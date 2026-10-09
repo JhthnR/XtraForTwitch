@@ -28,6 +28,7 @@ import com.github.andreyasadchy.xtra.repository.NotificationUsersRepository
 import com.github.andreyasadchy.xtra.repository.OfflineRepository
 import com.github.andreyasadchy.xtra.repository.RecentSearchRepository
 import com.github.andreyasadchy.xtra.repository.SavedFiltersRepository
+import com.github.andreyasadchy.xtra.repository.LiveNotificationState
 import com.github.andreyasadchy.xtra.repository.ShownNotificationsRepository
 import com.github.andreyasadchy.xtra.repository.SortChannelRepository
 import com.github.andreyasadchy.xtra.repository.SortGameRepository
@@ -75,7 +76,7 @@ class DatabaseModule {
 
     @Singleton
     @Provides
-    fun providesShownNotificationsRepository(shownNotificationsDao: ShownNotificationsDao): ShownNotificationsRepository = ShownNotificationsRepository(shownNotificationsDao)
+    fun providesShownNotificationsRepository(shownNotificationsDao: ShownNotificationsDao, state: LiveNotificationState): ShownNotificationsRepository = ShownNotificationsRepository(shownNotificationsDao, state)
 
     @Singleton
     @Provides

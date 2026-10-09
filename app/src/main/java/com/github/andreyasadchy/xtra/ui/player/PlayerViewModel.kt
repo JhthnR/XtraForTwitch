@@ -29,6 +29,7 @@ import com.github.andreyasadchy.xtra.repository.LocalFollowChannelRepository
 import com.github.andreyasadchy.xtra.repository.NotificationUsersRepository
 import com.github.andreyasadchy.xtra.repository.OfflineRepository
 import com.github.andreyasadchy.xtra.repository.PlayerRepository
+import com.github.andreyasadchy.xtra.repository.liveNotificationStartedAt
 import com.github.andreyasadchy.xtra.repository.ShownNotificationsRepository
 import com.github.andreyasadchy.xtra.repository.TranslateAllMessagesUsersRepository
 import com.github.andreyasadchy.xtra.ui.player.PlaybackService.Companion.MEDIA_PLAYLIST_REGEX
@@ -774,10 +775,11 @@ class PlayerViewModel @Inject constructor(
                         if (!errorMessage.isNullOrBlank()) {
                             follow.value = Pair(true, errorMessage)
                         } else {
+                            shownNotificationsRepository.accountNotificationChanged(userId, channelId, !disableNotifications)
                             _isFollowing.value = true
                             follow.value = Pair(true, null)
                             if (liveNotificationsEnabled) {
-                                startedAt.takeUnless { it.isNullOrBlank() }?.let { TwitchApiHelper.parseIso8601DateUTC(it) }?.let {
+                                startedAt.takeUnless { it.isNullOrBlank() }?.let { liveNotificationStartedAt(it) }?.let {
                                     shownNotificationsRepository.saveList(listOf(ShownNotification(channelId, it)))
                                 }
                             }
@@ -790,7 +792,7 @@ class PlayerViewModel @Inject constructor(
                             notificationUsersRepository.saveUser(NotificationUser(channelId))
                         }
                         if (liveNotificationsEnabled) {
-                            startedAt.takeUnless { it.isNullOrBlank() }?.let { TwitchApiHelper.parseIso8601DateUTC(it) }?.let {
+                            startedAt.takeUnless { it.isNullOrBlank() }?.let { liveNotificationStartedAt(it) }?.let {
                                 shownNotificationsRepository.saveList(listOf(ShownNotification(channelId, it)))
                             }
                         }
@@ -818,6 +820,7 @@ class PlayerViewModel @Inject constructor(
                         if (!errorMessage.isNullOrBlank()) {
                             follow.value = Pair(false, errorMessage)
                         } else {
+                            shownNotificationsRepository.accountNotificationChanged(userId, channelId, false)
                             _isFollowing.value = false
                             follow.value = Pair(false, null)
                         }

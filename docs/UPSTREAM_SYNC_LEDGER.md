@@ -8,6 +8,16 @@ new audits go here.
 
 ## Latest audit
 
+- **Date checked:** 2026-10-04
+- **Branches:** stacked `xtra-ports/1-notifications` → `2-rewards` → `3-quality` → `4-rewind`, based on `e8cbd77cb9f875ed2e4b777684065278bc766060`
+- **crackededed/Xtra:** `9f8043e8bdf45e8a2b2bf4cecfa74dc1de8ae0a3`
+- **thiscallnet/Xtra:** `fbffe567381dfca9970860e2976ab0021c2602eb`
+- **Disposition:** bounded manual feature ports, unreleased; the configured local
+  Android build/test/lint gates passed. Hosted CI and device QA are separate gates. See [October intake](#october-4-2026-feature-intake-unreleased)
+  and [validation status](FEATURE_PORTS_VALIDATION.md).
+
+## September 25, 2026 audit
+
 - **Date checked:** 2026-09-25
 - **Branch audited:** `codex/large-screen-upstream-update`, based on public main `fc45301d4`
 - **Upstream remote:** `upstream` -> `https://github.com/crackededed/Xtra.git`
@@ -244,3 +254,23 @@ architecture. These entries supersede earlier deferrals only for the named scope
 
 Quality-identity/bitrate, proxy, dependency, DI and playback-service migrations are
 not included. See RELEASE_1_3_REVIEW.md for the complete release review map.
+
+## October 4, 2026 feature intake (unreleased)
+
+Baseline: `e8cbd77cb9f875ed2e4b777684065278bc766060` (ThystTV 1.3.1 app).
+Inspected donor snapshots: crackededed/Xtra
+`9f8043e8bdf45e8a2b2bf4cecfa74dc1de8ae0a3`, thiscallnet/Xtra
+`fbffe567381dfca9970860e2976ab0021c2602eb`.
+
+| Source | Manual adaptation | Risk / exclusions |
+| --- | --- | --- |
+| thiscallnet `fbffe567` notification policy | Account-scoped cached notification preferences, Helix fallback and delivery-aware dedup | Retain WorkManager, Hilt and the single live-follows request per poll; no EventSub, foreground service or full follow-list sync. |
+
+The new upstream minSdk 24 and donor minSdk 26/GeckoView remain deferred. No broad
+merge, Hilt removal, Media3 1.11.1 upgrade, Cronet rewrite, multiview, clipping,
+captioning or release/version change is included. Earlier quality deferrals are
+superseded only for the bounded scopes above.
+
+See [feature behavior and QA matrix](FEATURE_PORTS_2026_10.md). These changes are
+not a released APK. Local debug/release assembly, 735 configured tests and debug lint passed; see
+[validation results](FEATURE_PORTS_VALIDATION.md). No physical-device QA is claimed.
