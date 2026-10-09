@@ -22,12 +22,19 @@ class ShownNotificationsRepository @Inject constructor(
 ) {
     /** Setup baseline: acknowledge currently live streams without posting old live alerts. */
     suspend fun getNewStreams(notificationUsersRepository: NotificationUsersRepository, networkLibrary: String?, gqlHeaders: Map<String, String>, graphQLRepository: GraphQLRepository, helixHeaders: Map<String, String>, helixRepository: HelixRepository): List<Stream> = withContext(Dispatchers.IO) {
-        val accountId = state.accountId()
-        if (!state.isCurrent(accountId, gqlHeaders, helixHeaders)) return@withContext emptyList()
-        state.beginBaseline(accountId)
-        val baseline = mutableListOf<Stream>()
-        poll(notificationUsersRepository, networkLibrary, gqlHeaders, graphQLRepository, helixHeaders, helixRepository, onBaseline = { baseline.add(it) }) { true }
-        baseline
+        try {
+            val accountId = state.accountId()
+            if (!state.isCurrent(accountId, gqlHeaders, helixHeaders)) return@withContext emptyList()
+            state.beginBaseline(accountId)
+            val baseline = mutableListOf<Stream>()
+            poll(notificationUsersRepository, networkLibrary, gqlHeaders, graphQLRepository, helixHeaders, helixRepository, onBaseline = { baseline.add(it) }) { true }
+            baseline
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            // As in 1.3.1, a failed setup poll must not stop the caller from scheduling the worker.
+            emptyList()
+        }
     }
 
     /** Returns whether an incomplete fetch or failed delivery needs a WorkManager retry. */
@@ -55,7 +62,7 @@ class ShownNotificationsRepository @Inject constructor(
             currentCoroutineContext().ensureActive()
             val accountId = state.accountId()
             val revision = state.revision()
-            val baselineCompleted = state.baselineCompleted(accountId)
+            val pendingBaseline = state.pendingBaseline(accountId)
             fun isCurrent() = state.revision() == revision && state.isCurrent(accountId, gqlHeaders, helixHeaders)
             if (!isCurrent()) return@withLock true
             var retry = false
@@ -66,18 +73,18 @@ class ShownNotificationsRepository @Inject constructor(
             val fetchedIds = mutableSetOf<String>()
             var followed = emptySet<String>()
             var followsResolved = true
-            if (accountId != null && (hasGqlToken || hasHelixToken)) {
+            // Without a GQL token no source reports Twitch's notification preferences, so only
+            // local opt-ins alert, as in 1.3.1. The channel bell then edits those opt-ins.
+            if (accountId != null && hasGqlToken) {
                 // Ask only for live follows; paging every follow on each poll scales with follow count.
                 val cached = state.load(accountId)
                 var live: List<FollowedLiveStream>? = null
-                if (hasGqlToken) {
-                    try {
-                        live = loadFollowedStreams(networkLibrary, gqlHeaders, graphQLRepository)
-                    } catch (e: CancellationException) {
-                        throw e
-                    } catch (_: Exception) {
-                        retry = true
-                    }
+                try {
+                    live = loadFollowedStreams(networkLibrary, gqlHeaders, graphQLRepository)
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (_: Exception) {
+                    retry = true
                 }
                 val preferencesReported = live != null
                 if (live == null && hasHelixToken) {
@@ -85,7 +92,7 @@ class ShownNotificationsRepository @Inject constructor(
                         // Helix cannot expose Twitch's per-follow notification preference. Never
                         // turn muted or unknown channels on after a failed authenticated GQL sync.
                         live = loadHelixFollowedStreams(networkLibrary, helixHeaders, accountId, helixRepository).map {
-                            FollowedLiveStream(it, !hasGqlToken || it.channelId in cached.orEmpty())
+                            FollowedLiveStream(it, it.channelId in cached.orEmpty())
                         }
                     } catch (e: CancellationException) {
                         throw e
@@ -157,7 +164,9 @@ class ShownNotificationsRepository @Inject constructor(
                 ) continue
                 currentCoroutineContext().ensureActive()
                 if (!isCurrent()) return@withLock true
-                val baseline = baselineCompleted != null && id !in baselineCompleted
+                // A broadcast that started after setup began is new even if the baseline is unfinished.
+                val baseline = pendingBaseline != null && id !in pendingBaseline.completed &&
+                    startedAt / 1000 <= pendingBaseline.startedAt / 1000
                 if (baseline || post(stream)) {
                     shownNotificationsDao.insertList(listOf(ShownNotification(id, startedAt)))
                     highWater[id] = startedAt
@@ -166,8 +175,8 @@ class ShownNotificationsRepository @Inject constructor(
                     retry = true
                 }
             }
-            if (baselineCompleted != null) {
-                val completed = baselineCompleted + fetchedIds
+            if (pendingBaseline != null) {
+                val completed = pendingBaseline.completed + fetchedIds
                 if (!state.advanceBaseline(accountId, revision, completed, followsResolved && completed.containsAll(localIds))) return@withLock true
             }
             retry
