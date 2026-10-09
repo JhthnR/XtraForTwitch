@@ -31,6 +31,22 @@ WorkManager retries, then returns to the normal 15-minute period. This is
 polling, not an always-running instant notification service: Android scheduling
 and battery restrictions still apply.
 
+### Channel Points rewards
+
+The chat's rewards entry opens custom rewards for the current channel. The flow
+shows availability, cost and required text input, then requires an explicit
+cost-labelled redemption confirmation. It rechecks the selected reward and
+account immediately before submitting. Repeated taps cannot submit duplicate
+redemptions. An uncertain network result is displayed as uncertain and is never
+automatically retried; users should check their points/reward history before
+starting another redemption. A request Twitch refuses before running it (invalid
+sign-in, rate limit or failed integrity check) is shown as rejected instead.
+See [Channel Points rewards](CHANNEL_POINT_REWARDS.md) for the full policy.
+
+This port excludes built-in reward emote unlocks, Drops, polls/prediction redesigns,
+and the donor's full chat/interface rewrite. Existing polling/prediction behavior
+is unchanged.
+
 ## Source provenance
 
 All ports are manual adaptations, not whole-fork merges or claims of patch
@@ -38,6 +54,8 @@ identity. The existing AGPL-3.0 license and Xtra attribution remain.
 
 - Live notifications: [thiscallnet/Xtra](https://github.com/thiscallnet/Xtra)
   `fbffe567381dfca9970860e2976ab0021c2602eb` persistence, fallback and dedup policy.
+- Channel Points rewards: thiscallnet/Xtra `fbffe567381dfca9970860e2976ab0021c2602eb`
+  custom reward flow.
 
 The donor's new minimum SDK, GeckoView, Cronet/service rewrites, EventSub,
 multiview, local clips, captions and dependency upgrades are not included.
@@ -58,5 +76,8 @@ Required device matrix before merge/release:
 - Logged-out local follows, authenticated account follows, muted channels, account
   changes during a poll, permission denied/re-enabled, API outages, an expired
   GQL token with working Helix, and duplicate workers/stream restarts
+- Reward text required/optional, insufficient points, disabled/cooling down/full
+  rewards, changed cost, rapid taps, cancel/back/rotation, account logout/change,
+  failure before send, refusal before execution and uncertain response after send
 
 Releasing remains a separate approval and verification step.

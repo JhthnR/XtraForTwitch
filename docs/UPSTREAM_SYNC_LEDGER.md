@@ -265,6 +265,7 @@ Inspected donor snapshots: crackededed/Xtra
 | Source | Manual adaptation | Risk / exclusions |
 | --- | --- | --- |
 | thiscallnet `fbffe567` notification policy | Account-scoped cached notification preferences, Helix fallback and delivery-aware dedup | Retain WorkManager, Hilt and the single live-follows request per poll; no EventSub, foreground service or full follow-list sync. |
+| thiscallnet `fbffe567` custom reward flow | Custom Channel Points catalog, input, availability and confirmation with guarded mutation | No automatic spend retry; no Drops, emote unlocks or poll/prediction expansion. |
 
 The new upstream minSdk 24 and donor minSdk 26/GeckoView remain deferred. No broad
 merge, Hilt removal, Media3 1.11.1 upgrade, Cronet rewrite, multiview, clipping,

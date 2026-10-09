@@ -202,7 +202,7 @@ class GraphQLRepository @Inject constructor(
         }
     }
 
-    private suspend fun sendPersistedQuery(networkLibrary: String?, headers: Map<String, String>, body: String): String = withContext(Dispatchers.IO) {
+    private suspend fun sendPersistedQuery(networkLibrary: String?, headers: Map<String, String>, body: String, client: OkHttpClient = okHttpClient): String = withContext(Dispatchers.IO) {
         when {
             networkLibrary == "HttpEngine" && Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && SdkExtensions.getExtensionVersion(Build.VERSION_CODES.S) >= 7 && httpEngine != null -> {
                 val response = suspendCancellableCoroutine { continuation ->
@@ -235,7 +235,7 @@ class GraphQLRepository @Inject constructor(
                 }
             }
             else -> {
-                okHttpClient.newCall(Request.Builder().apply {
+                client.newCall(Request.Builder().apply {
                     url(TwitchEndpoints.GRAPHQL)
                     headers(headers.toHeaders())
                     header("Content-Type", "application/json")
@@ -1378,6 +1378,24 @@ class GraphQLRepository @Inject constructor(
             }
         }.toString()
         json.decodeFromString<ChannelPointContextResponse>(sendPersistedQuery(networkLibrary, headers, body))
+    }
+
+    /** Reward catalog operation from thiscallnet/Xtra fbffe56; existing bonus claiming is unchanged. */
+    suspend fun loadChannelPointRewards(networkLibrary: String?, headers: Map<String, String>, channelLogin: String): com.github.andreyasadchy.xtra.model.gql.chat.ChannelPointRewardsResponse = withContext(Dispatchers.IO) {
+        val body = buildJsonObject {
+            putJsonObject("extensions") {
+                putJsonObject("persistedQuery") {
+                    put("sha256Hash", "7fe050e3761eb2cf258d70ee1a21cbd76fa8cf3d7e7b12fc437e7029d446b5e3")
+                    put("version", 1)
+                }
+            }
+            put("operationName", "ChannelPointsContext")
+            putJsonObject("variables") {
+                put("channelLogin", channelLogin)
+                putJsonArray("includeGoalTypes") { add("CREATOR"); add("BOOST") }
+            }
+        }.toString()
+        json.decodeFromString(sendPersistedQuery(networkLibrary, headers, body, okHttpClient.withoutRewardLogging()))
     }
 
     suspend fun loadClaimPoints(networkLibrary: String?, headers: Map<String, String>, channelId: String?, claimId: String?): ErrorResponse = withContext(Dispatchers.IO) {
