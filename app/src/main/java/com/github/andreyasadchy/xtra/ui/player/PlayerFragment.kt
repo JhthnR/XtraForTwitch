@@ -50,6 +50,7 @@ import androidx.annotation.OptIn
 import androidx.core.content.edit
 import androidx.core.graphics.ColorUtils
 import androidx.core.os.bundleOf
+import androidx.core.os.BundleCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
@@ -103,6 +104,11 @@ import com.google.android.material.timepicker.MaterialTimePicker
 import com.google.android.material.timepicker.TimeFormat
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import kotlin.math.abs
@@ -267,6 +273,105 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
     open fun startAudioOnly() {}
     open fun downloadVideo() {}
     open fun close() {}
+
+    private var liveRewindDiscovery: Job? = null
+    private var liveRewindStartup: Job? = null
+    private var liveRewindDialog: androidx.appcompat.app.AlertDialog? = null
+
+    internal fun liveRewindOrigin(): Stream? = arguments?.let {
+        BundleCompat.getParcelable(it, LiveRewind.ORIGIN, Stream::class.java)
+    }
+
+    internal fun showLiveRewindOptions() {
+        if (videoType != STREAM || liveRewindDiscovery?.isActive == true || liveRewindDialog != null) return
+        liveRewindDialog = requireContext().getAlertDialogBuilder()
+            .setTitle(R.string.live_rewind)
+            .setItems(arrayOf(
+                getString(R.string.live_rewind_30_seconds), getString(R.string.live_rewind_1_minute),
+                getString(R.string.live_rewind_5_minutes), getString(R.string.live_rewind_beginning),
+            )) { _, which -> requestLiveRewind(listOf(30_000L, 60_000L, 300_000L, null)[which]) }
+            .setNegativeButton(android.R.string.cancel, null)
+            .create().also { dialog ->
+                dialog.setOnDismissListener { liveRewindDialog = null }
+                dialog.show()
+            }
+    }
+
+    private fun requestLiveRewind(rewindMs: Long?) {
+        if (videoType != STREAM || liveRewindDiscovery?.isActive == true || !isResumed) return
+        val source = Stream(
+            id = viewModel.stream.value?.id ?: requireArguments().getString(KEY_STREAM_ID),
+            channelId = requireArguments().getString(KEY_CHANNEL_ID),
+            channelLogin = requireArguments().getString(KEY_CHANNEL_LOGIN),
+            createdAt = viewModel.stream.value?.createdAt ?: requireArguments().getString(KEY_STARTED_AT),
+        )
+        val context = requireContext()
+        Toast.makeText(context, R.string.live_rewind_searching, Toast.LENGTH_SHORT).show()
+        liveRewindDiscovery = viewLifecycleOwner.lifecycleScope.launch {
+            try {
+                val prepared = withTimeoutOrNull(20_000L) {
+                    viewModel.prepareLiveRewind(
+                        source, rewindMs, context.prefs().getString(C.NETWORK_LIBRARY, "OkHttp"),
+                        TwitchApiHelper.getGQLHeaders(context),
+                        TwitchApiHelper.getGQLHeaders(context, context.prefs().getBoolean(C.TOKEN_INCLUDE_TOKEN_VIDEO, true)),
+                        context.prefs().getString(C.TOKEN_PLAYERTYPE_VIDEO, "channel_home_live"),
+                        context.prefs().getString(C.TOKEN_SUPPORTED_CODECS, "av1,h265,h264"),
+                        context.prefs().getBoolean(C.ENABLE_INTEGRITY, false),
+                    )
+                }
+                currentCoroutineContext().ensureActive()
+                if (!isResumed || !isMaximized) return@launch
+                if (prepared == null) {
+                    Toast.makeText(context, R.string.live_rewind_unavailable, Toast.LENGTH_LONG).show()
+                } else {
+                    (activity as? MainActivity)?.startLiveRewind(this@PlayerFragment, prepared)
+                }
+            } catch (error: CancellationException) {
+                throw error
+            } catch (_: Exception) {
+                if (isResumed) Toast.makeText(context, R.string.live_rewind_unavailable, Toast.LENGTH_LONG).show()
+            }
+        }
+    }
+
+    internal fun returnToLiveFromRecording() {
+        val origin = liveRewindOrigin() ?: return
+        (activity as? MainActivity)?.returnFromLiveRewind(this, origin)
+    }
+
+    protected open fun isLiveRewindPlaybackReady(): Boolean = false
+
+    protected fun markLiveRewindReady() {
+        if (liveRewindOrigin() == null || !viewModel.liveRewindPending || !viewModel.started || !isLiveRewindPlaybackReady()) return
+        viewModel.liveRewindPending = false
+        liveRewindStartup?.cancel()
+        liveRewindStartup = null
+    }
+
+    /**
+     * Only the initial recording handoff falls back to live. Once the recording has played,
+     * errors use ordinary VoD recovery so a network blip does not discard the viewer's position.
+     */
+    protected fun handleLiveRewindFailure(): Boolean {
+        val origin = liveRewindOrigin() ?: return false
+        if (!viewModel.liveRewindPending && !viewModel.liveRewindFailed) return false
+        if (!viewModel.started) return true
+        viewModel.liveRewindPending = false
+        viewModel.liveRewindFailed = true
+        liveRewindStartup?.cancel()
+        if (isResumed && isMaximized && (activity as? MainActivity)?.returnFromLiveRewind(this, origin) == true) {
+            Toast.makeText(requireContext(), R.string.live_rewind_failed_returning, Toast.LENGTH_LONG).show()
+        }
+        return true
+    }
+
+    private fun watchLiveRewindStartup() {
+        if (liveRewindOrigin() == null || !viewModel.liveRewindPending || liveRewindStartup?.isActive == true) return
+        liveRewindStartup = viewLifecycleOwner.lifecycleScope.launch {
+            delay(30_000L)
+            if (viewModel.liveRewindPending) handleLiveRewindFailure()
+        }
+    }
 
     /** Reveal on the first remote press; visible controls retain native key handling. */
     fun dispatchTvKeyEvent(event: KeyEvent): Boolean {
@@ -1033,7 +1138,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                 val titleText = requireArguments().getString(KEY_TITLE)
                 if (!titleText.isNullOrBlank() && requireContext().prefs().getBoolean(C.PLAYER_TITLE, true)) {
                     title.visibility = View.VISIBLE
-                    title.text = titleText
+                    title.text = if (liveRewindOrigin() != null) getString(R.string.live_rewind_recording_title, titleText) else titleText
                 }
                 val gameName = requireArguments().getString(KEY_GAME_NAME)
                 if (!gameName.isNullOrBlank() && requireContext().prefs().getBoolean(C.PLAYER_CATEGORY, true)) {
@@ -1206,6 +1311,11 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                     }
                 }
                 if (videoType == VIDEO) {
+                    if (liveRewindOrigin() != null) {
+                        seekLive.visibility = View.VISIBLE
+                        seekLive.contentDescription = getString(R.string.live_rewind_go_live)
+                        seekLive.setOnClickListener { returnToLiveFromRecording() }
+                    }
                     viewLifecycleOwner.lifecycleScope.launch {
                         repeatOnLifecycle(Lifecycle.State.STARTED) {
                             viewModel.videoResult.collectLatest {
@@ -2680,6 +2790,9 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
 
     override fun onResume() {
         super.onResume()
+        if (viewModel.liveRewindFailed && isMaximized && handleLiveRewindFailure()) return
+        markLiveRewindReady()
+        watchLiveRewindStartup()
         val isInPIPMode = when {
             Build.VERSION.SDK_INT >= Build.VERSION_CODES.R -> requireActivity().isInPictureInPictureMode
             Build.VERSION.SDK_INT >= Build.VERSION_CODES.O -> !useController && isMaximized
@@ -2722,6 +2835,24 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
 
     protected fun startPlayer() {
         viewModel.started = true
+        if (videoType == VIDEO && liveRewindOrigin() != null) {
+            requireArguments().getString(LiveRewind.PLAYLIST)?.let { preparedUrl ->
+                viewModel.liveRewindPending = true
+                watchLiveRewindStartup()
+                requireArguments().remove(LiveRewind.PLAYLIST)
+                requireArguments().putBoolean(KEY_IGNORE_SAVED_POSITION, false)
+                requireArguments().putLong(KEY_OFFSET, -1L)
+                viewModel.playbackPosition = requireArguments().getLong(LiveRewind.POSITION)
+                try {
+                    startVideo(preparedUrl, viewModel.playbackPosition, true)
+                } catch (error: CancellationException) {
+                    throw error
+                } catch (error: Exception) {
+                    if (!handleLiveRewindFailure()) throw error
+                }
+                return
+            }
+        }
         when (videoType) {
             STREAM -> {
                 viewModel.useCustomProxy = requireContext().prefs().getBoolean(C.PLAYER_STREAM_PROXY, false)
@@ -2884,6 +3015,8 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
     override fun onPictureInPictureModeChanged(isInPictureInPictureMode: Boolean) {
         with(binding) {
             if (isInPictureInPictureMode) {
+                liveRewindDiscovery?.cancel()
+                liveRewindDialog?.dismiss()
                 restoreBrightness()
                 hidePlayerPopup(restoreFocus = false, animate = false)
                 if (!isMaximized) {
@@ -2919,6 +3052,10 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
     }
 
     override fun onStop() {
+        liveRewindDiscovery?.cancel()
+        liveRewindStartup?.cancel()
+        liveRewindStartup = null
+        liveRewindDialog?.dismiss()
         restoreBrightness()
         super.onStop()
         binding.playerControls.root.removeCallbacks(controllerHideAction)
@@ -2946,6 +3083,8 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
     }
 
     fun minimize() {
+        liveRewindDiscovery?.cancel()
+        liveRewindDialog?.dismiss()
         with(binding) {
             isMaximized = false
             // Restore original brightness when minimizing
@@ -3026,6 +3165,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
     fun maximize() {
         with(binding) {
             isMaximized = true
+            if (viewModel.liveRewindFailed && handleLiveRewindFailure()) return
             requireActivity().onBackPressedDispatcher.addCallback(viewLifecycleOwner, backPressedCallback)
             if (videoType == STREAM && chatFragment?.emoteMenuIsVisible() == true) {
                 chatFragment?.toggleBackPressedCallback(true)
@@ -3367,6 +3507,9 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
     }
 
     override fun onDestroyView() {
+        liveRewindDiscovery?.cancel()
+        liveRewindStartup?.cancel()
+        liveRewindDialog?.dismiss()
         doubleTapChatSnapshot = null
         systemUiListener.detach()
         finalizePinchSurface()

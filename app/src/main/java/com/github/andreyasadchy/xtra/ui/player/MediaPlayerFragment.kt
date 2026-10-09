@@ -34,6 +34,7 @@ import com.github.andreyasadchy.xtra.ui.main.MainActivity
 import com.github.andreyasadchy.xtra.util.C
 import com.github.andreyasadchy.xtra.util.prefs
 import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.json.JSONArray
@@ -78,6 +79,7 @@ class MediaPlayerFragment : PlayerFragment() {
                         player?.setDisplay(binding.playerSurface.holder)
                     }
                     playbackService?.preparedListener = MediaPlayer.OnPreparedListener { player ->
+                        markLiveRewindReady()
                         val duration = player.duration.takeIf { it != -1 }?.toLong() ?: 0
                         binding.playerControls.progressBar.setDuration(duration)
                         binding.playerControls.duration.text = DateUtils.formatElapsedTime(duration / 1000)
@@ -105,6 +107,7 @@ class MediaPlayerFragment : PlayerFragment() {
                         }
                     }
                     playbackService?.errorListener = MediaPlayer.OnErrorListener { _, _, _ ->
+                        if (handleLiveRewindFailure()) return@OnErrorListener true
                         updatePlayingState()
                         return@OnErrorListener true
                     }
@@ -137,6 +140,7 @@ class MediaPlayerFragment : PlayerFragment() {
                             viewModel.started = false
                         }
                         if (viewModel.started && player.duration != -1) {
+                            markLiveRewindReady()
                             chatFragment?.startReplayChatLoad()
                         }
                         if (!requireContext().prefs().getBoolean(C.PLAYER_KEEP_SCREEN_ON_WHEN_PAUSED, false) && canEnterPictureInPicture()) {
@@ -202,6 +206,10 @@ class MediaPlayerFragment : PlayerFragment() {
         }
         super.initialize()
     }
+
+    override fun isLiveRewindPlaybackReady(): Boolean =
+        playbackService?.videoId?.toString() == arguments?.getString(KEY_VIDEO_ID) &&
+            runCatching { player?.duration?.let { it > 0 } == true }.getOrDefault(false)
 
     override fun startStream(url: String?) {
         player?.let { player ->
@@ -297,7 +305,8 @@ class MediaPlayerFragment : PlayerFragment() {
         player?.let { player ->
             if (url != null) {
                 if (multivariantPlaylist) {
-                    viewLifecycleOwner.lifecycleScope.launch {
+                    // Recording startup errors return to live; any other error keeps its old behavior.
+                    viewLifecycleOwner.lifecycleScope.launch(CoroutineExceptionHandler { _, error -> if (!handleLiveRewindFailure()) throw error }) {
                         if (surfaceCreated) {
                             player.setDisplay(binding.playerSurface.holder)
                         }
@@ -316,6 +325,7 @@ class MediaPlayerFragment : PlayerFragment() {
                         val response = viewModel.loadPlaylist(url, requireContext().prefs().getString(C.NETWORK_LIBRARY, "OkHttp"))
                         val playlist = response?.first
                         val responseCode = response?.second
+                        if ((responseCode != null || playlist.isNullOrBlank()) && handleLiveRewindFailure()) return@launch
                         val connectivityManager = requireContext().getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
                         val networkCapabilities = connectivityManager.getNetworkCapabilities(connectivityManager.activeNetwork)
                         val isNetworkAvailable = networkCapabilities != null

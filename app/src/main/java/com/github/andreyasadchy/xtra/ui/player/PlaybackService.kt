@@ -423,6 +423,7 @@ class PlaybackService : MediaSessionService() {
                                         setPlaylistParserFactory(CustomHlsPlaylistParserFactory())
                                     }.createMediaSource(
                                         MediaItem.Builder().apply {
+                                            setMediaId("video:$newId")
                                             setUri(uri?.toUri())
                                             setMediaMetadata(
                                                 MediaMetadata.Builder().apply {

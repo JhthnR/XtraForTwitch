@@ -268,6 +268,7 @@ Inspected donor snapshots: crackededed/Xtra
 | thiscallnet `42ab1d2cb0a07842748c278dfd874e0fddb43208` (#433) | Metered-Wi-Fi quality policy/settings and capability-change handling | Android 6 preserved; explicit session choices remain authoritative. |
 | thiscallnet `fbffe567` notification policy | Account-scoped cached notification preferences, Helix fallback and delivery-aware dedup | Retain WorkManager, Hilt and the single live-follows request per poll; no EventSub, foreground service or full follow-list sync. |
 | thiscallnet `fbffe567` custom reward flow | Custom Channel Points catalog, input, availability and confirmation with guarded mutation | No automatic spend retry; no Drops, emote unlocks or poll/prediction expansion. |
+| thiscallnet `fbffe567` LiveRewind.kt | Current-recording matching and failure rollback, adapted to existing live/VoD fragment replacement | High player/lifecycle risk. Existing VoD timeline/replay chat and Go Live; no local DVR or new playback service. |
 
 The new upstream minSdk 24 and donor minSdk 26/GeckoView remain deferred. No broad
 merge, Hilt removal, Media3 1.11.1 upgrade, Cronet rewrite, multiview, clipping,

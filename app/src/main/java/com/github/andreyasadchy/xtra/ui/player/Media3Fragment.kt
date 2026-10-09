@@ -78,6 +78,7 @@ class Media3Fragment : PlayerFragment() {
             val listener = object : Player.Listener {
 
                 override fun onPlaybackStateChanged(playbackState: Int) {
+                    if (playbackState == Player.STATE_READY) markLiveRewindReady()
                     binding.bufferingIndicator.isVisible = playbackState == Player.STATE_BUFFERING
                     val showPlayButton = Util.shouldShowPlayButton(player)
                     if (showPlayButton) {
@@ -314,6 +315,7 @@ class Media3Fragment : PlayerFragment() {
                 }
 
                 override fun onPlayerError(error: PlaybackException) {
+                    if (handleLiveRewindFailure()) return
                     Log.e(tag, "Player error", error)
                     when (videoType) {
                         STREAM -> {
@@ -445,6 +447,7 @@ class Media3Fragment : PlayerFragment() {
                     viewModel.started = false
                 }
                 if (viewModel.started && player.currentMediaItem != null) {
+                    markLiveRewindReady()
                     chatFragment?.startReplayChatLoad()
                 }
                 if (!requireContext().prefs().getBoolean(C.PLAYER_KEEP_SCREEN_ON_WHEN_PAUSED, false) && canEnterPictureInPicture()) {
@@ -476,6 +479,11 @@ class Media3Fragment : PlayerFragment() {
         }
         super.initialize()
     }
+
+    override fun isLiveRewindPlaybackReady(): Boolean = player?.let {
+        it.playbackState == Player.STATE_READY &&
+            it.currentMediaItem?.mediaId == "video:${arguments?.getString(KEY_VIDEO_ID)}"
+    } == true
 
     override fun startStream(url: String?) {
         player?.sendCustomCommand(
