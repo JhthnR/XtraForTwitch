@@ -52,7 +52,6 @@ import com.google.common.util.concurrent.MoreExecutors
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import kotlin.math.floor
 
 @OptIn(UnstableApi::class)
 @AndroidEntryPoint
@@ -201,7 +200,13 @@ class Media3Fragment : PlayerFragment() {
                                         result.get().extras.getStringArray(PlaybackService.CODECS)?.let { codecs ->
                                             result.get().extras.getStringArray(PlaybackService.URLS)?.let { urls ->
                                                 names.mapIndexed { index, name ->
-                                                    VideoQuality(name, codecs.getOrNull(index).takeIf { it != "null" }, urls.getOrNull(index))
+                                                    VideoQuality(
+                                                        name, codecs.getOrNull(index).takeIf { it != "null" }, urls.getOrNull(index),
+                                                        result.get().extras.getIntArray(PlaybackService.QUALITY_BITRATES)?.getOrNull(index)?.takeIf { it > 0 },
+                                                        result.get().extras.getIntArray(PlaybackService.QUALITY_RESOLUTIONS)?.getOrNull(index)?.takeIf { it > 0 },
+                                                        result.get().extras.getFloatArray(PlaybackService.QUALITY_FRAME_RATES)?.getOrNull(index)?.takeIf { it > 0 },
+                                                        result.get().extras.getStringArray(PlaybackService.QUALITY_FORMAT_IDS)?.getOrNull(index)?.takeIf { it.isNotBlank() },
+                                                    )
                                                 }
                                             }
                                         }
@@ -811,31 +816,8 @@ class Media3Fragment : PlayerFragment() {
                                 player.trackSelectionParameters = player.trackSelectionParameters.buildUpon().apply {
                                     setTrackTypeDisabled(androidx.media3.common.C.TRACK_TYPE_VIDEO, false)
                                     binding.playerSurface.visibility = View.VISIBLE
-                                    if (!player.currentTracks.isEmpty) {
-                                        player.currentTracks.groups.find { it.type == androidx.media3.common.C.TRACK_TYPE_VIDEO }?.let {
-                                            val selectedQuality = quality.name?.split("p")
-                                            val targetResolution = selectedQuality?.getOrNull(0)?.takeWhile { it.isDigit() }?.toIntOrNull()
-                                            val targetFps = selectedQuality?.getOrNull(1)?.takeWhile { it.isDigit() }?.toIntOrNull() ?: 30
-                                            if (it.mediaTrackGroup.length > 0) {
-                                                if (targetResolution != null) {
-                                                    val formats = mutableListOf<Triple<Int, Int, Float>>()
-                                                    for (i in 0 until it.mediaTrackGroup.length) {
-                                                        val format = it.mediaTrackGroup.getFormat(i)
-                                                        formats.add(Triple(i, format.height, format.frameRate))
-                                                    }
-                                                    val list = formats.sortedWith(
-                                                        compareByDescending<Triple<Int, Int, Float>> { it.third }.thenByDescending { it.second }
-                                                    )
-                                                    list.find {
-                                                        (targetResolution == it.second && targetFps >= floor(it.third)) || targetResolution > it.second || it == list.last()
-                                                    }?.first?.let { index ->
-                                                        setOverrideForType(TrackSelectionOverride(it.mediaTrackGroup, index))
-                                                    }
-                                                } else {
-                                                    setOverrideForType(TrackSelectionOverride(it.mediaTrackGroup, 0))
-                                                }
-                                            }
-                                        }
+                                    selectQualityTrack(quality, player.currentTracks.groups)?.let { override ->
+                                        setOverrideForType(override)
                                     }
                                 }.build()
                             } else {
@@ -856,9 +838,9 @@ class Media3Fragment : PlayerFragment() {
                     }
                     val connectivityManager = requireContext().getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
                     val networkCapabilities = connectivityManager.getNetworkCapabilities(connectivityManager.activeNetwork)
-                    val cellular = networkCapabilities?.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) == true
-                    if ((!cellular && requireContext().prefs().getString(C.PLAYER_DEFAULTQUALITY, "saved") == "saved") || (cellular && requireContext().prefs().getString(C.PLAYER_DEFAULT_CELLULAR_QUALITY, "saved") == "saved")) {
-                        requireContext().prefs().edit { putString(C.PLAYER_QUALITY, quality.name) }
+                    val profile = PlayerQualityNetworkProfile.from(networkCapabilities)
+                    if (shouldPersistQualitySelection(profile)) {
+                        PlayerQualityPreferences.save(requireContext().prefs(), quality)
                     }
                 }
             }
@@ -948,6 +930,7 @@ class Media3Fragment : PlayerFragment() {
                         qualityNames = qualities?.map { it.name.toString() }?.toTypedArray(),
                         qualityCodecs = qualities?.map { it.codecs.toString() }?.toTypedArray(),
                         qualityUrls = qualities?.map { it.url.toString() }?.toTypedArray(),
+                        qualityBitrates = qualities?.map { it.bitrate ?: -1 }?.toIntArray(),
                     ).show(childFragmentManager, null)
                 }
             }, MoreExecutors.directExecutor())
@@ -1041,13 +1024,6 @@ class Media3Fragment : PlayerFragment() {
 
     override fun onNetworkRestored() {
         if (isResumed) {
-            if (!viewModel.userHasChangedQuality) {
-                val currentQuality = viewModel.quality
-                setDefaultQuality()
-                if (viewModel.quality != currentQuality) {
-                    changeQuality(viewModel.quality)
-                }
-            }
             if (videoType == STREAM) {
                 restartPlayer()
             } else {

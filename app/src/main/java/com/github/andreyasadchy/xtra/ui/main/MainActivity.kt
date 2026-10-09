@@ -77,6 +77,7 @@ import com.github.andreyasadchy.xtra.ui.games.GamesFragmentDirections
 import com.github.andreyasadchy.xtra.ui.player.ExoPlayerFragment
 import com.github.andreyasadchy.xtra.ui.player.Media3Fragment
 import com.github.andreyasadchy.xtra.ui.player.MediaPlayerFragment
+import com.github.andreyasadchy.xtra.ui.player.PlayerQualityNetworkProfile
 import com.github.andreyasadchy.xtra.ui.player.PlayerFragment
 import com.github.andreyasadchy.xtra.ui.team.TeamFragmentDirections
 import com.github.andreyasadchy.xtra.ui.top.TopStreamsFragmentDirections
@@ -123,19 +124,36 @@ class MainActivity : AppCompatActivity() {
     }
     var playerFragment: PlayerFragment? = null
         private set
+    private var lastPlaybackNetworkProfile: PlayerQualityNetworkProfile? = null
     private val networkCallback = object : ConnectivityManager.NetworkCallback() {
         override fun onAvailable(network: Network) {
             lifecycleScope.launch {
                 viewModel.checkNetworkStatus.value = true
+                updatePlaybackNetworkProfile()
             }
         }
 
         override fun onLost(network: Network) {
             lifecycleScope.launch {
                 viewModel.checkNetworkStatus.value = true
+                updatePlaybackNetworkProfile()
             }
         }
+        override fun onCapabilitiesChanged(network: Network, networkCapabilities: NetworkCapabilities) {
+            lifecycleScope.launch { updatePlaybackNetworkProfile() }
+        }
     }
+    private fun updatePlaybackNetworkProfile() {
+        val manager = getSystemService(CONNECTIVITY_SERVICE) as ConnectivityManager
+        val capabilities = manager.getNetworkCapabilities(manager.activeNetwork) ?: return
+        if (!capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) ||
+            !capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)) return
+        val profile = PlayerQualityNetworkProfile.from(capabilities)
+        val previous = lastPlaybackNetworkProfile
+        lastPlaybackNetworkProfile = profile
+        if (previous != null && previous != profile) playerFragment?.reapplyNetworkDefaultQuality(profile)
+    }
+
     private val pipActionReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
             when (intent?.action) {
@@ -904,8 +922,8 @@ class MainActivity : AppCompatActivity() {
         return viewModel.sleepTimerEndTime - System.currentTimeMillis()
     }
 
-    fun downloadStream(filesDir: String, id: String?, title: String?, createdAt: String?, channelId: String?, channelLogin: String?, channelName: String?, channelImage: String?, thumbnail: String?, gameId: String?, gameSlug: String?, gameName: String?, downloadPath: String, quality: String, downloadChat: Boolean, downloadChatEmotes: Boolean, wifiOnly: Boolean) {
-        viewModel.downloadStream(prefs.getString(C.NETWORK_LIBRARY, "OkHttp"), filesDir, id, title, createdAt, channelId, channelLogin, channelName, channelImage, thumbnail, gameId, gameSlug, gameName, downloadPath, quality, downloadChat, downloadChatEmotes, wifiOnly)
+    fun downloadStream(filesDir: String, id: String?, title: String?, createdAt: String?, channelId: String?, channelLogin: String?, channelName: String?, channelImage: String?, thumbnail: String?, gameId: String?, gameSlug: String?, gameName: String?, downloadPath: String, quality: String, downloadChat: Boolean, downloadChatEmotes: Boolean, wifiOnly: Boolean, qualityCodecs: String? = null, qualityBitrate: Int? = null) {
+        viewModel.downloadStream(prefs.getString(C.NETWORK_LIBRARY, "OkHttp"), filesDir, id, title, createdAt, channelId, channelLogin, channelName, channelImage, thumbnail, gameId, gameSlug, gameName, downloadPath, quality, downloadChat, downloadChatEmotes, wifiOnly, qualityCodecs, qualityBitrate)
     }
 
     fun downloadVideo(filesDir: String, id: String?, title: String?, createdAt: String?, type: String?, channelId: String?, channelLogin: String?, channelName: String?, channelImage: String?, thumbnail: String?, gameId: String?, gameSlug: String?, gameName: String?, url: String, downloadPath: String, quality: String, from: Long, to: Long, downloadChat: Boolean, downloadChatEmotes: Boolean, playlistToFile: Boolean, wifiOnly: Boolean) {

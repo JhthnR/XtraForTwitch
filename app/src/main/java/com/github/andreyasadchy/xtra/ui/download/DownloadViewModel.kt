@@ -3,6 +3,7 @@ package com.github.andreyasadchy.xtra.ui.download
 import android.util.Base64
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.github.andreyasadchy.xtra.util.parsePlaylistQualities
 import com.github.andreyasadchy.xtra.model.VideoQuality
 import com.github.andreyasadchy.xtra.repository.PlayerRepository
 import com.github.andreyasadchy.xtra.util.TwitchApiHelper
@@ -38,14 +39,7 @@ class DownloadViewModel @Inject constructor(
                         val list = if (!channelLogin.isNullOrBlank()) {
                             val playlist = playerRepository.loadStreamPlaylist(networkLibrary, gqlHeaders, channelLogin, randomDeviceId, xDeviceId, playerType, supportedCodecs, enableIntegrity)
                             if (!playlist.isNullOrBlank()) {
-                                val names = Regex("IVS-NAME=\"(.+?)\"").findAll(playlist).mapNotNull { it.groups[1]?.value }.toMutableList()
-                                val codecs = Regex("CODECS=\"(.+?)\"").findAll(playlist).mapNotNull { it.groups[1]?.value }.toMutableList()
-                                val urls = Regex("https://.*\\.m3u8").findAll(playlist).map(MatchResult::value).toMutableList()
-                                names.mapIndexedNotNull { index, name ->
-                                    urls.getOrNull(index)?.let { url ->
-                                        VideoQuality(name, codecs.getOrNull(index), url)
-                                    }
-                                }
+                                parsePlaylistQualities(playlist)
                             } else {
                                 default.map {
                                     VideoQuality(it, null, "")
@@ -109,9 +103,8 @@ class DownloadViewModel @Inject constructor(
                             val playlist = result.first
                             backupQualities = result.second
                             if (!playlist.isNullOrBlank()) {
-                                val names = Regex("IVS-NAME=\"(.+?)\"").findAll(playlist).mapNotNull { it.groups[1]?.value }.toMutableList()
-                                val codecs = Regex("CODECS=\"(.+?)\"").findAll(playlist).mapNotNull { it.groups[1]?.value }.toMutableList()
-                                val urls = Regex("https://.*\\.m3u8").findAll(playlist).map(MatchResult::value).toMutableList()
+                                val parsedQualities = parsePlaylistQualities(playlist).toMutableList()
+                                val urls = parsedQualities.mapNotNull { it.url }.toMutableList()
                                 playlist.lines().filter { it.startsWith("#EXT-X-SESSION-DATA") }.let { list ->
                                     if (list.isNotEmpty()) {
                                         val url = urls.firstOrNull()?.takeIf { it.contains("/index-") }
@@ -154,18 +147,16 @@ class DownloadViewModel @Inject constructor(
                                                                             val codec = obj.optString("CODECS")
                                                                             val newVariantId = obj.optString("STABLE-VARIANT-ID")
                                                                             if (!name.isNullOrBlank() && !newVariantId.isNullOrBlank()) {
-                                                                                names.add(name)
-                                                                                if (!codec.isNullOrBlank()) {
-                                                                                    codecs.add(codec)
-                                                                                }
-                                                                                urls.add(url.replace(
+                                                                                val newUrl = url.replace(
                                                                                     "$variantId/index-",
                                                                                     if (urls.find { it.contains("chunked/index-") } == null && newVariantId != "audio_only") {
                                                                                         "chunked/index-"
                                                                                     } else {
                                                                                         "$newVariantId/index-"
                                                                                     }
-                                                                                ))
+                                                                                )
+                                                                                urls.add(newUrl)
+                                                                                parsedQualities.add(VideoQuality(name, codec.takeIf { it.isNotBlank() }, newUrl, obj.optInt("BANDWIDTH").takeIf { it > 0 }))
                                                                             }
                                                                         }
                                                                     }
@@ -178,11 +169,7 @@ class DownloadViewModel @Inject constructor(
                                         }
                                     }
                                 }
-                                val list = names.mapIndexedNotNull { index, name ->
-                                    urls.getOrNull(index)?.let { url ->
-                                        VideoQuality(name, codecs.getOrNull(index), url)
-                                    }
-                                }
+                                val list = parsedQualities
                                 _qualities.value = list
                                     .sortedByDescending {
                                         it.name?.substringAfter("p", "")?.takeWhile { it.isDigit() }?.toIntOrNull()

@@ -125,6 +125,16 @@
         app:iconSpaceReserved="false"
         app:singleLineTitle="false" />
 
+    <ListPreference
+        android:defaultValue="mobile_data"
+        android:entries="@array/playerMeteredWifiQualityEntries"
+        android:entryValues="@array/playerMeteredWifiQualityValues"
+        android:key="player_default_metered_wifi_quality"
+        android:summary="%s"
+        android:title="@string/settings_metered_wifi_quality"
+        app:iconSpaceReserved="false"
+        app:singleLineTitle="false" />
+
     <SwitchPreferenceCompat
         android:defaultValue="false"
         android:key="player_rounded_corner_padding"

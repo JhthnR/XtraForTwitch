@@ -375,7 +375,7 @@ class PlayerRepository @Inject constructor(
                             appendQueryParameter("sig", accessToken?.signature)
                             appendQueryParameter("token", accessToken?.value)
                         }.build().toString()
-                        VideoQuality(name, quality.codecs, url)
+                        VideoQuality(name, quality.codecs, url, quality.bitrate, quality.quality?.toIntOrNull(), quality.frameRate?.toFloat())
                     } else null
                 }
             }
@@ -403,7 +403,7 @@ class PlayerRepository @Inject constructor(
                             appendQueryParameter("sig", accessToken?.signature)
                             appendQueryParameter("token", accessToken?.value)
                         }.build().toString()
-                        VideoQuality(name, quality.codecs, url)
+                        VideoQuality(name, quality.codecs, url, quality.bitrate, quality.quality?.toIntOrNull(), quality.frameRate?.toFloat())
                     } else null
                 }
             }

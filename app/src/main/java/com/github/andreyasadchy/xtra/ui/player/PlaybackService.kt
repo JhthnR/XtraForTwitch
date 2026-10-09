@@ -603,12 +603,16 @@ class PlaybackService : MediaSessionService() {
                                 val list = playlist?.variants?.mapIndexedNotNull { index, variant ->
                                     val videoName = playlist.videos.find { it.groupId == variant.videoGroupId }?.name
                                     val name = variant.format.toReadableQualityName(videoName, variant.url.toString(), index.toString())
-                                    VideoQuality(name, variant.format.codecs, variant.url.toString())
+                                    variant.format.toVideoQuality(name, variant.url.toString())
                                 }
                                 Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS, Bundle().apply {
                                     putStringArray(NAMES, list?.map { it.name.toString() }?.toTypedArray())
                                     putStringArray(CODECS, list?.map { it.codecs.toString() }?.toTypedArray())
                                     putStringArray(URLS, list?.map { it.url.toString() }?.toTypedArray())
+                                    putIntArray(QUALITY_BITRATES, list?.map { it.bitrate ?: -1 }?.toIntArray())
+                                    putIntArray(QUALITY_RESOLUTIONS, list?.map { it.resolution ?: -1 }?.toIntArray())
+                                    putFloatArray(QUALITY_FRAME_RATES, list?.map { it.frameRate ?: -1f }?.toFloatArray())
+                                    putStringArray(QUALITY_FORMAT_IDS, list?.map { it.formatId.orEmpty() }?.toTypedArray())
                                 }))
                             }
                             GET_DURATION -> {
@@ -795,6 +799,10 @@ class PlaybackService : MediaSessionService() {
         const val NAMES = "names"
         const val CODECS = "codecs"
         const val URLS = "urls"
+        const val QUALITY_BITRATES = "quality_bitrates"
+        const val QUALITY_RESOLUTIONS = "quality_resolutions"
+        const val QUALITY_FRAME_RATES = "quality_frame_rates"
+        const val QUALITY_FORMAT_IDS = "quality_format_ids"
 
         const val MULTIVARIANT_PLAYLIST_REGEX = "^usher\\.ttvnw\\.net$"
         const val MEDIA_PLAYLIST_REGEX = "^(?:[a-z0-9-]+\\.playlist\\.(?:live-video|ttvnw)\\.net|video-weaver\\.[a-z0-9-]+\\.hls\\.ttvnw\\.net)$"

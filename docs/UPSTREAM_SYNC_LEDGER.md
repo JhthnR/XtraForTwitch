@@ -264,6 +264,8 @@ Inspected donor snapshots: crackededed/Xtra
 
 | Source | Manual adaptation | Risk / exclusions |
 | --- | --- | --- |
+| crackededed `a70b0897`, `2c582bb83621881dd36c4c7f6632587d38e633cb`, `703437feee29435f9aa341dac17ad1358d059286` | Resolution-first fallback and full quality identity/bitrate through playback, labels and downloads | Preserve Thyst quality UI; no service or dependency migration. |
+| thiscallnet `42ab1d2cb0a07842748c278dfd874e0fddb43208` (#433) | Metered-Wi-Fi quality policy/settings and capability-change handling | Android 6 preserved; explicit session choices remain authoritative. |
 | thiscallnet `fbffe567` notification policy | Account-scoped cached notification preferences, Helix fallback and delivery-aware dedup | Retain WorkManager, Hilt and the single live-follows request per poll; no EventSub, foreground service or full follow-list sync. |
 | thiscallnet `fbffe567` custom reward flow | Custom Channel Points catalog, input, availability and confirmation with guarded mutation | No automatic spend retry; no Drops, emote unlocks or poll/prediction expansion. |
 

@@ -23,6 +23,7 @@ import androidx.core.view.isVisible
 import androidx.lifecycle.lifecycleScope
 import androidx.media3.common.util.UnstableApi
 import com.github.andreyasadchy.xtra.R
+import com.github.andreyasadchy.xtra.util.parsePlaylistQualities
 import com.github.andreyasadchy.xtra.model.VideoQuality
 import com.github.andreyasadchy.xtra.model.ui.Clip
 import com.github.andreyasadchy.xtra.model.ui.OfflineVideo
@@ -256,16 +257,8 @@ class MediaPlayerFragment : PlayerFragment() {
                         }
                     }
                     if (!playlist.isNullOrBlank()) {
-                        val names = Regex("IVS-NAME=\"(.+?)\"").findAll(playlist).mapNotNull { it.groups[1]?.value }.toMutableList().ifEmpty {
-                            Regex("NAME=\"(.+?)\"").findAll(playlist).mapNotNull { it.groups[1]?.value }.toMutableList()
-                        }
-                        val codecs = Regex("CODECS=\"(.+?)\"").findAll(playlist).mapNotNull { it.groups[1]?.value }.toMutableList()
-                        val urls = Regex("https://.*\\.m3u8").findAll(playlist).map(MatchResult::value).toMutableList()
-                        val list = names.mapIndexedNotNull { index, name ->
-                            urls.getOrNull(index)?.let { url ->
-                                VideoQuality(name, codecs.getOrNull(index), url)
-                            }
-                        }
+                        val parsedQualities = parsePlaylistQualities(playlist, url)
+                        val list = parsedQualities
                         viewModel.qualities = list
                             .sortedByDescending {
                                 it.name?.substringAfter("p", "")?.takeWhile { it.isDigit() }?.toIntOrNull()
@@ -345,11 +338,8 @@ class MediaPlayerFragment : PlayerFragment() {
                             }
                         }
                         if (!playlist.isNullOrBlank()) {
-                            val names = Regex("IVS-NAME=\"(.+?)\"").findAll(playlist).mapNotNull { it.groups[1]?.value }.toMutableList().ifEmpty {
-                                Regex("NAME=\"(.+?)\"").findAll(playlist).mapNotNull { it.groups[1]?.value }.toMutableList()
-                            }
-                            val codecs = Regex("CODECS=\"(.+?)\"").findAll(playlist).mapNotNull { it.groups[1]?.value }.toMutableList()
-                            val urls = Regex("https://.*\\.m3u8").findAll(playlist).map(MatchResult::value).toMutableList()
+                            val parsedQualities = parsePlaylistQualities(playlist, url).toMutableList()
+                            val urls = parsedQualities.mapNotNull { it.url }.toMutableList()
                             playlist.lines().filter { it.startsWith("#EXT-X-SESSION-DATA") }.let { list ->
                                 if (list.isNotEmpty()) {
                                     val url = urls.firstOrNull()?.takeIf { it.contains("/index-") }
@@ -392,18 +382,16 @@ class MediaPlayerFragment : PlayerFragment() {
                                                                         val codec = obj.optString("CODECS")
                                                                         val newVariantId = obj.optString("STABLE-VARIANT-ID")
                                                                         if (!name.isNullOrBlank() && !newVariantId.isNullOrBlank()) {
-                                                                            names.add(name)
-                                                                            if (!codec.isNullOrBlank()) {
-                                                                                codecs.add(codec)
-                                                                            }
-                                                                            urls.add(url.replace(
+                                                                            val newUrl = url.replace(
                                                                                 "$variantId/index-",
                                                                                 if (urls.find { it.contains("chunked/index-") } == null && newVariantId != "audio_only") {
                                                                                     "chunked/index-"
                                                                                 } else {
                                                                                     "$newVariantId/index-"
                                                                                 }
-                                                                            ))
+                                                                            )
+                                                                            urls.add(newUrl)
+                                                                            parsedQualities.add(VideoQuality(name, codec.takeIf { it.isNotBlank() }, newUrl, obj.optInt("BANDWIDTH").takeIf { it > 0 }))
                                                                         }
                                                                     }
                                                                 }
@@ -416,11 +404,7 @@ class MediaPlayerFragment : PlayerFragment() {
                                     }
                                 }
                             }
-                            val list = names.mapIndexedNotNull { index, name ->
-                                urls.getOrNull(index)?.let { url ->
-                                    VideoQuality(name, codecs.getOrNull(index), url)
-                                }
-                            }
+                            val list = parsedQualities
                             viewModel.qualities = list
                                 .sortedByDescending {
                                     it.name?.substringAfter("p", "")?.takeWhile { it.isDigit() }?.toIntOrNull()
@@ -697,9 +681,9 @@ class MediaPlayerFragment : PlayerFragment() {
                 }
                 val connectivityManager = requireContext().getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
                 val networkCapabilities = connectivityManager.getNetworkCapabilities(connectivityManager.activeNetwork)
-                val cellular = networkCapabilities?.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) == true
-                if ((!cellular && requireContext().prefs().getString(C.PLAYER_DEFAULTQUALITY, "saved") == "saved") || (cellular && requireContext().prefs().getString(C.PLAYER_DEFAULT_CELLULAR_QUALITY, "saved") == "saved")) {
-                    requireContext().prefs().edit { putString(C.PLAYER_QUALITY, quality.name) }
+                val profile = PlayerQualityNetworkProfile.from(networkCapabilities)
+                if (shouldPersistQualitySelection(profile)) {
+                    PlayerQualityPreferences.save(requireContext().prefs(), quality)
                 }
             }
         }
@@ -774,6 +758,7 @@ class MediaPlayerFragment : PlayerFragment() {
             qualityNames = qualities?.map { it.name.toString() }?.toTypedArray(),
             qualityCodecs = qualities?.map { it.codecs.toString() }?.toTypedArray(),
             qualityUrls = qualities?.map { it.url.toString() }?.toTypedArray(),
+            qualityBitrates = qualities?.map { it.bitrate ?: -1 }?.toIntArray(),
         ).show(childFragmentManager, null)
     }
 

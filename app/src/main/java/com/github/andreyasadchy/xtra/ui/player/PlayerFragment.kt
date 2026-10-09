@@ -1645,37 +1645,13 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
     }
 
     fun getQualityMap(): Map<String, VideoQuality>? {
-        val qualities = viewModel.qualities
-        return if (!qualities.isNullOrEmpty()) {
-            val hideCodecs = qualities.all {
-                val codec = it.codecs?.substringBefore('.')
-                codec == "avc1" || codec == "mp4a" || codec.isNullOrBlank()
-            }
-            qualities.filterNot { quality ->
-                quality.name.isNumericQualityFallback()
-            }.associateBy { quality ->
-                when (normalizeQualityName(quality.name)) {
-                    "auto" -> getString(R.string.auto)
-                    "source" -> getString(R.string.source)
-                    "audio_only" -> getString(R.string.audio_only)
-                    "chat_only" -> getString(R.string.chat_only)
-                    else -> {
-                        if (hideCodecs) {
-                            quality.name.toString()
-                        } else {
-                            val codec = quality.codecs?.substringBefore('.')
-                            val codecName = when {
-                                codec == "av01" -> "AV1"
-                                codec == "hev1" || codec == "hvc1" -> "H.265"
-                                codec == "avc1" || codec.isNullOrBlank() -> "H.264"
-                                else -> codec
-                            }
-                            "${quality.name} $codecName"
-                        }
-                    }
-                }
-            }
-        } else null
+        val qualities = viewModel.qualities?.takeIf { it.isNotEmpty() } ?: return null
+        return PlayerQualityPopupModel.build(
+            qualities,
+            PlayerQualityPopupLabels(getString(R.string.auto), getString(R.string.source), getString(R.string.audio_only), getString(R.string.chat_only)),
+        ).associate { option ->
+            listOfNotNull(option.primaryLabel, option.codecLabel).joinToString(" ") to option.quality
+        }
     }
 
     fun showQualityDialog() {
@@ -1698,9 +1674,9 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
             context = requireContext(),
             binding = popupBinding,
             qualities = qualities,
-            selectedTag = viewModel.quality?.name,
+            selectedQuality = viewModel.quality,
             panelWidthPx = panelWidth,
-            onQualitySelected = ::selectQuality,
+            onQualitySelected = ::selectQualityOption,
             onDismissRequested = { hidePlayerPopup() },
         ).also { it.bind() }
         showPlayerPopup(
@@ -1713,12 +1689,18 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
     }
 
     fun selectQuality(qualityName: String?) {
-        viewModel.userHasChangedQuality = true
         val normalizedQualityName = normalizeQualityName(qualityName)
-        changeQuality(
-            viewModel.qualities?.find { it.name == qualityName }
+        selectQualityOption(
+            getQualityMap()?.get(qualityName)
+                ?: viewModel.qualities?.find { it.name == qualityName }
                 ?: viewModel.qualities?.find { normalizeQualityName(it.name) == normalizedQualityName }
         )
+    }
+
+    private fun selectQualityOption(quality: VideoQuality?) {
+        if (quality == null) return
+        viewModel.userHasChangedQuality = true
+        changeQuality(quality)
         changePlayerMode()
         setQualityText()
     }
@@ -2389,41 +2371,45 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
     protected fun setDefaultQuality() {
         val connectivityManager = requireContext().getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
         val networkCapabilities = connectivityManager.getNetworkCapabilities(connectivityManager.activeNetwork)
-        val cellular = networkCapabilities?.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) == true
-        val defaultQuality = if (cellular) {
-            requireContext().prefs().getString(C.PLAYER_DEFAULT_CELLULAR_QUALITY, "saved")
-        } else {
-            requireContext().prefs().getString(C.PLAYER_DEFAULTQUALITY, "saved")
-        }?.substringBefore(" ")
-        viewModel.quality = when (defaultQuality) {
-            "saved" -> {
-                val savedQuality = requireContext().prefs().getString(C.PLAYER_QUALITY, "720p60")?.substringBefore(" ")
-                when (savedQuality) {
-                    AUTO_QUALITY -> viewModel.qualities?.find { it.name == AUTO_QUALITY }
-                    AUDIO_ONLY_QUALITY -> viewModel.qualities?.find { it.name == AUDIO_ONLY_QUALITY }
-                    CHAT_ONLY_QUALITY -> viewModel.qualities?.find { it.name == CHAT_ONLY_QUALITY }
-                    else -> findQuality(savedQuality)
-                }
-            }
-            AUTO_QUALITY -> viewModel.qualities?.find { it.name == AUTO_QUALITY }
-            "Source" -> viewModel.qualities?.find { it.name != AUTO_QUALITY }
-            AUDIO_ONLY_QUALITY -> viewModel.qualities?.find { it.name == AUDIO_ONLY_QUALITY }
-            CHAT_ONLY_QUALITY -> viewModel.qualities?.find { it.name == CHAT_ONLY_QUALITY }
-            else -> findQuality(defaultQuality)
-        } ?: viewModel.qualities?.firstOrNull()
+        val profile = PlayerQualityNetworkProfile.from(networkCapabilities)
+        val qualities = viewModel.qualities.orEmpty()
+        viewModel.previousQuality = viewModel.previousQuality?.let { selectDownloadQuality(qualities, it) }
+        viewModel.quality = preserveRefreshedQuality(qualities, viewModel.quality, viewModel.userHasChangedQuality)
+            ?: resolveDefaultQuality(profile)
     }
 
-    private fun findQuality(targetQualityString: String?): VideoQuality? {
-        val targetQuality = targetQualityString?.split("p")
-        return targetQuality?.getOrNull(0)?.takeWhile { it.isDigit() }?.toIntOrNull()?.let { targetResolution ->
-            val targetFps = targetQuality.getOrNull(1)?.takeWhile { it.isDigit() }?.toIntOrNull() ?: 30
-            val last = viewModel.qualities?.last { it.name != AUDIO_ONLY_QUALITY && it.name != CHAT_ONLY_QUALITY }
-            viewModel.qualities?.find { qualityString ->
-                val quality = qualityString.name?.split("p")
-                val resolution = quality?.getOrNull(0)?.takeWhile { it.isDigit() }?.toIntOrNull()
-                val fps = quality?.getOrNull(1)?.takeWhile { it.isDigit() }?.toIntOrNull() ?: 30
-                resolution != null && ((targetResolution == resolution && targetFps >= fps) || targetResolution > resolution || qualityString == last)
-            }
+    private fun resolveDefaultQuality(profile: PlayerQualityNetworkProfile): VideoQuality? {
+        val configured = profile.qualityPreference(requireContext().prefs())?.substringBefore(" ")
+        val qualities = viewModel.qualities.orEmpty()
+        return if (configured == "saved") {
+            PlayerQualityPreferences.resolve(requireContext().prefs(), qualities)
+        } else {
+            selectPreferredQuality(qualities, configured)
+        } ?: qualities.firstOrNull()
+    }
+
+    private var applyingNetworkQuality = false
+
+    internal fun shouldPersistQualitySelection(profile: PlayerQualityNetworkProfile): Boolean =
+        !applyingNetworkQuality && profile.qualityPreference(requireContext().prefs())?.substringBefore(" ") == "saved"
+
+    internal fun reapplyNetworkDefaultQuality(profile: PlayerQualityNetworkProfile) {
+        if (!isAdded || _binding == null || viewModel.qualities.isNullOrEmpty()) return
+        if (!shouldReapplyNetworkQuality(videoType == STREAM, viewModel.userHasChangedQuality)) return
+        val target = resolveDefaultQuality(profile) ?: return
+        if (viewModel.restoreQuality) {
+            // Background audio keeps playing; foreground restore uses the new network's default.
+            viewModel.previousQuality = target
+            return
+        }
+        if (target == viewModel.quality) return
+        applyingNetworkQuality = true
+        try {
+            changeQuality(target)
+            changePlayerMode()
+            setQualityText()
+        } finally {
+            applyingNetworkQuality = false
         }
     }
 
@@ -3117,6 +3103,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                         qualityNames = qualities?.map { it.name.toString() }?.toTypedArray(),
                         qualityCodecs = qualities?.map { it.codecs.toString() }?.toTypedArray(),
                         qualityUrls = qualities?.map { it.url.toString() }?.toTypedArray(),
+                        qualityBitrates = qualities?.map { it.bitrate ?: -1 }?.toIntArray(),
                     ).show(childFragmentManager, null)
                 }
                 VIDEO -> {
@@ -3141,6 +3128,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                         qualityNames = qualities?.map { it.name.toString() }?.toTypedArray(),
                         qualityCodecs = qualities?.map { it.codecs.toString() }?.toTypedArray(),
                         qualityUrls = qualities?.map { it.url.toString() }?.toTypedArray(),
+                        qualityBitrates = qualities?.map { it.bitrate ?: -1 }?.toIntArray(),
                     ).show(childFragmentManager, null)
                 }
             }
