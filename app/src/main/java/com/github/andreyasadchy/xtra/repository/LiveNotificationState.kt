@@ -66,18 +66,22 @@ class LiveNotificationState @Inject constructor(
         pendingChanges.remove(key)
     }
 
-    internal fun beginBaseline(accountId: String?): Unit = synchronized(lock) {
+    internal fun beginBaseline(accountId: String?, startedAt: Long = System.currentTimeMillis()): Unit = synchronized(lock) {
         revision++
         if (!preferences.edit().putString("baseline_account", accountId.orEmpty())
-                .putBoolean("baseline_pending", true).putStringSet("baseline_completed", emptySet()).commit()
+                .putBoolean("baseline_pending", true).putLong("baseline_started", startedAt)
+                .putStringSet("baseline_completed", emptySet()).commit()
         ) throw IOException("Unable to persist live notification baseline")
     }
 
-    internal fun baselineCompleted(accountId: String?): Set<String>? = synchronized(lock) {
+    internal fun pendingBaseline(accountId: String?): PendingLiveBaseline? = synchronized(lock) {
         if (!preferences.getBoolean("baseline_pending", false) ||
             preferences.getString("baseline_account", null) != accountId.orEmpty()
         ) return null
-        preferences.getStringSet("baseline_completed", emptySet()).orEmpty().toSet()
+        PendingLiveBaseline(
+            preferences.getLong("baseline_started", Long.MAX_VALUE),
+            preferences.getStringSet("baseline_completed", emptySet()).orEmpty().toSet(),
+        )
     }
 
     internal fun advanceBaseline(accountId: String?, expectedRevision: Long, completed: Set<String>, complete: Boolean): Boolean = synchronized(lock) {
@@ -96,3 +100,6 @@ class LiveNotificationState @Inject constructor(
         ) throw IOException("Unable to persist live notification preferences")
     }
 }
+
+/** Setup started at [startedAt]; [completed] channels have already been checked. */
+internal class PendingLiveBaseline(val startedAt: Long, val completed: Set<String>)

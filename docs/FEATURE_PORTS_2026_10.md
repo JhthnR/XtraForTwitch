@@ -19,8 +19,13 @@ authenticated GQL request fails. The notification preference each live follow
 reports is cached per account, separately from local notification opt-ins.
 Helix cannot report preferences, so after a failed GQL request only channels last
 reported with notifications enabled may alert; failed results never erase the
-cache or turn unknown/muted notifications on. Account changes and worker
-cancellation are checked before posting.
+cache or turn unknown/muted notifications on. An account without a GQL token
+alerts only local opt-ins, as in 1.3.1. Account changes and worker cancellation
+are checked before posting.
+
+Turning notifications on acknowledges broadcasts that are already live. If that
+setup poll is incomplete, later polls finish it quietly, but a broadcast that
+started after setup still alerts.
 
 Deduplication keeps the newest acknowledged broadcast start per channel and
 retains it across temporary offline or failed polls. A stream is acknowledged
