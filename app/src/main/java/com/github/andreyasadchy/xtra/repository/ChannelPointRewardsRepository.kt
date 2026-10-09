@@ -32,7 +32,7 @@ class ChannelPointRewardsRepository @Inject constructor(
 ) {
     // Spending must not be replayed by a transport retry or redirect. This isolated
     // mutation path deliberately uses OkHttp for every configured network backend.
-    private val mutationClient = okHttpClient.withoutRewardLogging().newBuilder()
+    internal val mutationClient = okHttpClient.withoutRewardLogging().newBuilder()
         .retryOnConnectionFailure(false).followRedirects(false).followSslRedirects(false).build()
 
     suspend fun load(networkLibrary: String?, headers: Map<String, String>, channelLogin: String) =
