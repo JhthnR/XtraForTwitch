@@ -62,6 +62,14 @@ class ChannelPointRewardsRepositoryTest {
         } catch (_: IOException) { }
         assertEquals(1, count.get())
     }
+    @Test fun `mutation client disables OkHttp connection retries and redirects`() {
+        // OkHttp replays below application interceptors, so assert the client configuration itself.
+        val inherited = OkHttpClient.Builder().retryOnConnectionFailure(true).followRedirects(true).followSslRedirects(true).build()
+        val client = repository(inherited).mutationClient
+        assertFalse(client.retryOnConnectionFailure)
+        assertFalse(client.followRedirects)
+        assertFalse(client.followSslRedirects)
+    }
     @Test fun `gateway refusal before execution is a definite rejection`() = runTest {
         val count = AtomicInteger()
         val client = OkHttpClient.Builder().addInterceptor { chain ->
