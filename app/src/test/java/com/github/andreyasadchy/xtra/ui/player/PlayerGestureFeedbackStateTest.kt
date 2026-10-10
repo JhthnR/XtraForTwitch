@@ -122,6 +122,20 @@ class PlayerGestureFeedbackStateTest {
     }
 
     @Test
+    fun `free zoom bar shows the position between Fit and Fill`() {
+        val fit = PlayerGestureFeedbackState.pinchZoomPresentation(PlayerSurfaceClass.LARGE, 0f, "Fit")
+        val middle = PlayerGestureFeedbackState.pinchZoomPresentation(PlayerSurfaceClass.LARGE, 0.5f, "Zoom 128%")
+        val fill = PlayerGestureFeedbackState.pinchZoomPresentation(PlayerSurfaceClass.LARGE, 1f, "Fill")
+        assertTrue(fit.levelVisible)
+        assertEquals(0, fit.level)
+        assertEquals(50, middle.level)
+        assertEquals("Zoom 128%", middle.text)
+        assertEquals(100, fill.level)
+        assertEquals(100, PlayerGestureFeedbackState.pinchZoomPresentation(PlayerSurfaceClass.LARGE, 1.4f, "Fill").level)
+        assertEquals(0, PlayerGestureFeedbackState.pinchZoomPresentation(PlayerSurfaceClass.LARGE, -1f, "Fit").level)
+    }
+
+    @Test
     fun `neutral preview from Stretch parks at the bar center`() {
         assertEquals(50, PlayerGestureFeedbackState.pinchLevel(0f, PlayerDisplayMode.STRETCH))
         assertEquals(50, PlayerGestureFeedbackState.pinchLevel(1f, PlayerDisplayMode.STRETCH))

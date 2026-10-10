@@ -1,5 +1,7 @@
 package com.github.andreyasadchy.xtra.ui.player
 
+import kotlin.math.roundToInt
+
 /**
  * Pure presentation rules for the shared gesture-feedback overlay.
  *
@@ -102,6 +104,23 @@ object PlayerGestureFeedbackState {
             surfaceClass = surfaceClass,
             level = pinchLevel(progress, toward),
             text = targetLabel,
+        )
+    }
+
+    /**
+     * Free-zoom pinch bar: a position rather than a direction, empty at Fit and
+     * full at Fill, with [fraction] the log-scale position between them.
+     */
+    fun pinchZoomPresentation(
+        surfaceClass: PlayerSurfaceClass,
+        fraction: Float,
+        label: String,
+    ): PlayerGestureFeedbackPresentation {
+        return presentation(
+            kind = PlayerGestureFeedbackKind.PINCH,
+            surfaceClass = surfaceClass,
+            level = (fraction.coerceIn(0f, 1f) * 100).roundToInt(),
+            text = label,
         )
     }
 }

@@ -16,6 +16,7 @@ import com.github.andreyasadchy.xtra.util.TwitchApiHelper
 import com.github.andreyasadchy.xtra.util.getAlertDialogBuilder
 import com.github.andreyasadchy.xtra.util.prefs
 import com.github.andreyasadchy.xtra.util.tokenPrefs
+import kotlin.math.roundToInt
 
 /** Binds the existing grouped More actions inside the player-owned popup host. */
 internal class PlayerMorePopupBinder(
@@ -231,13 +232,26 @@ internal class PlayerMorePopupBinder(
                     },
                 )
             }.toTypedArray()
-            displayModeValue.text = labels[modes.indexOf(fragment.getCurrentDisplayMode())]
+            // A pinch zoom between Fit and Fill is listed as the current choice;
+            // picking a mode clears it.
+            fun choices(): Pair<Array<String>, Int> {
+                val zoom = fragment.getDisplayZoom()
+                return if (fragment.getCurrentDisplayMode() == PlayerDisplayMode.FIT && zoom > 1f) {
+                    labels + context.getString(R.string.display_mode_zoom, (zoom * 100).roundToInt()) to labels.size
+                } else {
+                    labels to modes.indexOf(fragment.getCurrentDisplayMode())
+                }
+            }
+            displayModeValue.text = choices().let { (items, checked) -> items[checked] }
             menuDisplayMode.setOnClickListener {
+                val (items, checked) = choices()
                 context.getAlertDialogBuilder()
                     .setTitle(context.getString(R.string.display_mode))
-                    .setSingleChoiceItems(labels, modes.indexOf(fragment.getCurrentDisplayMode())) { dialog, which ->
-                        fragment.selectDisplayMode(modes[which])
-                        displayModeValue.text = labels[which]
+                    .setSingleChoiceItems(items, checked) { dialog, which ->
+                        if (which < modes.size) {
+                            fragment.selectDisplayMode(modes[which])
+                            displayModeValue.text = labels[which]
+                        }
                         dialog.dismiss()
                     }
                     .setNegativeButton(context.getString(R.string.no), null)
