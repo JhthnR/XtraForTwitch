@@ -777,11 +777,11 @@ class PlayerViewModel @Inject constructor(
         }
     }
 
-    fun loadClip(networkLibrary: String?, gqlHeaders: Map<String, String>, id: String?, enableIntegrity: Boolean) {
+    fun loadClip(networkLibrary: String?, gqlHeaders: Map<String, String>, id: String?, supportedCodecs: String?, enableIntegrity: Boolean) {
         if (clipUrls.value == null) {
             viewModelScope.launch {
                 try {
-                    clipUrls.value = playerRepository.loadClipQualities(networkLibrary, gqlHeaders, id, enableIntegrity) ?: emptyList()
+                    clipUrls.value = playerRepository.loadClipQualities(networkLibrary, gqlHeaders, id, supportedCodecs, enableIntegrity) ?: emptyList()
                 } catch (e: Exception) {
                     if (e.message == "failed integrity check" && integrity.value == null) {
                         integrity.value = "refreshClip"

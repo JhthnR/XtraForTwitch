@@ -297,6 +297,7 @@ class DownloadDialog : DialogFragment(), IntegrityDialog.CallbackListener {
                             }
                         }
                     },
+                    supportedCodecs = requireContext().prefs().getString(C.TOKEN_SUPPORTED_CODECS, "av1,h265,h264"),
                     enableIntegrity = requireContext().prefs().getBoolean(C.ENABLE_INTEGRITY, false),
                 )
             }
@@ -716,6 +717,7 @@ class DownloadDialog : DialogFragment(), IntegrityDialog.CallbackListener {
                                 }
                             }
                         },
+                        supportedCodecs = requireContext().prefs().getString(C.TOKEN_SUPPORTED_CODECS, "av1,h265,h264"),
                         enableIntegrity = requireContext().prefs().getBoolean(C.ENABLE_INTEGRITY, false),
                     )
                 }

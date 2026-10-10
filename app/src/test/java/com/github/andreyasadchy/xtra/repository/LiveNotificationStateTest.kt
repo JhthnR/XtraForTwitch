@@ -41,15 +41,17 @@ class LiveNotificationStateTest {
         assertEquals(setOf("2"), LiveNotificationState(context).load("other"))
     }
 
-    @Test fun `pending baseline and completed channel coverage survive process recreation`() {
+    @Test fun `pending baseline start and completed channel coverage survive process recreation`() {
         val state = LiveNotificationState(context)
-        state.beginBaseline("viewer")
+        state.beginBaseline("viewer", 1_000L)
         val revision = state.revision()
         assertTrue(state.advanceBaseline("viewer", revision, setOf("1"), false))
-        assertEquals(setOf("1"), LiveNotificationState(context).baselineCompleted("viewer"))
-        assertNull(LiveNotificationState(context).baselineCompleted("other"))
+        val restored = LiveNotificationState(context).pendingBaseline("viewer")!!
+        assertEquals(setOf("1"), restored.completed)
+        assertEquals(1_000L, restored.startedAt)
+        assertNull(LiveNotificationState(context).pendingBaseline("other"))
         assertTrue(state.advanceBaseline("viewer", revision, setOf("1", "2"), true))
-        assertNull(LiveNotificationState(context).baselineCompleted("viewer"))
+        assertNull(LiveNotificationState(context).pendingBaseline("viewer"))
     }
 
     @Test fun `account mute invalidates pending work and removes its cached ID durably`() {

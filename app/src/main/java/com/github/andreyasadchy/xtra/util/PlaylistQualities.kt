@@ -4,6 +4,13 @@ import com.github.andreyasadchy.xtra.model.VideoQuality
 import java.net.URI
 import kotlin.math.roundToInt
 
+/** Dual-format streams also offer portrait variants; the player shows landscape video. */
+internal fun isPortraitVariant(stableVariantId: String?) = stableVariantId?.endsWith("-portrait") == true
+
+/** Twitch withholds these unavailable variants for an unrequested codec or the portrait format. */
+internal fun isSkippedUnavailableReason(reason: String?) =
+    reason == "FR_CODEC_NOT_REQUESTED" || reason == "FR_DUALFORMAT_INCOMPATIBLE"
+
 /** Read attributes per variant so optional CODECS/BANDWIDTH cannot shift onto another URL. */
 internal fun parsePlaylistQualities(playlist: String, baseUrl: String? = null): List<VideoQuality> {
     val attributes = Regex("""(?:^|,)([A-Z0-9-]+)=(?:"([^"]*)"|([^,]*))""")
@@ -23,6 +30,7 @@ internal fun parsePlaylistQualities(playlist: String, baseUrl: String? = null): 
                 line.isNotEmpty() && !line.startsWith('#') -> {
                     val attrs = pending ?: continue
                     pending = null
+                    if (isPortraitVariant(attrs["STABLE-VARIANT-ID"])) continue
                     val url = runCatching {
                         val uri = URI(line)
                         if (uri.isAbsolute) uri else baseUrl?.let { URI(it).resolve(uri) }

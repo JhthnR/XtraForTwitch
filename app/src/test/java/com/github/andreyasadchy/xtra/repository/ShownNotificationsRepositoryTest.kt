@@ -39,6 +39,7 @@ class ShownNotificationsRepositoryTest {
     private var current = true
     private var revision = 0L
     private var pendingBaseline: Set<String>? = null
+    private var baselineStart = Long.MAX_VALUE
     private var localIds = listOf("1")
     private var follows = listOf("1")
     private var streams = listOf(live("1"))
@@ -50,8 +51,10 @@ class ShownNotificationsRepositoryTest {
         whenever(state.accountId()).thenAnswer { account }
         whenever(state.accountChannelAllowed(anyOrNull(), any())).thenReturn(true)
         whenever(state.revision()).thenAnswer { revision }
-        whenever(state.baselineCompleted(anyOrNull())).thenAnswer { pendingBaseline }
-        doAnswer { pendingBaseline = emptySet(); revision++; null }.whenever(state).beginBaseline(anyOrNull())
+        whenever(state.pendingBaseline(anyOrNull())).thenAnswer { pendingBaseline?.let { PendingLiveBaseline(baselineStart, it) } }
+        // Setup runs a minute after the fixture broadcasts started.
+        doAnswer { pendingBaseline = emptySet(); baselineStart = liveNotificationStartedAt(START)!! + 60_000; revision++; null }
+            .whenever(state).beginBaseline(anyOrNull(), any())
         whenever(state.advanceBaseline(anyOrNull(), any(), any(), any())).thenAnswer {
             pendingBaseline = if (it.getArgument<Boolean>(3)) null else it.getArgument<Set<String>>(2)
             true
@@ -153,18 +156,17 @@ class ShownNotificationsRepositoryTest {
         assertEquals(listOf("101"), posted.map { it.channelId })
     }
 
-    @Test fun `Helix-only account alerts each live follow from one followed-streams request`() = runTest {
+    @Test fun `Helix-only account alerts only local opt-ins as 1_3_1 did`() = runTest {
         account = "viewer"
-        localIds = emptyList()
+        cache["viewer"] = setOf("1", "3")
+        localIds = listOf("2")
         follows = listOf("1", "2", "3")
-        poll()
-        assertEquals(listOf("1"), posted.map { it.channelId })
-        streams = listOf(live("2"))
-        poll()
-        assertEquals(listOf("1", "2"), posted.map { it.channelId })
-        verify(helix, times(2)).getFollowedStreams(anyOrNull(), any(), anyOrNull(), anyOrNull(), anyOrNull())
+        streams = follows.map { live(it) }
+        assertFalse(poll())
+        assertEquals(listOf("2"), posted.map { it.channelId })
+        verify(helix, never()).getFollowedStreams(anyOrNull(), any(), anyOrNull(), anyOrNull(), anyOrNull())
         verify(helix, never()).getUserFollows(anyOrNull(), any(), anyOrNull(), anyOrNull(), anyOrNull(), anyOrNull())
-        verify(state, never()).saveIfCurrent(any(), any(), any())
+        verify(state, never()).load(any())
     }
 
     @Test fun `follow outage retries without alerting or changing cached preferences`() = runTest {
@@ -315,11 +317,14 @@ class ShownNotificationsRepositoryTest {
     @Test fun `Helix live follows paginate`() = runTest {
         account = "viewer"
         localIds = emptyList()
+        gqlHeaders = mapOf(C.HEADER_TOKEN to "fixture-gql")
+        cache["viewer"] = setOf("1", "2")
         whenever(helix.getFollowedStreams("OkHttp", helixHeaders, "viewer", 100, null))
             .thenReturn(StreamsResponse(listOf(live("1")), Pagination("next")))
         whenever(helix.getFollowedStreams("OkHttp", helixHeaders, "viewer", 100, "next"))
             .thenReturn(StreamsResponse(listOf(live("2")), Pagination()))
-        assertFalse(poll())
+        // The failed GQL request still asks for a retry.
+        assertTrue(poll())
         assertEquals(listOf("1", "2"), posted.mapNotNull { it.channelId }.sorted())
     }
 
@@ -390,6 +395,23 @@ class ShownNotificationsRepositoryTest {
         assertEquals(listOf("1"), posted.map { it.channelId })
     }
 
+    @Test fun `broadcast starting after an unfinished baseline began still alerts`() = runTest {
+        doAnswer { throw IOException("offline") }.whenever(helix).getStreams(anyOrNull(), any(), anyOrNull(), anyOrNull(), anyOrNull(), anyOrNull(), anyOrNull(), anyOrNull())
+        repository.getNewStreams(local, "OkHttp", gqlHeaders, gql, helixHeaders, helix)
+        assertEquals(emptySet<String>(), pendingBaseline)
+        doAnswer { StreamsResponse(streams) }.whenever(helix).getStreams(anyOrNull(), any(), anyOrNull(), anyOrNull(), anyOrNull(), anyOrNull(), anyOrNull(), anyOrNull())
+        streams = listOf(live("1", NEWER))
+        assertFalse(poll())
+        assertEquals(listOf(NEWER), posted.map { it.createdAt })
+        assertNull(pendingBaseline)
+    }
+
+    @Test fun `setup storage failure does not stop notification scheduling`() = runTest {
+        doAnswer { throw IOException("disk full") }.whenever(state).beginBaseline(anyOrNull(), any())
+        assertEquals(emptyList<Stream>(), repository.getNewStreams(local, "OkHttp", gqlHeaders, gql, helixHeaders, helix))
+        assertTrue(posted.isEmpty())
+    }
+
     @Test fun `local opt out between deliveries prevents second local alert`() = runTest {
         localIds = listOf("1", "2")
         streams = listOf(live("1"), live("2"))
@@ -400,6 +422,8 @@ class ShownNotificationsRepositoryTest {
     @Test fun `remote mute generation during fetch prevents stale account delivery`() = runTest {
         account = "viewer"
         localIds = emptyList()
+        gqlHeaders = mapOf(C.HEADER_TOKEN to "fixture-gql")
+        cache["viewer"] = setOf("1")
         doAnswer { revision++; StreamsResponse(streams, Pagination()) }
             .whenever(helix).getFollowedStreams(anyOrNull(), any(), anyOrNull(), anyOrNull(), anyOrNull())
         assertTrue(poll())
@@ -462,6 +486,9 @@ class ShownNotificationsRepositoryTest {
     @Test fun `pending remote opt out blocks polls started before durable cache update`() = runTest {
         account = "viewer"
         localIds = emptyList()
+        gqlHeaders = mapOf(C.HEADER_TOKEN to "fixture-gql")
+        whenever(gql.loadQueryUserFollowedStreams("OkHttp", gqlHeaders, 100, null))
+            .thenReturn(followPage(listOf("1" to true), null, false))
         whenever(state.accountChannelAllowed("viewer", "1")).thenReturn(false)
         poll()
         assertTrue(posted.isEmpty())

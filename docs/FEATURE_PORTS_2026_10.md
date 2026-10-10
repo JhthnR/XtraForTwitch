@@ -19,8 +19,13 @@ authenticated GQL request fails. The notification preference each live follow
 reports is cached per account, separately from local notification opt-ins.
 Helix cannot report preferences, so after a failed GQL request only channels last
 reported with notifications enabled may alert; failed results never erase the
-cache or turn unknown/muted notifications on. Account changes and worker
-cancellation are checked before posting.
+cache or turn unknown/muted notifications on. An account without a GQL token
+alerts only local opt-ins, as in 1.3.1. Account changes and worker cancellation
+are checked before posting.
+
+Turning notifications on acknowledges broadcasts that are already live. If that
+setup poll is incomplete, later polls finish it quietly, but a broadcast that
+started after setup still alerts.
 
 Deduplication keeps the newest acknowledged broadcast start per channel and
 retains it across temporary offline or failed polls. A stream is acknowledged
@@ -60,6 +65,11 @@ installing an older app afterward is not an automatic schema rollback.
 Fallback picks the best resolution, then frame rate, at or below the saved
 choice; saved bitrate and codec only choose among variants of that resolution
 and frame rate.
+
+Streams that Twitch also delivers in vertical format list portrait variants;
+these are not offered, since the player shows landscape video. Clips request the
+codecs allowed by the existing codec preference, so HEVC/AV1 clip qualities can
+appear, and use the landscape asset when a portrait crop also exists.
 
 A separate metered-Wi-Fi preset supports hotspots/data caps. Its default follows
 the mobile-data preset; unmetered Wi-Fi retains its existing preset. Network
@@ -113,7 +123,8 @@ identity. The existing AGPL-3.0 license and Xtra attribution remain.
 - Quality identity: [crackededed/Xtra](https://github.com/crackededed/Xtra), inspected at
   `9f8043e8bdf45e8a2b2bf4cecfa74dc1de8ae0a3`: resolution-first ordering `a70b0897`,
   exact quality/bitrate `2c582bb83621881dd36c4c7f6632587d38e633cb` and duplicate
-  quality labels `703437feee29435f9aa341dac17ad1358d059286`.
+  quality labels `703437feee29435f9aa341dac17ad1358d059286`; then, at
+  `a3cbb0325`, hidden portrait variants `01f981ab0` and clip codecs `edd8ae257`.
 - Metered Wi-Fi: thiscallnet/Xtra [PR #433](https://github.com/thiscallnet/Xtra/pull/433),
   `42ab1d2cb0a07842748c278dfd874e0fddb43208`.
 - Live rewind: thiscallnet/Xtra `fbffe567381dfca9970860e2976ab0021c2602eb`
@@ -125,7 +136,7 @@ multiview, local clips, captions and dependency upgrades are not included.
 ## Verification and remaining gates
 
 Local debug/release assembly, the configured unit suite and debug lint passed
-after independent correctness/lifecycle reviews and the October 9 review fixes. See the
+after independent correctness/lifecycle reviews and the October 9 and 10 review fixes. See the
 [validation report](FEATURE_PORTS_VALIDATION.md) for exact results and limits;
 source review and unit tests are not device playback evidence.
 No physical device/emulator playback or authenticated Twitch mutation has been
@@ -144,7 +155,8 @@ Required device matrix before merge/release:
 - Upgrade a database with existing downloads/follows/stats from schema 35 to 36;
   stop/resume a new exact-variant recording and reopen the app
 - Live, VoD, clips, all three player backends; quality names shared across codecs
-  and bitrates; 1080p30 versus 720p60; audio/chat-only and restore
+  and bitrates; 1080p30 versus 720p60; audio/chat-only and restore; a stream
+  that also broadcasts vertically; HEVC/AV1 clips and clip downloads
 - Wi-Fi ↔ metered hotspot ↔ mobile; metering changes on the same network; VPN;
   manual-quality override and background reconnection
 - No overlapping old audio; minimize/restore, close/reopen, PiP, sleep timer,

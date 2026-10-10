@@ -106,6 +106,14 @@ Human QA completed: none.
   errors. Split into four stacked branches (notifications → rewards → quality →
   rewind); each intermediate layer was built and tested on its own.
 
+- 2026-10-10: Muse Spark 1.3 reviews of #30–#33 triaged against the code. Fixed the
+  pending-baseline start time, Helix-only account alerts, setup-poll failure,
+  the reward replay test and legacy duplicate quality choice; other findings were
+  verified as non-issues. Ported crackededed portrait-variant hiding and clip
+  codec requests into the quality layer; the settings drag-order fix went to a
+  separate PR. Fixes were committed per layer and merged upward. Layer checks:
+  626, 665, 716 and 743 tests, zero lint errors; top-layer release build passed.
+
 ## Decisions
 - Manual ports only; upstream architecture and dependency changes intentionally deferred.
 - Rewind uses the established player replacement and VoD UI, preserving replay chat,
@@ -118,7 +126,7 @@ Human QA completed: none.
 ## Final PR summary draft
 Summary: All five bounded feature areas implemented with preserved minSdk23,
 Hilt, WorkManager and Media3 1.9.3; no version bump or publication.
-Tests: full configured Android aggregate passed, including 735 tests and
+Tests: full configured Android aggregate passed, including 743 tests and
 zero-error lint. SDK setup blocker resolved. See
 `docs/FEATURE_PORTS_VALIDATION.md` for exact passed/unrun boundaries.
 Human QA: listed above; none performed.
