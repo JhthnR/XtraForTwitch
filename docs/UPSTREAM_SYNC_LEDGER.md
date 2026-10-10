@@ -273,5 +273,5 @@ captioning or release/version change is included. Earlier quality deferrals are
 superseded only for the bounded scopes above.
 
 See [feature behavior and QA matrix](FEATURE_PORTS_2026_10.md). These changes are
-not a released APK. Local debug/release assembly, 735 configured tests and debug lint passed; see
+not a released APK. Local debug/release assembly, 743 configured tests and debug lint passed; see
 [validation results](FEATURE_PORTS_VALIDATION.md). No physical-device QA is claimed.
