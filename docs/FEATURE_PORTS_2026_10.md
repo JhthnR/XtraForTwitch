@@ -139,8 +139,11 @@ Local debug/release assembly, the configured unit suite and debug lint passed
 after independent correctness/lifecycle reviews and the October 9 and 10 review fixes. See the
 [validation report](FEATURE_PORTS_VALIDATION.md) for exact results and limits;
 source review and unit tests are not device playback evidence.
-No physical device/emulator playback or authenticated Twitch mutation has been
-performed for this change.
+An API 36 emulator smoke test covered logged-out playback, quality, metered Wi-Fi,
+rewind, notification setup and the database upgrade; the
+[port tracker](FEATURE_PORTS_VALIDATION.md#port-tracker) lists what each change
+still needs. No physical-device playback or authenticated Twitch mutation has been
+performed.
 
 Required device matrix before merge/release:
 

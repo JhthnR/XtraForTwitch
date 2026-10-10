@@ -27,6 +27,27 @@ Twitch endpoint success, physical-device behavior or approval to publish a relea
 Hosted CI must be checked against the exact proposed commits and is reported
 separately from this local pass. No merge or release is part of this change.
 
+## Port tracker
+
+Every ported change, where it lives and how far it has been checked on a device.
+Unit-test and CI results per layer are under [Android checks](#android-checks);
+upstream commits that were reviewed but not ported are listed with reasons in the
+[upstream ledger](UPSTREAM_SYNC_LEDGER.md).
+
+| Feature | Source commit | Layer / PR | Emulator, October 10 | Still open |
+| --- | --- | --- | --- | --- |
+| Live notifications: cache, Helix fallback, dedup | thiscallnet `fbffe567` | 1 / #30 | Local opt-in, setup baseline, worker run with no alert for an already-live channel | Alert for a channel going live after setup; account follows; muted channels |
+| Channel Points custom rewards | thiscallnet `fbffe567` | 2 / #31 | Not run (logged out) | All authenticated flows |
+| Resolution-first quality order | crackededed `a70b0897` | 3 / #32 | Live, VoD and clip lists in descending order | — |
+| Exact quality and bitrate | crackededed `2c582bb8` | 3 / #32 | Choice saved with codecs and bitrate; audio-only and chat-only restore | Other player backends |
+| Duplicate quality labels | crackededed `703437fe` | 3 / #32 | No tested stream had duplicate names | A stream with duplicate names |
+| Download identity, Room 35→36 | crackededed `2c582bb8` | 3 / #32 | In-place upgrade from 1.2.1 data | Data with existing downloads |
+| Hidden portrait variants | crackededed `01f981ab0` | 3 / #32 | No portrait entries; no vertical broadcast was live | A stream that also broadcasts vertically |
+| Clip codecs | crackededed `edd8ae257` | 3 / #32 | H.265 clip renditions offered and decoded | AV1; a device without HEVC; clip downloads |
+| Metered Wi-Fi preset | thiscallnet `42ab1d2c` ([#433](https://github.com/thiscallnet/Xtra/pull/433)) | 3 / #32 | Preset applied on metered Wi-Fi and lifted when unmetered | Hotspot and mobile data; VPN; manual override |
+| Recording-backed live rewind | thiscallnet `fbffe567` | 4 / #33 | Handoff, offsets, Go Live, PiP, minimize and close during discovery | Subscriber-only recordings; stream restart; network loss |
+| Settings drag order | crackededed `a3cbb0325` | `fix/settings-drag-reorder` / #35 | Bug reproduced, then fixed with #35 merged onto the stack | Tablet; TV D-pad |
+
 ## Android checks
 
 | Check | Layer 1 | Layer 2 | Layer 3 | Layer 4 (top) |
@@ -124,14 +145,61 @@ and clip codec requests to the quality layer; see the
 [ledger](UPSTREAM_SYNC_LEDGER.md#october-10-2026-crackededed-recheck). Its settings
 drag-order fix is a separate PR against master (#35).
 
+## Emulator smoke test
+
+On 2026-10-10 a debug build of the top layer (`f65c4fb55`) ran on an API 36 phone
+emulator (`Medium_Phone_API_36.1`), installed over existing 1.2.1 app data without
+clearing it. The app was logged out and used the emulator's Wi-Fi.
+
+- Upgrade: the schema 35 database migrated in place to 36 with the generated
+  identity hash; existing watch sessions, streaks and saved positions were kept.
+- Quality: live and VoD sheets listed Auto, 1080p60, 720p60, 480p, 360p and 160p,
+  with no duplicate or portrait entries. Audio-only and chat-only returned to
+  720p60 with readable labels, and the choice was saved as `720p60` with codecs
+  `avc1.4D4020,mp4a.40.2` and its bitrate. Switching streams released the old
+  audio track before the new one started.
+- Clips: with the emulator's detected codec preference (`h265,h264`) the clip
+  sheet offered 1080p60 to 360p in H.265, and playback used the HEVC decoder.
+- Metered Wi-Fi: with the preset at 360p and the network marked metered through
+  `cmd netpolicy`, a new stream opened at 360p. Clearing the flag during playback
+  returned it to the saved 720p60.
+- Rewind: a channel without archives stayed live with the "no playable recording"
+  message. On a channel recording an archive, "last 5 minutes" and "last 30
+  seconds" started about 5:00 and 0:30 before the recorded edge, labeled as a
+  recording, with replay chat. Go Live restored live playback and chat. Minimizing
+  during discovery left live playback in place; closing during discovery kept the
+  player closed. Home moved the recording into PiP, and it kept playing after
+  resume.
+- Notifications: the channel bell, logged out, stored the local opt-in, enabled
+  live notifications and scheduled the worker. The setup baseline completed, and a
+  forced worker run succeeded without alerting for the channel that was already
+  live, recording its broadcast as shown.
+- Drag order: on the stack alone, an 80 ms drag across four rows displayed one
+  order and saved another. With #35 merged on top locally (745 tests passed on the
+  merge), the saved order matched the screen.
+- The crash log had no ThystTV entries for the session.
+
+Observed and left unchanged:
+
+- A rewind whose discovery finishes while the player is minimized is dropped
+  without a message, so playback never expands over browsing. A notice on restore
+  could be added later.
+- Since 1.3 (`7061795ea`), the one-time gesture guide can open inside the PiP
+  window, which reports a landscape configuration. This predates the series.
+
+Not covered here: rewards and account notifications (logged out), a channel going
+live after notification setup, API 23, tablet and TV layouts, hardware decoders
+and mobile data.
+
 ## Independent review and remaining QA
 
 Earlier correctness/lifecycle reviews resolved quality metadata/fallback issues,
 notification account and baseline races, reward web authentication/logging,
 recording ownership/readiness/recovery, and async test completion.
 
-No physical device/emulator decoding, live Twitch notification delivery, real
-reward spending, or complete Hilt/DialogFragment recreation scenario was tested.
+Beyond the emulator smoke test above, no physical-device decoding, delivered live
+notification, real reward spending or complete Hilt/DialogFragment recreation
+scenario was tested.
 Notification posting and durable acknowledgment cannot be strictly atomic across
 hard process death. Rewind depends on an available server recording and uses the
 ordinary VoD timeline, not local DVR.
