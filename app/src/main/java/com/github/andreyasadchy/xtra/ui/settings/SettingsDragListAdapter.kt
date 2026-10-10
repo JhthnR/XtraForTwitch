@@ -12,6 +12,7 @@ import androidx.recyclerview.widget.RecyclerView
 import com.github.andreyasadchy.xtra.R
 import com.github.andreyasadchy.xtra.databinding.SettingsDragListItemBinding
 import com.github.andreyasadchy.xtra.model.ui.SettingsDragListItem
+import java.util.Collections
 
 class SettingsDragListAdapter : ListAdapter<SettingsDragListItem, SettingsDragListAdapter.ViewHolder>(
     object : DiffUtil.ItemCallback<SettingsDragListItem>() {
@@ -71,5 +72,20 @@ class SettingsDragListAdapter : ListAdapter<SettingsDragListItem, SettingsDragLi
                 }
             }
         }
+    }
+}
+
+/**
+ * A fast drag can skip rows. Move one row at a time so the list order matches each
+ * notifyItemMoved call; one swap of distant rows would scramble the rows in between.
+ */
+internal fun moveDragListItem(list: List<*>, from: Int, to: Int, notifyMoved: (Int, Int) -> Unit) {
+    if (from == RecyclerView.NO_POSITION || to == RecyclerView.NO_POSITION) return
+    val step = if (from < to) 1 else -1
+    var position = from
+    while (position != to) {
+        Collections.swap(list, position, position + step)
+        notifyMoved(position, position + step)
+        position += step
     }
 }
