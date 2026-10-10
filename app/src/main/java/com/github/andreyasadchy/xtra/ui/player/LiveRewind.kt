@@ -67,4 +67,33 @@ internal object LiveRewind {
     fun isPlayablePlaylist(body: String?, errorCode: Int?): Boolean = errorCode == null &&
         body?.trimStart()?.startsWith("#EXTM3U") == true &&
         (body.contains("#EXT-X-STREAM-INF:") || body.contains("#EXTINF:"))
+
+    /** Playback at or above this multiple of realtime counts as catching up to live. */
+    const val LIVE_CATCH_UP_SPEED = 1.05f
+
+    /** Recording positions within this distance of the reported edge count as caught up. */
+    const val LIVE_EDGE_SLACK_MS = 5_000L
+
+    fun shouldResetSpeedAtLiveEdge(
+        hasLiveRewindOrigin: Boolean,
+        currentSpeed: Float?,
+        positionMs: Long?,
+        durationMs: Long?,
+    ): Boolean {
+        if (!hasLiveRewindOrigin) return false
+        if (currentSpeed == null || currentSpeed <= LIVE_CATCH_UP_SPEED) return false
+        if (positionMs == null || durationMs == null || durationMs <= 0L) return false
+        return durationMs - positionMs <= LIVE_EDGE_SLACK_MS
+    }
+
+    fun shouldShowFullscreenLiveRewind(
+        videoType: String?,
+        hasLiveRewindOrigin: Boolean,
+        isMaximized: Boolean,
+        isPortrait: Boolean,
+    ): Boolean =
+        videoType == PlayerFragment.STREAM &&
+            !hasLiveRewindOrigin &&
+            isMaximized &&
+            !isPortrait
 }

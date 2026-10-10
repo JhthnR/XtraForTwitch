@@ -352,7 +352,42 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
 
     internal fun returnToLiveFromRecording() {
         val origin = liveRewindOrigin() ?: return
+        resetLiveRewindSpeed()
         (activity as? MainActivity)?.returnFromLiveRewind(this, origin)
+    }
+
+    /**
+     * Recording playback can run faster than realtime to catch up. Returning to
+     * live must not leave that multiple persisted or displayed.
+     */
+    internal fun resetLiveRewindSpeed() {
+        if (liveRewindOrigin() == null) return
+        setPlaybackSpeed(1f)
+        updatePlaybackSpeedUi(1f)
+        requireContext().prefs().edit { putFloat(C.PLAYER_SPEED, 1f) }
+    }
+
+    /** True while a live-rewind recording is close enough to live to drop catch-up speed. */
+    internal fun checkLiveRewindCatchUp(): Boolean {
+        if (liveRewindOrigin() == null) return false
+        if (!LiveRewind.shouldResetSpeedAtLiveEdge(true, getCurrentSpeed(), getCurrentPosition(), getDuration())) {
+            return false
+        }
+        resetLiveRewindSpeed()
+        return true
+    }
+
+    private fun updateFullscreenLiveRewind() {
+        val show = LiveRewind.shouldShowFullscreenLiveRewind(videoType, liveRewindOrigin() != null, isMaximized, isPortrait)
+        with(binding.playerControls) {
+            liveRewind.isVisible = show
+            if (show) {
+                liveRewind.contentDescription = getString(R.string.live_rewind)
+                liveRewind.setOnClickListener { showLiveRewindOptions() }
+            } else {
+                liveRewind.setOnClickListener(null)
+            }
+        }
     }
 
     protected open fun isLiveRewindPlaybackReady(): Boolean = false
@@ -1293,6 +1328,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                         restart.visibility = View.VISIBLE
                         restart.setOnClickListener { restartPlayer() }
                     }
+                    updateFullscreenLiveRewind()
                     if (requireContext().prefs().getBoolean(C.PLAYER_SEEKLIVE, false)) {
                         seekLive.visibility = View.VISIBLE
                         seekLive.setOnClickListener { seekToLivePosition() }
@@ -1641,6 +1677,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                         }
                     }
                     toggleChat.visibility = View.GONE
+                    updateFullscreenLiveRewind()
                 }            } else {
                 systemUiListener.attach(requireActivity().window.decorView, viewLifecycleOwner) {
                     if (!isKeyboardShown && isMaximized && activity != null) {
@@ -1732,6 +1769,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                         }
                         // Separate floating chat button is now hidden as functionality is merged
                         toggleFloatingChat.visibility = View.GONE
+                    updateFullscreenLiveRewind()
                 }
             }
             updateQuickPlayerControls()

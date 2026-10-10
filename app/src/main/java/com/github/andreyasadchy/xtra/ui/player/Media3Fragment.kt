@@ -627,6 +627,7 @@ class Media3Fragment : PlayerFragment() {
     }
 
     override fun updateProgress() {
+        checkLiveRewindCatchUp()
         with(binding.playerControls) {
             if (root.isVisible && !progressBar.isPressed) {
                 val currentPosition = player?.currentPosition ?: 0
