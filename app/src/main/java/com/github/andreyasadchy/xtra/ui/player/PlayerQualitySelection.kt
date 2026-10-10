@@ -55,7 +55,8 @@ internal fun selectQualityFormatIndex(quality: VideoQuality, formats: List<Forma
                 (quality.bitrate == null || quality.bitrate == format.bitrate)
         }
         exact.find { quality.formatId != null && formats[it].id == quality.formatId }?.let { return it }
-        exact.firstOrNull()?.let { return it }
+        // A name-only choice saved by 1.3.1 matches every same-named duplicate; take the best one.
+        pickByBitrate(exact, quality.bitrate) { formats[it].bitrate }?.let { return it }
     }
     val rungOrder = compareBy<Int> { formats[it].height }.thenBy { formats[it].frameRate.roundToInt() }
     val eligible = formats.indices.filter {

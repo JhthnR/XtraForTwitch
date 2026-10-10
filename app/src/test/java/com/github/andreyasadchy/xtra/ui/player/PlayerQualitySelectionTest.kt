@@ -22,6 +22,11 @@ class PlayerQualitySelectionTest {
         assertEquals(2, selectQualityFormatIndex(VideoQuality("1080p60", "av01.0.08M.08", bitrate = 3000000), formats))
     }
 
+    @Test fun `legacy name-only choice picks the highest bitrate duplicate regardless of order`() {
+        val formats = listOf(format(1080, 60f, 3000000), format(1080, 60f, 6000000), format(720, 60f, 9000000))
+        assertEquals(1, selectQualityFormatIndex(VideoQuality("1080p60"), formats))
+    }
+
     @Test fun `format identity disambiguates otherwise identical variants`() {
         val formats = listOf(format(1080, 60f, id = "first"), format(1080, 60f, id = "second"))
         assertEquals(1, selectQualityFormatIndex(VideoQuality("1080p60", formatId = "second"), formats))
