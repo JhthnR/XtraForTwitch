@@ -78,10 +78,10 @@ It is narrow, reversible, and keeps the old controller for unsupported cases.
 
 Automated checks:
 
-- [ ] `./gradlew assembleDebug`
-- [ ] `./gradlew test`
-- [ ] `./gradlew lintDebug`
-- [ ] `./gradlew assembleRelease`
+- [x] `./gradlew assembleDebug`
+- [x] `./gradlew test` (578 tests)
+- [x] `./gradlew lintDebug` (0 errors, 343 warnings, same as master)
+- [x] `./gradlew assembleRelease`
 
 Human QA required:
 
@@ -96,11 +96,25 @@ Human QA required:
 
 Human QA completed:
 
-- [ ] none yet
+- [ ] none yet (emulator results in the progress log)
 
 ## Progress log
 
 - 2026-10-10: Created plan.
+- 2026-10-10: Implemented `PinchZoomController`, fragment wiring, persistence, More
+  label and docs. `assembleDebug test lintDebug assembleRelease` passed; after two
+  small follow-ups (KTX preference edits, removing a redundant scale reset)
+  `testDebugUnitTest lintDebug` passed again.
+- 2026-10-10: Emulator (API 36, `wm size 2172x2352` in landscape, side chat open,
+  so Fill was about 2.37x Fit). A real two-finger pinch injected through a
+  throwaway self-instrumenting test APK (not committed) saved Fit zooms of
+  1.31x, 1.51x and 1.64x. The picture stayed vertically centered and the pill
+  read "Zoom 134%" mid-pinch. Pinching past Fill committed Fill and cleared the zoom key.
+  Pinching in from Fill kept 1.64x in the Fit renderer. Portrait, the
+  mini-player and PiP drew plain Fit; landscape, restore and return from PiP
+  brought the zoom back. More showed "Zoom 164%" checked; choosing Fit cleared it.
+  No app crashes. Haptics, a physical foldable, other backends and API 23 were
+  not covered.
 
 ## Decisions
 
