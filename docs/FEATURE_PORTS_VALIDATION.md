@@ -179,13 +179,15 @@ clearing it. The app was logged out and used the emulator's Wi-Fi.
   merge), the saved order matched the screen.
 - The crash log had no ThystTV entries for the session.
 
-Observed and left unchanged:
+Observed during the test and fixed afterward (unit tests only, not re-run on the
+emulator):
 
-- A rewind whose discovery finishes while the player is minimized is dropped
-  without a message, so playback never expands over browsing. A notice on restore
-  could be added later.
-- Since 1.3 (`7061795ea`), the one-time gesture guide can open inside the PiP
-  window, which reports a landscape configuration. This predates the series.
+- A rewind whose discovery finished while the player was minimized was dropped
+  silently, so playback never expands over browsing. Layer 4 now shows a one-time
+  message when the full player returns.
+- Since 1.3 (`7061795ea`), the one-time gesture guide could open inside the PiP
+  window, which reports a landscape configuration. This predates the series and is
+  fixed separately in #36.
 
 Not covered here: rewards and account notifications (logged out), a channel going
 live after notification setup, API 23, tablet and TV layouts, hardware decoders
