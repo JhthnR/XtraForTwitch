@@ -114,6 +114,11 @@ Human QA completed: none.
   separate PR. Fixes were committed per layer and merged upward. Layer checks:
   626, 665, 716 and 743 tests, zero lint errors; top-layer release build passed.
 
+- 2026-10-10: Emulator smoke test of the top layer on API 36, installed over 1.2.1
+  data: database upgrade, live/VoD/clip quality, HEVC clips, metered Wi-Fi,
+  rewind handoff and Go Live, logged-out notification setup, and the #35 drag fix
+  merged locally on top (745 tests). Added a port tracker to the validation report.
+
 ## Decisions
 - Manual ports only; upstream architecture and dependency changes intentionally deferred.
 - Rewind uses the established player replacement and VoD UI, preserving replay chat,
@@ -129,6 +134,7 @@ Hilt, WorkManager and Media3 1.9.3; no version bump or publication.
 Tests: full configured Android aggregate passed, including 743 tests and
 zero-error lint. SDK setup blocker resolved. See
 `docs/FEATURE_PORTS_VALIDATION.md` for exact passed/unrun boundaries.
-Human QA: listed above; none performed.
+Human QA: listed above. An emulator smoke test is recorded in the validation
+report; device and authenticated QA have not been performed.
 Risks: external Twitch/device behavior remains unverified. Hosted exact-commit CI,
 manual device/authenticated-flow QA and user review are distinct from local validation.
