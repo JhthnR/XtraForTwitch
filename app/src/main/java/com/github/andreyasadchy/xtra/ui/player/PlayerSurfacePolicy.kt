@@ -67,6 +67,15 @@ object PlayerSurfacePolicy {
     private const val COMPACT_LEVEL_WIDTH_DP = 4
     private const val ICON_SPACING_DP = 12
 
+    /**
+     * Fixed label slot for the pinch pill, in ems. `Zoom 200%`-class labels in
+     * monospace at 14sp need 9 characters; Fit/Fill/Zoom N% center inside the
+     * same slot so swaps keep the pill width. Ems scale with text size, so
+     * large fonts keep the slot instead of relayouting the pill. Applied only
+     * to pinch: other gestures share the view and reset it.
+     */
+    const val PINCH_LABEL_MIN_EMS = 9
+
     fun classify(surfaceWidthPx: Int, density: Float): PlayerSurfaceClass {
         if (density <= 0f || surfaceWidthPx <= 0) {
             return PlayerSurfaceClass.COMPACT
@@ -278,8 +287,18 @@ object PlayerSurfacePolicy {
             params.marginEnd = trailing
             icon.layoutParams = params
         }
+        val newText = presentation.text.orEmpty()
+        val horizontalLevelChanged = horizontalProgress?.progress != presentation.level
+        val textChanged = text?.text?.toString() != newText
         horizontalProgress?.visibility = if (presentation.levelVisible && !vertical) View.VISIBLE else View.GONE
-        horizontalProgress?.progress = presentation.level
+        if (presentation.levelVisible && !vertical && horizontalLevelChanged) {
+            // Animate the determinate bar so per-touch pinch updates glide
+            // instead of jumping. Reduced motion shortens the animation to a
+            // near-instant step; the final value is still exact.
+            horizontalProgress?.setProgressCompat(presentation.level, true)
+        } else if (!presentation.levelVisible || vertical) {
+            horizontalProgress?.progress = presentation.level
+        }
         verticalLevel?.visibility = if (presentation.levelVisible && vertical) View.VISIBLE else View.GONE
         verticalLevel?.progress = presentation.level
         verticalLevel?.let { level ->
@@ -288,8 +307,19 @@ object PlayerSurfacePolicy {
             }
         }
         text?.visibility = if (presentation.text != null && !vertical) View.VISIBLE else View.GONE
-        text?.text = presentation.text.orEmpty()
+        if (textChanged) {
+            text?.text = newText
+        }
         text?.maxLines = 1
+        // The pinch pill keeps a fixed label slot so Fit/Zoom N%/Fill swaps do
+        // not relayout it; other gestures reuse the same view, so reset width.
+        // Monospace comes from the layout; the ems slot is the whole mechanism
+        // (setMinEms shares its field with setMinWidth, so only one is used).
+        if (kind == PlayerGestureFeedbackKind.PINCH && !vertical) {
+            text?.setMinEms(PINCH_LABEL_MIN_EMS)
+        } else {
+            text?.setMinEms(0)
+        }
 
         feedbackRoot.contentDescription = a11yText
         feedbackRoot.alpha = 1f

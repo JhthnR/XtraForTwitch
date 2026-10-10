@@ -136,6 +136,80 @@ class PlayerGestureFeedbackStateTest {
     }
 
     @Test
+    fun `pinch labels share one fixed-width slot`() {
+        // The widest label must hold every other label without resizing the
+        // pill; shorter labels center inside the same slot.
+        val widest = PlayerGestureFeedbackState.PINCH_LABEL_WIDEST
+        for (label in listOf("Fit", "Fill", "Zoom 100%", "Zoom 134%", "Zoom 200%")) {
+            assertTrue("$label must fit in $widest", label.length <= widest.length)
+        }
+        assertEquals(9, widest.length)
+        assertEquals(PlayerSurfacePolicy.PINCH_LABEL_MIN_EMS, widest.length)
+    }
+
+    @Test
+    fun `zoom percent rounds the Fit-relative zoom`() {
+        assertEquals(100, PlayerGestureFeedbackState.zoomPercent(1f))
+        assertEquals(134, PlayerGestureFeedbackState.zoomPercent(1.335f))
+        assertEquals(164, PlayerGestureFeedbackState.zoomPercent(1.635f))
+        assertEquals(200, PlayerGestureFeedbackState.zoomPercent(2f))
+    }
+
+    @Test
+    fun `pinch feedback skips redundant writes but keeps endpoints exact`() {
+        // First write always passes; identical small deltas do not, so
+        // per-touch updates stop churning layout and progress.
+        assertTrue(
+            PlayerGestureFeedbackState.shouldUpdatePinchFeedback(null, null, "Zoom 130%", 30, false),
+        )
+        assertFalse(
+            PlayerGestureFeedbackState.shouldUpdatePinchFeedback("Zoom 130%", 30, "Zoom 130%", 31, false),
+        )
+        // A visible bar step passes even within the same frame.
+        assertTrue(
+            PlayerGestureFeedbackState.shouldUpdatePinchFeedback("Zoom 130%", 30, "Zoom 130%", 32, false),
+        )
+        // Label changes and endpoint arrivals always pass.
+        assertTrue(
+            PlayerGestureFeedbackState.shouldUpdatePinchFeedback("Zoom 130%", 31, "Zoom 131%", 31, false),
+        )
+        assertTrue(
+            PlayerGestureFeedbackState.shouldUpdatePinchFeedback("Zoom 199%", 99, "Fill", 100, true),
+        )
+    }
+
+    @Test
+    fun `pinch feedback identical frames skip the view write`() {
+        // Skipped frames keep the shared hide timer alive in the fragment so
+        // the pill does not fade mid-pinch; the pure helper only decides view
+        // writes.
+        assertFalse(
+            PlayerGestureFeedbackState.shouldUpdatePinchFeedback("Zoom 130%", 30, "Zoom 130%", 30, false),
+        )
+    }
+
+    @Test
+    fun `fill edge flashes only when newly sticking to Fill`() {
+        assertTrue(
+            PlayerGestureFeedbackState.shouldFlashFillEdge(PinchZoomController.Target.FILL, true),
+        )
+        // Dwelling at Fill (no new endpoint entry) must not refire.
+        assertFalse(
+            PlayerGestureFeedbackState.shouldFlashFillEdge(PinchZoomController.Target.FILL, false),
+        )
+        // Fit stick and intermediate zoom never flash the Fill edge.
+        assertFalse(
+            PlayerGestureFeedbackState.shouldFlashFillEdge(PinchZoomController.Target.FIT, true),
+        )
+        assertFalse(
+            PlayerGestureFeedbackState.shouldFlashFillEdge(PinchZoomController.Target.ZOOM, false),
+        )
+        assertFalse(
+            PlayerGestureFeedbackState.shouldFlashFillEdge(PinchZoomController.Target.ZOOM, true),
+        )
+    }
+
+    @Test
     fun `neutral preview from Stretch parks at the bar center`() {
         assertEquals(50, PlayerGestureFeedbackState.pinchLevel(0f, PlayerDisplayMode.STRETCH))
         assertEquals(50, PlayerGestureFeedbackState.pinchLevel(1f, PlayerDisplayMode.STRETCH))

@@ -200,6 +200,10 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
     private var pinchLastArmedTarget: PlayerDisplayMode? = null
     private var pinchSettleAnimator: ViewPropertyAnimator? = null
     private var pinchCommitGeneration = 0
+    /** Last pinch feedback write, used to skip redundant per-touch updates. */
+    private var pinchFeedbackLabel: String? = null
+    private var pinchFeedbackLevel: Int? = null
+    private var pinchFillEdgeAnimator: ViewPropertyAnimator? = null
 
     // Stream volume popup state (ThystTV playback volume, independent of device volume)
     private val volumeOverlayState = PlayerVolumeOverlayState()
@@ -3432,9 +3436,18 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
         systemUiListener.detach()
         finalizePinchSurface()
         hidePlayerPopup(restoreFocus = false, animate = false)
+        pinchFillEdgeAnimator?.cancel()
+        pinchFillEdgeAnimator = null
+        pinchFeedbackLabel = null
+        pinchFeedbackLevel = null
         _binding?.playerLayout?.findViewById<View>(R.id.gestureFeedback)?.let { feedback ->
             feedback.animate().cancel()
             feedback.removeCallbacks(hideGestureRunnable)
+        }
+        _binding?.playerLayout?.findViewById<View>(R.id.pinchFillEdge)?.let { edge ->
+            edge.animate().cancel()
+            edge.visibility = View.GONE
+            edge.alpha = 0f
         }
         // Restore original brightness when fragment is destroyed
         restoreBrightness()
@@ -3461,6 +3474,8 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
         private const val PINCH_FEEDBACK_LINGER_MS = 400L
         private const val PINCH_SETTLE_MS = 240L
         private const val PINCH_SETTLE_EPSILON = 0.001f
+        private const val PINCH_FILL_EDGE_MS = 220L
+        private const val PINCH_FILL_EDGE_ALPHA = 0.55f
         private const val VOLUME_OVERLAY_DISMISS_MS = 1500L
         private const val PINCH_HINT_LINGER_MS = 3000L
         private const val PLAYER_POPUP_OPEN_MS = 220L
@@ -3901,6 +3916,8 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
             pinchController.begin(effectivePinchDisplayMode())
         }
         pinchLastArmedTarget = null
+        pinchFeedbackLabel = null
+        pinchFeedbackLevel = null
         isSwipeGestureInProgress = true
         val cancelEvent = MotionEvent.obtain(event).apply { action = MotionEvent.ACTION_CANCEL }
         if (controlsVisibleAtGestureStart) {
@@ -3984,9 +4001,12 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
      * are down.
      */
     private fun applyPinchZoom(step: PinchZoomController.Frame) {
-        showPinchZoomFeedback(step.target, step.zoom, step.fraction)
+        showPinchZoomFeedback(step.target, step.zoom, step.fraction, step.reachedEnd)
         if (step.reachedEnd) {
             performPinchHaptic()
+            if (PlayerGestureFeedbackState.shouldFlashFillEdge(step.target, step.reachedEnd)) {
+                flashPinchFillEdge()
+            }
         }
         if (isPortrait || !isMaximized) {
             return
@@ -4157,15 +4177,74 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
         }
     }
 
-    private fun showPinchZoomFeedback(target: PinchZoomController.Target, zoom: Float, fraction: Float) {
+    private fun showPinchZoomFeedback(target: PinchZoomController.Target, zoom: Float, fraction: Float, reachedEnd: Boolean = false) {
         val label = when (target) {
             PinchZoomController.Target.FIT -> getString(R.string.display_mode_fit)
             PinchZoomController.Target.FILL -> getString(R.string.display_mode_fill)
-            PinchZoomController.Target.ZOOM -> getString(R.string.display_mode_zoom, (zoom * 100).roundToInt())
+            PinchZoomController.Target.ZOOM -> getString(R.string.display_mode_zoom, PlayerGestureFeedbackState.zoomPercent(zoom))
         }
+        val level = (fraction.coerceIn(0f, 1f) * 100).roundToInt()
+        val shouldWrite = reachedEnd || PlayerGestureFeedbackState.shouldUpdatePinchFeedback(
+            lastLabel = pinchFeedbackLabel,
+            lastLevel = pinchFeedbackLevel,
+            label = label,
+            level = level,
+            reachedEnd = false,
+        )
+        if (!shouldWrite) {
+            // Skip the view write, but keep the shared hide timer alive so the
+            // pill cannot fade mid-pinch while throttled.
+            binding.playerLayout.findViewById<View>(R.id.gestureFeedback)?.let { feedback ->
+                feedback.removeCallbacks(hideGestureRunnable)
+                feedback.postDelayed(hideGestureRunnable, PINCH_FEEDBACK_LINGER_MS + PlayerSurfacePolicy.FEEDBACK_HOLD_MS)
+            }
+            return
+        }
+        pinchFeedbackLabel = label
+        pinchFeedbackLevel = level
         presentPinchFeedback(label) { surfaceClass ->
             PlayerGestureFeedbackState.pinchZoomPresentation(surfaceClass, fraction, label)
         }
+    }
+
+    /**
+     * Subtle YouTube-style white edge rectangle when free zoom sticks to Fill.
+     * Fades smoothly; reduced motion shows only a brief static frame so the
+     * overlay never lingers or intercepts touches.
+     */
+    private fun flashPinchFillEdge() {
+        val edge = _binding?.playerLayout?.findViewById<View>(R.id.pinchFillEdge) ?: return
+        pinchFillEdgeAnimator?.cancel()
+        pinchFillEdgeAnimator = null
+        edge.animate().cancel()
+        val reducedMotion = Settings.Global.getFloat(
+            requireContext().contentResolver,
+            Settings.Global.ANIMATOR_DURATION_SCALE,
+            1f,
+        ) == 0f
+        edge.visibility = View.VISIBLE
+        edge.alpha = PINCH_FILL_EDGE_ALPHA
+        if (reducedMotion) {
+            edge.post {
+                if (_binding?.playerLayout?.findViewById<View>(R.id.pinchFillEdge) === edge) {
+                    edge.visibility = View.GONE
+                    edge.alpha = 0f
+                }
+            }
+            return
+        }
+        pinchFillEdgeAnimator = edge.animate()
+            .alpha(0f)
+            .setDuration(PINCH_FILL_EDGE_MS)
+            .setInterpolator(DecelerateInterpolator())
+            .withEndAction {
+                pinchFillEdgeAnimator = null
+                if (_binding?.playerLayout?.findViewById<View>(R.id.pinchFillEdge) === edge) {
+                    edge.visibility = View.GONE
+                    edge.alpha = 0f
+                }
+            }
+            .also { it.start() }
     }
 
     private fun presentPinchFeedback(
@@ -4188,6 +4267,9 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
     }
 
     private fun hidePinchFeedback() {
+        // Reset the skip state so the next pinch starts with a fresh write.
+        pinchFeedbackLabel = null
+        pinchFeedbackLevel = null
         binding.playerLayout.findViewById<View>(R.id.gestureFeedback)?.let { feedback ->
             feedback.removeCallbacks(hideGestureRunnable)
             feedback.postDelayed(hideGestureRunnable, PINCH_FEEDBACK_LINGER_MS)

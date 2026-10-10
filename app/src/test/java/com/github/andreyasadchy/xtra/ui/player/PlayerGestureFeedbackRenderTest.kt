@@ -97,6 +97,38 @@ class PlayerGestureFeedbackRenderTest {
         }
     }
 
+    @Test fun `pinch pill keeps a fixed label slot across fit zoom and fill`() {
+        val (surface, feedback) = createSurface()
+        val widths = mutableSetOf<Int>()
+        for ((fraction, label) in listOf(
+            0f to "Fit",
+            0.31f to "Zoom 134%",
+            0.5f to "Zoom 150%",
+            1f to "Fill",
+        )) {
+            PlayerSurfacePolicy.presentFeedback(
+                context, feedback, PlayerGestureFeedbackKind.PINCH, 1280, 720, Insets.NONE,
+                PlayerGestureFeedbackState.pinchZoomPresentation(PlayerSurfaceClass.LARGE, fraction, label),
+                R.drawable.baseline_aspect_ratio_black_24,
+                "Pinch · $label", hide,
+            )
+            measure(surface, 1280, 720)
+            feedback.findViewById<LinearProgressIndicator>(R.id.feedbackProgress).jumpDrawablesToCurrentState()
+            val pill = feedback.findViewById<LinearLayout>(R.id.feedbackContainer)
+            val text = feedback.findViewById<TextView>(R.id.feedbackText)
+            assertEquals(label, text.text.toString())
+            assertEquals(
+                "pinch labels keep a fixed ems slot",
+                PlayerSurfacePolicy.PINCH_LABEL_MIN_EMS,
+                text.minEms,
+            )
+            widths += pill.width
+            assertContentsFit(pill)
+        }
+        assertEquals("pinch pill width must not depend on the label: $widths", 1, widths.size)
+        UiTestRender.save(surface, "gesture-pinch-fixed-pill")
+    }
+
     @Test fun `same overlay restores compact geometry after resize and other gestures`() {
         val (surface, feedback) = createSurface()
         present(surface, feedback, PlayerGestureFeedbackKind.BRIGHTNESS, 1280, 720)
