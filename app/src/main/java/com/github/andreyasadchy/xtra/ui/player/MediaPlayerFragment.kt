@@ -23,6 +23,8 @@ import androidx.core.view.isVisible
 import androidx.lifecycle.lifecycleScope
 import androidx.media3.common.util.UnstableApi
 import com.github.andreyasadchy.xtra.R
+import com.github.andreyasadchy.xtra.util.isPortraitVariant
+import com.github.andreyasadchy.xtra.util.isSkippedUnavailableReason
 import com.github.andreyasadchy.xtra.util.parsePlaylistQualities
 import com.github.andreyasadchy.xtra.model.VideoQuality
 import com.github.andreyasadchy.xtra.model.ui.Clip
@@ -371,7 +373,7 @@ class MediaPlayerFragment : PlayerFragment() {
                                                                     if (filterReasons != null) {
                                                                         for (filterIndex in 0 until filterReasons.length()) {
                                                                             val filter = filterReasons.optString(filterIndex)
-                                                                            if (filter == "FR_CODEC_NOT_REQUESTED") {
+                                                                            if (isSkippedUnavailableReason(filter)) {
                                                                                 skip = true
                                                                                 break
                                                                             }
@@ -381,7 +383,7 @@ class MediaPlayerFragment : PlayerFragment() {
                                                                         val name = obj.optString("IVS_NAME")
                                                                         val codec = obj.optString("CODECS")
                                                                         val newVariantId = obj.optString("STABLE-VARIANT-ID")
-                                                                        if (!name.isNullOrBlank() && !newVariantId.isNullOrBlank()) {
+                                                                        if (!name.isNullOrBlank() && !newVariantId.isNullOrBlank() && !isPortraitVariant(newVariantId)) {
                                                                             val newUrl = url.replace(
                                                                                 "$variantId/index-",
                                                                                 if (urls.find { it.contains("chunked/index-") } == null && newVariantId != "audio_only") {

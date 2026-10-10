@@ -45,6 +45,20 @@ class PlaylistQualitiesTest {
         assertEquals(listOf("1080p60", "audio_only", "source"), variants.map { it.name })
     }
 
+    @Test fun `portrait variants of dual-format streams are not offered`() {
+        val variants = parsePlaylistQualities("""
+            #EXT-X-STREAM-INF:IVS-NAME="1080p60",STABLE-VARIANT-ID="1080p60",RESOLUTION=1920x1080
+            https://example.com/landscape.m3u8
+            #EXT-X-STREAM-INF:IVS-NAME="1080p60",STABLE-VARIANT-ID="1080p60-portrait",RESOLUTION=1080x1920
+            https://example.com/portrait.m3u8
+        """.trimIndent())
+        assertEquals(listOf("https://example.com/landscape.m3u8"), variants.map { it.url })
+        assertTrue(isSkippedUnavailableReason("FR_DUALFORMAT_INCOMPATIBLE"))
+        assertTrue(isSkippedUnavailableReason("FR_CODEC_NOT_REQUESTED"))
+        assertFalse(isSkippedUnavailableReason("FR_UNKNOWN"))
+        assertFalse(isPortraitVariant("portrait-highlights"))
+    }
+
     @Test fun `invalid values and unsupported or unresolved URLs are skipped safely`() {
         val variants = parsePlaylistQualities("""
             #EXT-X-STREAM-INF:IVS-NAME="720p",BANDWIDTH=-1,FRAME-RATE=NaN,RESOLUTION=bad
