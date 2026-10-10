@@ -1,6 +1,6 @@
 # Feature-port validation report
 
-Date: 2026-10-09 (first pass 2026-10-04). Baseline: `e8cbd77cb9f875ed2e4b777684065278bc766060`.
+Date: 2026-10-10 (earlier passes 2026-10-04 and 2026-10-09). Baseline: `e8cbd77cb9f875ed2e4b777684065278bc766060`.
 Scope and provenance: [feature guide](FEATURE_PORTS_2026_10.md) and
 [upstream ledger](UPSTREAM_SYNC_LEDGER.md).
 
@@ -32,13 +32,13 @@ separately from this local pass. No merge or release is part of this change.
 | Check | Layer 1 | Layer 2 | Layer 3 | Layer 4 (top) |
 | --- | --- | --- | --- | --- |
 | Debug APK assembly | Passed | Passed | Passed | Passed |
-| Unit suite (0 failures, errors or skips) | 624 tests, 72 classes | 662 tests, 77 classes | 708 tests, 82 classes | 735 tests, 87 classes |
+| Unit suite (0 failures, errors or skips) | 626 tests, 72 classes | 665 tests, 77 classes | 716 tests, 84 classes | 743 tests, 89 classes |
 | Debug lint errors | Not run | 0 | 0 | 0 |
 | Release compilation, R8 and unsigned APK | Not run | Not run | Not run | Passed |
 | Room schema export | n/a | n/a | Genuine KSP-generated `36.json` | Same |
 
-Layer 4's tree is byte-identical to the review branch that passed the aggregate.
-Documentation-only edits followed that run.
+Review fixes were committed on the layer they belong to and merged upward, so each
+row checks that layer's final code. Documentation-only edits followed these runs.
 
 The configured `test` task ran the debug unit suite. This report does not claim a
 separate release-unit suite ran; the task catalog contains no `testReleaseUnitTest`.
@@ -96,9 +96,37 @@ A review of the October 4 port led to these changes, each with regression tests:
 - Downloads no longer persist a session-specific variant path (`quality_path`).
 - Channel Points refusals before execution are definite rejections.
 
+## October 10 review changes
+
+Muse Spark 1.3 (Command Code, xhigh effort) reviewed each stacked PR against the
+top of the stack. Each finding was checked against the code; the rewind review
+found no significant issues. Fixes, each with a regression test:
+
+- Notifications: an unfinished setup baseline only silences broadcasts that
+  started before setup, so a channel going live afterwards still alerts. An
+  account without a GQL token alerts only local opt-ins, as in 1.3.1. A failed
+  setup poll no longer prevents scheduling the worker.
+- Rewards: a test asserts the spend client's disabled connection retries and
+  redirects directly; an interceptor counter cannot observe OkHttp replays.
+- Quality: a name-only quality saved by 1.3.1 picks the highest-bitrate
+  duplicate instead of the first listed.
+
+Not changed after verification: catalog reads over Cronet/HttpEngine (no logging
+interceptor exists there), the dialog during and after a send, chat-bar
+visibility (same rule as 1.3.1), duplicate reward IDs (deliberately unavailable),
+free-text download qualities (the field is not editable), persisted variant paths
+(removed on October 9 as session-specific), VPN classification (matches 1.3.1;
+Android 9+ exposes the underlying transport) and Media3 quality names (an index
+fallback exists).
+
+A recheck of crackededed/Xtra through `a3cbb0325` added hidden portrait variants
+and clip codec requests to the quality layer; see the
+[ledger](UPSTREAM_SYNC_LEDGER.md#october-10-2026-crackededed-recheck). Its settings
+drag-order fix is a separate PR against master (#35).
+
 ## Independent review and remaining QA
 
-Correctness/lifecycle reviews resolved quality metadata/fallback issues,
+Earlier correctness/lifecycle reviews resolved quality metadata/fallback issues,
 notification account and baseline races, reward web authentication/logging,
 recording ownership/readiness/recovery, and async test completion.
 

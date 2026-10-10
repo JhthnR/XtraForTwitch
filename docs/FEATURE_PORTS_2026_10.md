@@ -104,7 +104,7 @@ multiview, local clips, captions and dependency upgrades are not included.
 ## Verification and remaining gates
 
 Local debug/release assembly, the configured unit suite and debug lint passed
-after independent correctness/lifecycle reviews and the October 9 review fixes. See the
+after independent correctness/lifecycle reviews and the October 9 and 10 review fixes. See the
 [validation report](FEATURE_PORTS_VALIDATION.md) for exact results and limits;
 source review and unit tests are not device playback evidence.
 No physical device/emulator playback or authenticated Twitch mutation has been
