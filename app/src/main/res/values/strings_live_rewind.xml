@@ -11,4 +11,5 @@
     <string name="live_rewind_searching" tools:ignore="MissingTranslation">Looking for this broadcast’s recording…</string>
     <string name="live_rewind_unavailable" tools:ignore="MissingTranslation">No playable recording is available for this live broadcast. Staying live.</string>
     <string name="live_rewind_failed_returning" tools:ignore="MissingTranslation">The recording could not play. Returning to live.</string>
+    <string name="live_rewind_canceled_minimized" tools:ignore="MissingTranslation">Rewind was canceled because the player was minimized or in the background. Choose Rewind live stream again to retry.</string>
 </resources>

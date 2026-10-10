@@ -88,6 +88,8 @@ minute, or five minutes of the available recording. Live playback continues whil
 ThystTV discovers the current broadcast, matches a recording, obtains playback
 access and preflights its playlist. No suitable recording, subscriber restrictions,
 an API failure, timeout or a changed broadcast leaves the live player untouched.
+If the player is minimized or the app is backgrounded before the search finishes,
+the rewind is not opened over browsing; a message on return says it was canceled.
 
 A successful handoff uses the existing single-active-player VoD path. It supplies
 normal seeking, playback speed, recording chat replay and the existing floating

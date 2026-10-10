@@ -320,18 +320,34 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                     )
                 }
                 currentCoroutineContext().ensureActive()
-                if (!isResumed || !isMaximized) return@launch
-                if (prepared == null) {
-                    Toast.makeText(context, R.string.live_rewind_unavailable, Toast.LENGTH_LONG).show()
-                } else {
-                    (activity as? MainActivity)?.startLiveRewind(this@PlayerFragment, prepared)
-                }
+                finishLiveRewindDiscovery(prepared)
             } catch (error: CancellationException) {
                 throw error
             } catch (_: Exception) {
-                if (isResumed) Toast.makeText(context, R.string.live_rewind_unavailable, Toast.LENGTH_LONG).show()
+                finishLiveRewindDiscovery(null)
             }
         }
+    }
+
+    /** Never expand over browsing: a result that arrives while minimized or backgrounded is dropped. */
+    internal fun finishLiveRewindDiscovery(prepared: PreparedLiveRewind?) {
+        if (!isResumed || !isMaximized) {
+            viewModel.liveRewindDropped = true
+            return
+        }
+        if (prepared == null) {
+            Toast.makeText(requireContext(), R.string.live_rewind_unavailable, Toast.LENGTH_LONG).show()
+        } else {
+            (activity as? MainActivity)?.startLiveRewind(this, prepared)
+        }
+    }
+
+    /** Tells the viewer once, on return, that a rewind they asked for did not happen. */
+    private fun showDroppedLiveRewindNotice() {
+        if (!viewModel.liveRewindDropped || !isResumed || !isMaximized) return
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N && activity?.isInPictureInPictureMode == true) return
+        viewModel.liveRewindDropped = false
+        Toast.makeText(requireContext(), R.string.live_rewind_canceled_minimized, Toast.LENGTH_LONG).show()
     }
 
     internal fun returnToLiveFromRecording() {
@@ -2793,6 +2809,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
         if (viewModel.liveRewindFailed && isMaximized && handleLiveRewindFailure()) return
         markLiveRewindReady()
         watchLiveRewindStartup()
+        showDroppedLiveRewindNotice()
         val isInPIPMode = when {
             Build.VERSION.SDK_INT >= Build.VERSION_CODES.R -> requireActivity().isInPictureInPictureMode
             Build.VERSION.SDK_INT >= Build.VERSION_CODES.O -> !useController && isMaximized
@@ -3167,6 +3184,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
         with(binding) {
             isMaximized = true
             if (viewModel.liveRewindFailed && handleLiveRewindFailure()) return
+            showDroppedLiveRewindNotice()
             requireActivity().onBackPressedDispatcher.addCallback(viewLifecycleOwner, backPressedCallback)
             if (videoType == STREAM && chatFragment?.emoteMenuIsVisible() == true) {
                 chatFragment?.toggleBackPressedCallback(true)

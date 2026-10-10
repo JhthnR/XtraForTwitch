@@ -11,6 +11,7 @@ import org.robolectric.RuntimeEnvironment
 import com.github.andreyasadchy.xtra.R
 import com.github.andreyasadchy.xtra.databinding.FragmentPlayerBinding
 import com.github.andreyasadchy.xtra.model.ui.Stream
+import com.github.andreyasadchy.xtra.model.ui.Video
 import com.github.andreyasadchy.xtra.ui.main.MainActivity
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -24,6 +25,7 @@ import org.mockito.kotlin.*
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.ConscryptMode
+import org.robolectric.shadows.ShadowToast
 import org.robolectric.util.ReflectionHelpers
 import java.io.IOException
 
@@ -169,6 +171,48 @@ class LiveRewindLifecycleTest {
         f.vm.started = true
         assertFalse(f.vm.liveRewindPending)
         assertFalse(f.fragment.fail())
+        f.owner.lifecycle.currentState = Lifecycle.State.DESTROYED
+    }
+
+    private val prepared = PreparedLiveRewind(Stream(id = "live"), Video(id = "123"), "https://example.test/master.m3u8", 0L)
+
+    @Test fun `rewind found while minimized is dropped and announced once on return`() = runTest {
+        val f = Fixture()
+        ReflectionHelpers.setField(f.fragment, "isMaximized", false)
+        f.fragment.finishLiveRewindDiscovery(prepared)
+        verify(f.activity, never()).startLiveRewind(any(), any())
+        assertTrue(f.vm.liveRewindDropped)
+        f.fragment.onResume()
+        assertNull(ShadowToast.getLatestToast())
+        ReflectionHelpers.setField(f.fragment, "isMaximized", true)
+        f.fragment.onResume()
+        assertEquals(RuntimeEnvironment.getApplication().getString(R.string.live_rewind_canceled_minimized), ShadowToast.getTextOfLatestToast())
+        assertFalse(f.vm.liveRewindDropped)
+        ShadowToast.reset()
+        f.fragment.onResume()
+        assertNull(ShadowToast.getLatestToast())
+        f.owner.lifecycle.currentState = Lifecycle.State.DESTROYED
+    }
+
+    @Test fun `rewind result while backgrounded waits for resume`() = runTest {
+        val f = Fixture()
+        doReturn(false).whenever(f.fragment).isResumed
+        f.fragment.finishLiveRewindDiscovery(null)
+        assertTrue(f.vm.liveRewindDropped)
+        assertNull(ShadowToast.getLatestToast())
+        doReturn(true).whenever(f.fragment).isResumed
+        f.fragment.onResume()
+        assertEquals(RuntimeEnvironment.getApplication().getString(R.string.live_rewind_canceled_minimized), ShadowToast.getTextOfLatestToast())
+        f.owner.lifecycle.currentState = Lifecycle.State.DESTROYED
+    }
+
+    @Test fun `rewind result while maximized starts or reports unavailable`() = runTest {
+        val f = Fixture()
+        f.fragment.finishLiveRewindDiscovery(prepared)
+        verify(f.activity).startLiveRewind(f.fragment, prepared)
+        f.fragment.finishLiveRewindDiscovery(null)
+        assertEquals(RuntimeEnvironment.getApplication().getString(R.string.live_rewind_unavailable), ShadowToast.getTextOfLatestToast())
+        assertFalse(f.vm.liveRewindDropped)
         f.owner.lifecycle.currentState = Lifecycle.State.DESTROYED
     }
 

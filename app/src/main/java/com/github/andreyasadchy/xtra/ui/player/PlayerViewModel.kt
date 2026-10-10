@@ -110,6 +110,8 @@ class PlayerViewModel @Inject constructor(
     /** True only while the initial recording handoff is starting; not restored after process death. */
     internal var liveRewindPending = false
     internal var liveRewindFailed = false
+    /** A rewind result arrived while minimized or backgrounded and was not applied. */
+    internal var liveRewindDropped = false
 
     val clipUrls = MutableStateFlow<List<VideoQuality>?>(null)
 
