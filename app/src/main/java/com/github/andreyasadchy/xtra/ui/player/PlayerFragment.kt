@@ -59,6 +59,7 @@ import androidx.core.view.doOnPreDraw
 import androidx.core.view.isVisible
 import androidx.core.view.updateLayoutParams
 import androidx.core.view.updatePadding
+import androidx.fragment.app.DialogFragment
 import androidx.fragment.app.viewModels
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
@@ -2920,8 +2921,8 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                 controllerAnimation?.cancel()
                 binding.playerControls.root.alpha = 0f
                 binding.playerControls.root.visibility = View.GONE
-                // player dialog
-                (childFragmentManager.findFragmentByTag("closeOnPip") as? BottomSheetDialogFragment)?.dismiss()
+                // player dialog, including the gesture guide (only its button marks it seen)
+                (childFragmentManager.findFragmentByTag("closeOnPip") as? DialogFragment)?.dismiss()
                 // player chat message dialog
                 (chatFragment?.childFragmentManager?.findFragmentByTag("messageDialog") as? BottomSheetDialogFragment)?.dismiss()
                 (chatFragment?.childFragmentManager?.findFragmentByTag("replyDialog") as? BottomSheetDialogFragment)?.dismiss()
@@ -4056,6 +4057,8 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
     fun maybeShowGestureGuide() {
         if (context?.isTelevision() == true) return
         if (isPortrait || !isMaximized || gestureGuideShownThisSession) return
+        // PiP reports a landscape configuration, but the guide would cover the small window.
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N && activity?.isInPictureInPictureMode == true) return
         if (activePlayerPopup != null) return
         if (childFragmentManager.findFragmentByTag("closeOnPip") != null) return
         if (PlayerGestureEducationState.shouldShowGuide(prefs.getInt(C.PLAYER_GESTURE_GUIDE_VERSION, 0))) {
