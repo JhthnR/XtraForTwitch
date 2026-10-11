@@ -31,7 +31,7 @@
 
 **ThystTV** is a third-party Twitch client for Android. It is based on [Xtra](https://github.com/crackededed/Xtra), with ThystTV-specific work aimed at making the viewing experience cleaner, faster, and more comfortable on phones, tablets, and large displays.
 
-The `1.3` release line brings consistent player overlays, pinch display controls, clearer local Stats, live discovery and a more resilient updater. See the [1.3 release notes](docs/release-notes/1.3.0.md) for the changes and upgrade guidance.
+The `1.4` release adds live rewind, free pinch zoom, Channel Points rewards and an optional spoiler-free mode for VoDs, and plays the exact quality you pick. See the [1.4.0 release notes](docs/release-notes/1.4.0.md) for the changes and upgrade guidance.
 
 > ThystTV is a fork of Xtra. A lot of credit goes to the Xtra project for the foundation this app builds on.
 
@@ -42,7 +42,7 @@ The `1.3` release line brings consistent player overlays, pinch display controls
 | Repository | [`tzii/ThystTV`](https://github.com/tzii/ThystTV) |
 | Active branch | [`master`](https://github.com/tzii/ThystTV/tree/master) |
 | Published release | [Latest available APK](https://github.com/tzii/ThystTV/releases/latest) |
-| Version in this branch | [`1.3.0`](docs/release-notes/1.3.0.md) |
+| Version in this branch | [`1.4.0`](docs/release-notes/1.4.0.md) |
 | License | [GNU AGPL-3.0](LICENSE) |
 | Primary language | Kotlin, with Java components |
 
@@ -100,7 +100,10 @@ https://github.com/user-attachments/assets/99d97579-3340-4200-8aa7-3cae0414560e
 ### Player refinement
 
 - Gesture-based playback controls for horizontal seek, playback speed, brightness, and volume.
-- Pinch between Fit and Fill in landscape, with Stretch available in display settings.
+- Pinch to any zoom between Fit and Fill in landscape, with Stretch available in display settings.
+- Rewind a live stream to its recording with replay chat, then return with Go live.
+- Exact quality picks by resolution, frame rate, codec and bitrate, with a separate metered Wi-Fi default.
+- An optional spoiler-free mode that hides VoD lengths and watched progress.
 - Quality, Speed, Stream volume and More share consistent overlays with reachable controls.
 - Clearer feedback while interacting with the player.
 - Better visual handling for minimized player states.
@@ -111,6 +114,11 @@ https://github.com/user-attachments/assets/99d97579-3340-4200-8aa7-3cae0414560e
 - Chat overlay designed for full-screen viewing.
 - A cleaner way to keep stream context visible while the video remains primary.
 - Better fit for phones, tablets, and wide layouts.
+
+### Chat and notifications
+
+- Redeem a channel's custom Channel Points rewards from chat after an explicit confirmation.
+- Live notifications follow each channel's notification setting and avoid repeat alerts.
 
 ### Local stats
 
