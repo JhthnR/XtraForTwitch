@@ -24,6 +24,8 @@ import androidx.work.ForegroundInfo
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import com.github.andreyasadchy.xtra.R
+import com.github.andreyasadchy.xtra.util.parsePlaylistQualities
+import com.github.andreyasadchy.xtra.ui.player.selectDownloadQuality
 import com.github.andreyasadchy.xtra.model.VideoQuality
 import com.github.andreyasadchy.xtra.model.chat.CheerEmote
 import com.github.andreyasadchy.xtra.model.chat.Emote
@@ -182,14 +184,8 @@ class StreamDownloadWorker @AssistedInject constructor(
                 }
             }
             if (!playlist.isNullOrBlank()) {
-                val names = Regex("IVS-NAME=\"(.+?)\"").findAll(playlist).mapNotNull { it.groups[1]?.value }.toMutableList()
-                val codecs = Regex("CODECS=\"(.+?)\"").findAll(playlist).mapNotNull { it.groups[1]?.value }.toMutableList()
-                val urls = Regex("https://.*\\.m3u8").findAll(playlist).map(MatchResult::value).toMutableList()
-                val list = names.mapIndexedNotNull { index, name ->
-                    urls.getOrNull(index)?.let { url ->
-                        VideoQuality(name, codecs.getOrNull(index), url)
-                    }
-                }
+                val parsedQualities = parsePlaylistQualities(playlist, playlistUrl)
+                val list = parsedQualities
                 val qualities = list
                     .sortedByDescending {
                         it.name?.substringAfter("p", "")?.takeWhile { it.isDigit() }?.toIntOrNull()
@@ -200,11 +196,11 @@ class StreamDownloadWorker @AssistedInject constructor(
                     .toMutableList().apply {
                         find { it.name.equals("source", true) }?.let { source ->
                             remove(source)
-                            add(0, VideoQuality("source", source.codecs, source.url))
+                            add(0, source.copy(name = "source"))
                         }
                         find { it.name?.startsWith("audio", true) == true }?.let { audio ->
                             remove(audio)
-                            add(VideoQuality("audio_only", audio.codecs, audio.url))
+                            add(audio.copy(name = "audio_only"))
                         }
                     }
                 if (qualities.isNotEmpty()) {
@@ -264,14 +260,8 @@ class StreamDownloadWorker @AssistedInject constructor(
                             }
                         }
                         if (!playlist.isNullOrBlank()) {
-                            val names = Regex("IVS-NAME=\"(.+?)\"").findAll(playlist).mapNotNull { it.groups[1]?.value }.toMutableList()
-                            val codecs = Regex("CODECS=\"(.+?)\"").findAll(playlist).mapNotNull { it.groups[1]?.value }.toMutableList()
-                            val urls = Regex("https://.*\\.m3u8").findAll(playlist).map(MatchResult::value).toMutableList()
-                            val list = names.mapIndexedNotNull { index, name ->
-                                urls.getOrNull(index)?.let { url ->
-                                    VideoQuality(name, codecs.getOrNull(index), url)
-                                }
-                            }
+                            val parsedQualities = parsePlaylistQualities(playlist, playlistUrl)
+                            val list = parsedQualities
                             val newQualities = list
                                 .sortedByDescending {
                                     it.name?.substringAfter("p", "")?.takeWhile { it.isDigit() }?.toIntOrNull()
@@ -282,36 +272,24 @@ class StreamDownloadWorker @AssistedInject constructor(
                                 .toMutableList().apply {
                                     find { it.name.equals("source", true) }?.let { source ->
                                         remove(source)
-                                        add(0, VideoQuality("source", source.codecs, source.url))
+                                        add(0, source.copy(name = "source"))
                                     }
                                     find { it.name?.startsWith("audio", true) == true }?.let { audio ->
                                         remove(audio)
-                                        add(VideoQuality("audio_only", audio.codecs, audio.url))
+                                        add(audio.copy(name = "audio_only"))
                                     }
                                 }
                             newQualities.ifEmpty { qualities }
                         } else qualities
                     } else qualities
-                    val selectedQuality = if (!quality.isNullOrBlank()) {
-                        val audio = if (quality.startsWith("audio", true)) {
-                            qualities.find { it.name == "audio_only" }
-                        } else null
-                        if (audio != null) {
-                            audio
-                        } else {
-                            val targetQuality = quality.split("p")
-                            targetQuality.getOrNull(0)?.takeWhile { it.isDigit() }?.toIntOrNull()?.let { targetResolution ->
-                                val targetFps = targetQuality.getOrNull(1)?.takeWhile { it.isDigit() }?.toIntOrNull() ?: 30
-                                val last = qualities.last { it.name != "audio_only" }
-                                qualities.find { qualityString ->
-                                    val quality = qualityString.name?.split("p")
-                                    val resolution = quality?.getOrNull(0)?.takeWhile { it.isDigit() }?.toIntOrNull()
-                                    val fps = quality?.getOrNull(1)?.takeWhile { it.isDigit() }?.toIntOrNull() ?: 30
-                                    resolution != null && ((targetResolution == resolution && targetFps >= fps) || targetResolution > resolution || qualityString == last)
-                                }
-                            } ?: qualities.first()
-                        }
-                    } else qualities.first()
+                    val selectedQuality = selectDownloadQuality(
+                        qualities,
+                        VideoQuality(
+                            name = quality,
+                            codecs = offlineVideo.qualityCodecs,
+                            bitrate = offlineVideo.qualityBitrate,
+                        ),
+                    ) ?: qualities.first()
                     offlineRepository.updateVideo(offlineVideo.apply { status = OfflineVideo.STATUS_DOWNLOADING })
                     setForeground(createForegroundInfo(true, firstVideo))
                     val done = try {
@@ -355,6 +333,8 @@ class StreamDownloadWorker @AssistedInject constructor(
                                 downloadPath = offlineVideo.downloadPath,
                                 status = OfflineVideo.STATUS_WAITING_FOR_STREAM,
                                 quality = offlineVideo.quality,
+                                qualityCodecs = offlineVideo.qualityCodecs,
+                                qualityBitrate = offlineVideo.qualityBitrate,
                                 downloadChat = offlineVideo.downloadChat,
                                 downloadChatEmotes = offlineVideo.downloadChatEmotes,
                                 live = true

@@ -8,9 +8,10 @@ new audits go here.
 
 ## Latest audit
 
-- **Date checked:** 2026-10-04
+- **Date checked:** 2026-10-04; crackededed rechecked 2026-10-10
 - **Branches:** stacked `xtra-ports/1-notifications` → `2-rewards` → `3-quality` → `4-rewind`, based on `e8cbd77cb9f875ed2e4b777684065278bc766060`
-- **crackededed/Xtra:** `9f8043e8bdf45e8a2b2bf4cecfa74dc1de8ae0a3`
+- **crackededed/Xtra:** `9f8043e8bdf45e8a2b2bf4cecfa74dc1de8ae0a3`; rechecked at
+  `a3cbb0325f3330573a6738f7d36a2c5b785f4d1c` ([October 10 recheck](#october-10-2026-crackededed-recheck))
 - **thiscallnet/Xtra:** `fbffe567381dfca9970860e2976ab0021c2602eb`
 - **Disposition:** bounded manual feature ports, unreleased; the configured local
   Android build/test/lint gates passed. Hosted CI and device QA are separate gates. See [October intake](#october-4-2026-feature-intake-unreleased)
@@ -264,8 +265,11 @@ Inspected donor snapshots: crackededed/Xtra
 
 | Source | Manual adaptation | Risk / exclusions |
 | --- | --- | --- |
+| crackededed `a70b0897`, `2c582bb83621881dd36c4c7f6632587d38e633cb`, `703437feee29435f9aa341dac17ad1358d059286` | Resolution-first fallback and full quality identity/bitrate through playback, labels and downloads | Preserve Thyst quality UI; no service or dependency migration. |
+| thiscallnet `42ab1d2cb0a07842748c278dfd874e0fddb43208` (#433) | Metered-Wi-Fi quality policy/settings and capability-change handling | Android 6 preserved; explicit session choices remain authoritative. |
 | thiscallnet `fbffe567` notification policy | Account-scoped cached notification preferences, Helix fallback and delivery-aware dedup | Retain WorkManager, Hilt and the single live-follows request per poll; no EventSub, foreground service or full follow-list sync. |
 | thiscallnet `fbffe567` custom reward flow | Custom Channel Points catalog, input, availability and confirmation with guarded mutation | No automatic spend retry; no Drops, emote unlocks or poll/prediction expansion. |
+| thiscallnet `fbffe567` LiveRewind.kt | Current-recording matching and failure rollback, adapted to existing live/VoD fragment replacement | High player/lifecycle risk. Existing VoD timeline/replay chat and Go Live; no local DVR or new playback service. |
 
 The new upstream minSdk 24 and donor minSdk 26/GeckoView remain deferred. No broad
 merge, Hilt removal, Media3 1.11.1 upgrade, Cronet rewrite, multiview, clipping,
@@ -275,3 +279,21 @@ superseded only for the bounded scopes above.
 See [feature behavior and QA matrix](FEATURE_PORTS_2026_10.md). These changes are
 not a released APK. Local debug/release assembly, 743 configured tests and debug lint passed; see
 [validation results](FEATURE_PORTS_VALIDATION.md). No physical-device QA is claimed.
+
+## October 10, 2026 crackededed recheck
+
+All ten crackededed commits after the September audit endpoint `cadfb8b7c`, through
+`a3cbb0325f3330573a6738f7d36a2c5b785f4d1c`, were checked against the stacked branches.
+
+| Commit | Disposition |
+| --- | --- |
+| `01f981ab0652cdf63a280b2d441cd2174ffe6128` hide portrait qualities | Adapted in `xtra-ports/3-quality`: portrait (`-portrait`, `FR_DUALFORMAT_INCOMPATIBLE`) variants are skipped by the low-latency parser, the shared playlist parser and the unavailable-quality expansion; clips use the widest asset. |
+| `edd8ae2576177625c98c483e2fc725609b6cee90` clip supportedCodecs | Adapted in `xtra-ports/3-quality`: the clip access-token query sends codecs from the existing codec preference, with the upstream persisted-query hash. The existing player codec filter still applies. |
+| `a3cbb0325f3330573a6738f7d36a2c5b785f4d1c` settings drag position | Same bug in ThystTV's drag lists; ported separately from this series. |
+| `c1485c7adea094828f9a6798b2b85fe591f856ee` unavailable quality parsing | N/A: the quality layer already parses each variant as one object, so attributes cannot shift between variants. |
+| `a70b0897e` quality sort | Already adapted (see October 4 intake). |
+| `37a51c37f` experiment cookie | N/A: ThystTV never sent the cookie. |
+| `9f8043e8b` minSdk 24 | Deferred: ThystTV keeps minSdk 23. |
+| `38e4c9b5d` Play Services Cronet provider | Deferred: dependency and network-provider change. |
+| `e3b8244e7` HTTP proxy fixes | Deferred with proxy compatibility work. |
+| `40b701ede` player fixes | Deferred: ad proxy/video-swap timing in upstream's playback service. Delaying the un-hide until ad segments end may be revisited with live ad QA. |

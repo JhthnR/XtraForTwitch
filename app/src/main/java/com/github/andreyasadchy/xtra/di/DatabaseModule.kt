@@ -4,6 +4,7 @@ import android.app.Application
 import androidx.room.Room
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
+import com.github.andreyasadchy.xtra.db.FEATURE_PORTS_MIGRATION
 import com.github.andreyasadchy.xtra.db.AppDatabase
 import com.github.andreyasadchy.xtra.db.BookmarksDao
 import com.github.andreyasadchy.xtra.db.LocalFollowsChannelDao
@@ -388,6 +389,7 @@ class DatabaseModule {
                         db.execSQL("CREATE TABLE IF NOT EXISTS watch_streak (id INTEGER NOT NULL, currentStreakDays INTEGER NOT NULL, longestStreakDays INTEGER NOT NULL, lastWatchDate TEXT NOT NULL, streakStartDate TEXT, PRIMARY KEY (id))")
                     }
                 },
+                FEATURE_PORTS_MIGRATION,
             )
             .build()
 }

@@ -876,6 +876,8 @@
     <string name="update_invalid_callback" tools:ignore="MissingTranslation">Android returned an unexpected installation response. Nothing was opened. Retry or download the update in your browser.</string>
     <string name="update_installer_timeout" tools:ignore="MissingTranslation">Android did not confirm the installation request. Retry or download the update in your browser.</string>
     <!-- New feature copy intentionally falls back to English until translations are vetted. -->
+    <string name="settings_metered_wifi_quality" tools:ignore="MissingTranslation">Metered Wi-Fi quality</string>
+    <string name="settings_metered_wifi_quality_use_mobile" tools:ignore="MissingTranslation">Use mobile data quality</string>
     <string name="channel_rewards_title" tools:ignore="MissingTranslation">Channel Points rewards</string>
     <string name="channel_rewards_redeem" tools:ignore="MissingTranslation">Redeem</string>
     <string name="channel_rewards_refresh" tools:ignore="MissingTranslation">Refresh</string>

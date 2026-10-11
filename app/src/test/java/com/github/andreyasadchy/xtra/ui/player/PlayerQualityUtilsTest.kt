@@ -75,4 +75,22 @@ class PlayerQualityUtilsTest {
 
         assertEquals(true, full.shouldReplaceCurrentQualities(current))
     }
+    @Test
+    fun `bitrate variants are counted separately during catalog refresh`() {
+        val high = VideoQuality("1080p60", "avc1", "https://example.com/high", 6000000)
+        val low = high.copy(url = "https://example.com/low", bitrate = 3000000)
+        assertEquals(false, listOf(high).shouldReplaceCurrentQualities(listOf(high, low)))
+        assertEquals(true, listOf(high, low).shouldReplaceCurrentQualities(listOf(high)))
+    }
+
+    @Test
+    fun `catalog sorting uses metadata then resolution FPS and bitrate`() {
+        val qualities = listOf(
+            VideoQuality("720p60", bitrate = 3000000),
+            VideoQuality("1080p", bitrate = 6000000),
+            VideoQuality("1080p", bitrate = 3000000),
+        ).toSelectableQualities(false)
+        assertEquals(listOf("auto", "1080p", "1080p", "720p60", "audio_only"), qualities.map { it.name })
+        assertEquals(listOf(6000000, 3000000), qualities.filter { it.name == "1080p" }.map { it.bitrate })
+    }
 }
