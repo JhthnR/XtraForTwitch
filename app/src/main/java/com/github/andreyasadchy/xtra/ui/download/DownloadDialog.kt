@@ -33,6 +33,7 @@ import com.github.andreyasadchy.xtra.R
 import com.github.andreyasadchy.xtra.databinding.DialogVideoDownloadBinding
 import com.github.andreyasadchy.xtra.ui.player.PlayerQualityPopupLabels
 import com.github.andreyasadchy.xtra.ui.player.PlayerQualityPopupModel
+import com.github.andreyasadchy.xtra.ui.player.SpoilerFreeVideos
 import com.github.andreyasadchy.xtra.model.VideoQuality
 import com.github.andreyasadchy.xtra.ui.common.IntegrityDialog
 import com.github.andreyasadchy.xtra.ui.main.MainActivity
@@ -340,8 +341,13 @@ class DownloadDialog : DialogFragment(), IntegrityDialog.CallbackListener {
                 val defaultFrom = DateUtils.formatElapsedTime(currentPosition / 1000L).let { if (it.length == 5) "00:$it" else it }
                 val totalTime = DateUtils.formatElapsedTime(totalDuration / 1000L)
                 val defaultTo = totalTime.let { if (it.length != 5) it else "00:$it" }
-                duration.text = getString(R.string.duration, totalTime)
-                timeTo.editText?.hint = defaultTo
+                // Spoiler-free VoDs keep the length hidden; the range checks still use totalDuration.
+                if (SpoilerFreeVideos.hideListSpoilers(requireContext().prefs().getBoolean(C.PLAYER_SPOILER_FREE_VODS, false))) {
+                    duration.visibility = View.GONE
+                } else {
+                    duration.text = getString(R.string.duration, totalTime)
+                    timeTo.editText?.hint = defaultTo
+                }
                 timeFrom.editText?.hint = defaultFrom
                 timeFrom.editText?.doOnTextChanged { text, _, _, _ -> if (text?.length == 8) timeTo.requestFocus() }
                 addTextChangeListener(timeFrom.editText)
