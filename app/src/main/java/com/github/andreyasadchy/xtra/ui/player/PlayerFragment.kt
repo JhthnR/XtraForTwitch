@@ -4156,6 +4156,8 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
             val transparency = prefs.getInt(C.FLOATING_CHAT_TRANSPARENCY, 0)
             val alpha = (transparency * 255 / 100).coerceIn(0, 255)
             binding.floatingChatContainer.setBackgroundColor(ColorUtils.setAlphaComponent(Color.BLACK, alpha))
+            // A book split sized the video for sidebar chat; floating chat gives it the whole screen.
+            updateFoldLayout()
         } else {
             // Hide with fade-out animation
             binding.floatingChatRoot.animate().alpha(0f).setDuration(200)

@@ -132,6 +132,25 @@ class PlayerFoldLayoutTest {
         }
     }
 
+    @Test fun `book posture gives floating chat the whole screen and splits again for the sidebar`() {
+        val harness = Harness(chatOpen = true)
+        harness.fold(book)
+        harness.fragment.cycleChatMode()
+        harness.settle()
+        with(harness) {
+            assertTrue(ReflectionHelpers.getField<Boolean>(fragment, "isFloatingChatEnabled"))
+            assertEquals(View.VISIBLE, binding.floatingChatRoot.visibility)
+            assertEquals(View.GONE, binding.chatLayout.visibility)
+            assertEquals(2076, binding.playerLayout.width)
+
+            fragment.cycleChatMode()
+            fragment.cycleChatMode()
+            settle()
+            assertEquals(1038, binding.playerLayout.width)
+            assertEquals(1038, binding.chatLayout.left)
+        }
+    }
+
     @Test fun `book posture leaves hidden chat with the whole screen`() {
         val harness = Harness(chatOpen = false)
         harness.fold(book)

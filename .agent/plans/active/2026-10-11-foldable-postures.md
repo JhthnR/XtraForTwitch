@@ -115,6 +115,12 @@ Human QA completed:
   before the configuration change (now restored only when the hinge is gone;
   covered by a test). Not covered: keyboard (logged out), RTL, VoDs, other
   backends, pinch zoom while folded, a physical hinge.
+- 2026-10-11: Release review (GLM 5.3 max) found that switching to floating chat
+  in book posture left the video at half width: the floating toggle did not
+  re-run the split. Fixed, with a test. The combined 1.4.0 build was checked on
+  the same emulator with a VoD and spoiler-free on: book and tabletop splits,
+  speed/quality/More popups in the video pane, double-tap chat, minimize/restore,
+  PiP and back, close/reopen, stream switch, rotation and unfold.
 
 ## Decisions
 
