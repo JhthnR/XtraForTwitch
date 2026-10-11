@@ -29,6 +29,7 @@ import com.github.andreyasadchy.xtra.ui.channel.ChannelPagerFragmentDirections
 import com.github.andreyasadchy.xtra.ui.game.GameMediaFragmentDirections
 import com.github.andreyasadchy.xtra.ui.game.GamePagerFragmentDirections
 import com.github.andreyasadchy.xtra.ui.main.MainActivity
+import com.github.andreyasadchy.xtra.ui.player.SpoilerFreeVideos
 import com.github.andreyasadchy.xtra.util.C
 import com.github.andreyasadchy.xtra.util.TwitchApiHelper
 import com.github.andreyasadchy.xtra.util.prefs
@@ -182,7 +183,10 @@ class DownloadsAdapter(
                     } else {
                         gameName.visibility = View.GONE
                     }
-                    item.duration?.let { itemDuration ->
+                    val itemDuration = item.duration.takeUnless {
+                        SpoilerFreeVideos.hideListSpoilers(context.prefs().getBoolean(C.PLAYER_SPOILER_FREE_VODS, false))
+                    }
+                    if (itemDuration != null) {
                         duration.visibility = View.VISIBLE
                         duration.text = DateUtils.formatElapsedTime(itemDuration / 1000L)
                         item.sourceStartPosition?.let { sourceStartPosition ->
@@ -200,7 +204,7 @@ class DownloadsAdapter(
                         } else {
                             progressBar.visibility = View.GONE
                         }
-                    } ?: {
+                    } else {
                         duration.visibility = View.GONE
                         sourceStart.visibility = View.GONE
                         sourceEnd.visibility = View.GONE

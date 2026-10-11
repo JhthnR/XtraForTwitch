@@ -144,6 +144,14 @@
 
     <SwitchPreferenceCompat
         android:defaultValue="false"
+        android:key="player_spoiler_free_vods"
+        android:summary="@string/spoiler_free_vods_summary"
+        android:title="@string/spoiler_free_vods"
+        app:iconSpaceReserved="false"
+        app:singleLineTitle="false" />
+
+    <SwitchPreferenceCompat
+        android:defaultValue="false"
         android:key="player_move_freely"
         android:title="@string/move_player_freely"
         app:iconSpaceReserved="false"

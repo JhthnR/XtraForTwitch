@@ -7,6 +7,8 @@ import android.view.HapticFeedbackConstants
 import android.view.MotionEvent
 import android.view.View
 import com.github.andreyasadchy.xtra.R
+import com.github.andreyasadchy.xtra.util.C
+import com.github.andreyasadchy.xtra.util.prefs
 import kotlin.math.abs
 
 interface PlayerGestureCallback {
@@ -230,7 +232,14 @@ class PlayerGestureListener(
                 val seekAmount = newPosition - startPosition
                 callback.seek(newPosition)
 
-                val valueText = "${helper.formatDuration(newPosition)} / ${helper.formatDuration(duration)}"
+                val valueText = SpoilerFreeVideos.seekLabel(
+                    helper.formatDuration(newPosition),
+                    helper.formatDuration(duration),
+                    SpoilerFreeVideos.hidePlayerProgress(
+                        context.prefs().getBoolean(C.PLAYER_SPOILER_FREE_VODS, false),
+                        callback.getPlayerVideoType(),
+                    ),
+                )
                 presentFeedback(
                     kind = PlayerGestureFeedbackKind.SEEK,
                     iconRes = if (seekAmount > 0) R.drawable.baseline_add_black_24 else R.drawable.baseline_remove_black_24,

@@ -1456,6 +1456,15 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                         speed.setOnClickListener { showSpeedDialog() }
                     }
                 }
+                if (SpoilerFreeVideos.hidePlayerProgress(
+                        requireContext().prefs().getBoolean(C.PLAYER_SPOILER_FREE_VODS, false),
+                        videoType,
+                    )
+                ) {
+                    position.visibility = View.GONE
+                    progressBar.visibility = View.GONE
+                    duration.visibility = View.GONE
+                }
                 if (videoType == VIDEO) {
                     if (liveRewindOrigin() != null) {
                         seekLive.visibility = View.VISIBLE

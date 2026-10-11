@@ -830,6 +830,8 @@
     <string name="display_mode_stretch" tools:ignore="MissingTranslation">Stretch</string>
     <string name="display_mode_zoom" tools:ignore="MissingTranslation">Zoom %1$d%%</string>
     <string name="display_mode" tools:ignore="MissingTranslation">Display mode</string>
+    <string name="spoiler_free_vods" tools:ignore="MissingTranslation">Spoiler-free VODs</string>
+    <string name="spoiler_free_vods_summary" tools:ignore="MissingTranslation">Hide the seek bar, length and watched progress of VODs, including downloads, so a VOD\'s length does not reveal how many games were played</string>
     <string name="stream_volume" tools:ignore="MissingTranslation">Stream volume</string>
     <string name="more_group_stream" tools:ignore="MissingTranslation">Stream</string>
     <string name="more_group_chat" tools:ignore="MissingTranslation">Chat</string>

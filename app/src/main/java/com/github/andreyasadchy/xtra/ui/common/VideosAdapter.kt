@@ -27,6 +27,7 @@ import com.github.andreyasadchy.xtra.ui.channel.ChannelPagerFragmentDirections
 import com.github.andreyasadchy.xtra.ui.game.GameMediaFragmentDirections
 import com.github.andreyasadchy.xtra.ui.game.GamePagerFragmentDirections
 import com.github.andreyasadchy.xtra.ui.main.MainActivity
+import com.github.andreyasadchy.xtra.ui.player.SpoilerFreeVideos
 import com.github.andreyasadchy.xtra.util.C
 import com.github.andreyasadchy.xtra.util.TwitchApiHelper
 import com.github.andreyasadchy.xtra.util.prefs
@@ -118,7 +119,8 @@ class VideosAdapter(
                     } else {
                         views.visibility = View.GONE
                     }
-                    if (item.durationSeconds != null) {
+                    val spoilerFree = SpoilerFreeVideos.hideListSpoilers(context.prefs().getBoolean(C.PLAYER_SPOILER_FREE_VODS, false))
+                    if (item.durationSeconds != null && !spoilerFree) {
                         duration.visibility = View.VISIBLE
                         duration.text = DateUtils.formatElapsedTime(item.durationSeconds.toLong())
                     } else {
@@ -135,7 +137,7 @@ class VideosAdapter(
                     } else {
                         type.visibility = View.GONE
                     }
-                    if (position != null && item.durationSeconds != null && item.durationSeconds > 0L) {
+                    if (!spoilerFree && position != null && item.durationSeconds != null && item.durationSeconds > 0L) {
                         progressBar.progress = (position / (item.durationSeconds * 10)).toInt()
                         progressBar.visibility = View.VISIBLE
                     } else {
