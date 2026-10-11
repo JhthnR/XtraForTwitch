@@ -277,7 +277,6 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
     private var liveRewindDiscovery: Job? = null
     private var liveRewindStartup: Job? = null
     private var liveRewindDialog: androidx.appcompat.app.AlertDialog? = null
-    private var liveRewindCatchUpWatch: Job? = null
 
     internal fun liveRewindOrigin(): Stream? = arguments?.let {
         BundleCompat.getParcelable(it, LiveRewind.ORIGIN, Stream::class.java)
@@ -392,10 +391,13 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
         )
     }
 
-    /** Checks the edge while a recording plays, including with the controls hidden. */
+    /**
+     * Checks the edge while a recording plays, including with the controls hidden.
+     * The origin is fixed in the arguments, so one watch per view is enough.
+     */
     private fun watchLiveRewindCatchUp() {
-        if (liveRewindOrigin() == null || liveRewindCatchUpWatch?.isActive == true) return
-        liveRewindCatchUpWatch = viewLifecycleOwner.lifecycleScope.launch {
+        if (liveRewindOrigin() == null) return
+        viewLifecycleOwner.lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
                 while (true) {
                     delay(LiveRewind.LIVE_CATCH_UP_POLL_MS)
@@ -677,6 +679,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
     @SuppressLint("ClickableViewAccessibility")
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
+        watchLiveRewindCatchUp()
         with(binding) {
             viewLifecycleOwner.lifecycleScope.launch {
                 repeatOnLifecycle(Lifecycle.State.STARTED) {
@@ -2885,7 +2888,6 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
         if (viewModel.liveRewindFailed && isMaximized && handleLiveRewindFailure()) return
         markLiveRewindReady()
         watchLiveRewindStartup()
-        watchLiveRewindCatchUp()
         showDroppedLiveRewindNotice()
         val isInPIPMode = when {
             Build.VERSION.SDK_INT >= Build.VERSION_CODES.R -> requireActivity().isInPictureInPictureMode
