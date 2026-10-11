@@ -9,6 +9,8 @@
   VoDs (#38, issue #34).
 - Fixes for settings drag order (#35), the gesture guide in PiP (#36) and a
   closed-player memory leak (#39).
+- A half-folded layout for foldables (#43) and spoiler-free VoDs hiding the
+  length in the games and download dialogs too (#42).
 
 Version 1.4.0/code 14 is being prepared from this update. Publication remains
 pending branch checks, signed-candidate verification, device QA and release review.

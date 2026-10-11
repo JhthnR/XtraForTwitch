@@ -31,7 +31,7 @@
 
 **ThystTV** is a third-party Twitch client for Android. It is based on [Xtra](https://github.com/crackededed/Xtra), with ThystTV-specific work aimed at making the viewing experience cleaner, faster, and more comfortable on phones, tablets, and large displays.
 
-The `1.4` release adds live rewind, free pinch zoom, Channel Points rewards and an optional spoiler-free mode for VoDs, and plays the exact quality you pick. See the [1.4.0 release notes](docs/release-notes/1.4.0.md) for the changes and upgrade guidance.
+The `1.4` release adds live rewind, free pinch zoom, Channel Points rewards, a half-folded layout for foldables and an optional spoiler-free mode for VoDs, and plays the exact quality you pick. See the [1.4.0 release notes](docs/release-notes/1.4.0.md) for the changes and upgrade guidance.
 
 > ThystTV is a fork of Xtra. A lot of credit goes to the Xtra project for the foundation this app builds on.
 
@@ -104,6 +104,7 @@ https://github.com/user-attachments/assets/99d97579-3340-4200-8aa7-3cae0414560e
 - Rewind a live stream to its recording with replay chat, then return with Go live.
 - Exact quality picks by resolution, frame rate, codec and bitrate, with a separate metered Wi-Fi default.
 - An optional spoiler-free mode that hides VoD lengths and watched progress.
+- On a half-open foldable, video above the hinge with chat below, or side by side in book posture.
 - Quality, Speed, Stream volume and More share consistent overlays with reachable controls.
 - Clearer feedback while interacting with the player.
 - Better visual handling for minimized player states.
