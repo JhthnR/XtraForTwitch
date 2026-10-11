@@ -166,6 +166,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
     private var foldHinge: FoldHinge? = null
     /** The split currently applied, or null while the normal layout is in use. */
     private var foldLayout: PlayerFoldLayout? = null
+    private var foldImeVisible = false
     /** Tabletop docked the viewer's floating chat; it floats again once the posture ends. */
     private var foldDockedFloatingChat = false
 
@@ -787,7 +788,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                         }
                     }
                 }
-                chatLayout.updatePadding(bottom = insets.bottom)
+                applyChatInsets(insets.bottom, windowInsets.isVisible(WindowInsetsCompat.Type.ime()))
                 // Capture system gesture insets for edge detection
                 gestureInsets = windowInsets.getInsets(WindowInsetsCompat.Type.systemGestures())
                 WindowInsetsCompat.CONSUMED
@@ -2537,6 +2538,14 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
         }
     }
 
+    private fun applyChatInsets(bottomInset: Int, imeVisible: Boolean) {
+        val binding = _binding ?: return
+        binding.chatLayout.updatePadding(bottom = bottomInset)
+        foldImeVisible = imeVisible
+        // IME height can change without resizing the container or changing keyboard visibility.
+        updateFoldLayout()
+    }
+
     /**
      * Splits the maximized player at a half-open hinge: video above and chat below in
      * tabletop posture, side by side in book posture when chat is showing. Every other
@@ -2549,7 +2558,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
         val enabled = prefs.getBoolean(C.PLAYER_FOLD_LAYOUT, true)
         var layout = if (hinge != null && container != null && isMaximized && !isInPipMode() && enabled) {
             val minPane = (PlayerFoldLayoutPolicy.MIN_PANE_DP * resources.displayMetrics.density).toInt()
-            PlayerFoldLayoutPolicy.resolve(hinge, container, minPane)
+            PlayerFoldLayoutPolicy.resolve(hinge, container, minPane, minChatPanePx = if (foldImeVisible) 0 else minPane)
         } else {
             null
         }
@@ -2576,6 +2585,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                     // means covering the bottom of the video while typing.
                     val minChat = (PlayerFoldLayoutPolicy.MIN_CHAT_DP * resources.displayMetrics.density).toInt()
                     val chatHeight = max(layout.chatHeight, chatLayout.paddingBottom + minChat)
+                        .coerceAtMost(slidingLayout.height - slidingLayout.paddingTop - slidingLayout.paddingBottom)
                     playerLayout.setFrameGeometry(ViewGroup.LayoutParams.MATCH_PARENT, layout.videoHeight, Gravity.TOP or Gravity.START, 0)
                     chatLayout.setFrameGeometry(ViewGroup.LayoutParams.MATCH_PARENT, chatHeight, Gravity.BOTTOM)
                     setPortraitMeasure(false)
@@ -3865,6 +3875,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
     }
 
     override fun onDestroyView() {
+        foldImeVisible = false
         liveRewindDiscovery?.cancel()
         liveRewindStartup?.cancel()
         liveRewindDialog?.dismiss()

@@ -55,6 +55,54 @@ class PlayerFoldLayoutTest {
         assertEquals(View.GONE, harness.binding.chatLayout.visibility)
     }
 
+    @Test fun `tabletop chat follows keyboard height changes and restores on close`() {
+        val harness = Harness(chatOpen = true)
+        harness.fold(tabletop)
+        val minChat = (PlayerFoldLayoutPolicy.MIN_CHAT_DP * harness.binding.root.resources.displayMetrics.density).toInt()
+
+        harness.insets(1200, imeVisible = true)
+        assertEquals(1076, harness.binding.playerLayout.height)
+        assertEquals(minChat, harness.binding.chatLinearLayout.height)
+        assertEquals(2152 - 1200, harness.binding.chatLinearLayout.bottom + harness.binding.chatLayout.top)
+
+        // A taller keyboard, e.g. its emoji panel, does not change the container or visibility.
+        harness.insets(1500, imeVisible = true)
+        assertEquals(minChat, harness.binding.chatLinearLayout.height)
+        assertEquals(2152 - 1500, harness.binding.chatLinearLayout.bottom + harness.binding.chatLayout.top)
+
+        harness.insets(0, imeVisible = false)
+        assertEquals(1076, harness.binding.chatLayout.top)
+        assertEquals(1076, harness.binding.chatLayout.height)
+        assertEquals(1076, harness.binding.playerLayout.height)
+    }
+
+    @Test fun `a resized keyboard window keeps tabletop even with a small lower pane`() {
+        val harness = Harness(chatOpen = true)
+        harness.fold(tabletop)
+        harness.insets(0, imeVisible = true)
+        harness.containerHeight = 1120
+        harness.settle()
+        harness.fold(tabletop)
+        assertEquals(1076, harness.binding.playerLayout.height)
+        val minChat = (PlayerFoldLayoutPolicy.MIN_CHAT_DP * harness.binding.root.resources.displayMetrics.density).toInt()
+        assertEquals(minChat, harness.binding.chatLinearLayout.height)
+        assertEquals(1120, harness.binding.chatLinearLayout.bottom + harness.binding.chatLayout.top)
+    }
+
+    @Test fun `keyboard does not reveal hidden tabletop chat or change book widths`() {
+        val hidden = Harness(chatOpen = false)
+        hidden.fold(tabletop)
+        hidden.insets(1200, imeVisible = true)
+        assertEquals(View.GONE, hidden.binding.chatLayout.visibility)
+        assertEquals(1076, hidden.binding.playerLayout.height)
+
+        val sidebar = Harness(chatOpen = true)
+        sidebar.fold(book)
+        sidebar.insets(1200, imeVisible = true)
+        assertEquals(1038, sidebar.binding.playerLayout.width)
+        assertEquals(1038, sidebar.binding.chatLayout.width)
+    }
+
     @Test fun `tabletop docks floating chat below the hinge and cycles without floating`() {
         val harness = Harness(chatOpen = true, floating = true)
         harness.fold(tabletop)
@@ -212,6 +260,7 @@ class PlayerFoldLayoutTest {
         private val context = ContextThemeWrapper(RuntimeEnvironment.getApplication(), R.style.BaseDarkTheme)
         val prefs = context.prefs()
         val binding = FragmentPlayerBinding.inflate(LayoutInflater.from(context))
+        var containerHeight = 2152
         val chatView = View(context)
         val fragment: PlayerFragment = Mockito.mock(PlayerFragment::class.java,
             Mockito.withSettings().useConstructor().defaultAnswer(Mockito.CALLS_REAL_METHODS))
@@ -252,13 +301,21 @@ class PlayerFoldLayoutTest {
             settle()
         }
 
+        fun insets(bottom: Int, imeVisible: Boolean) {
+            ReflectionHelpers.callInstanceMethod<Unit>(fragment, "applyChatInsets",
+                ReflectionHelpers.ClassParameter.from(Int::class.javaPrimitiveType, bottom),
+                ReflectionHelpers.ClassParameter.from(Boolean::class.javaPrimitiveType, imeVisible),
+            )
+            settle()
+        }
+
         fun settle() {
             shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(500))
             binding.root.measure(
                 View.MeasureSpec.makeMeasureSpec(2076, View.MeasureSpec.EXACTLY),
-                View.MeasureSpec.makeMeasureSpec(2152, View.MeasureSpec.EXACTLY),
+                View.MeasureSpec.makeMeasureSpec(containerHeight, View.MeasureSpec.EXACTLY),
             )
-            binding.root.layout(0, 0, 2076, 2152)
+            binding.root.layout(0, 0, 2076, containerHeight)
         }
     }
 }
