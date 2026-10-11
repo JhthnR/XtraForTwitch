@@ -114,6 +114,7 @@ dependencies {
     implementation(libs.swiperefreshlayout)
     implementation(libs.viewpager2)
     implementation(libs.webkit)
+    implementation(libs.window)
     implementation(libs.work.runtime)
 
     implementation(libs.cronet.api)

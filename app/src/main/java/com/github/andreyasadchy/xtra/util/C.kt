@@ -36,6 +36,7 @@ object C {
     const val ASPECT_RATIO_LANDSCAPE = "aspectRatioLandscape"
     const val PLAYER_DISPLAY_MODE_LANDSCAPE = "playerDisplayModeLandscape"
     const val PLAYER_SPOILER_FREE_VODS = "player_spoiler_free_vods"
+    const val PLAYER_FOLD_LAYOUT = "player_fold_layout"
     const val PLAYER_DISPLAY_ZOOM_LANDSCAPE = "playerDisplayZoomLandscape"
     const val FIRST_LAUNCH = "first_launch"
     const val FIRST_LAUNCH1 = "first_launch1"

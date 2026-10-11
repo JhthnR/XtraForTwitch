@@ -4,6 +4,9 @@ All notable changes to ThystTV should be documented here.
 
 ## [Unreleased]
 
+### Added
+- Half-folded layout for foldables: video above the hinge with chat below in tabletop posture, or video and chat side by side in book posture (Settings → Player settings, on by default).
+
 ## [1.4.0] - 2026-10-11
 
 ### Added

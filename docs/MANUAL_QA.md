@@ -131,6 +131,26 @@ behavior remain unverified; emulator results are recorded separately in
 - [ ] Live, VoD and clips on all three backends; a double tap followed by a pinch
   still restores chat.
 
+### Half-folded layout
+
+- [ ] Foldable inner screen, landscape, side chat open: half-fold like a laptop.
+  Video fills the top half above the hinge, chat the bottom half; unfolding
+  returns to the side chat without a flash of the wrong size.
+- [ ] Tabletop with floating chat: chat docks below the hinge and floats again
+  in its old place after unfolding. If the chat button is used while docked
+  (it cycles hidden and docked only), unfolding keeps the sidebar.
+- [ ] Tabletop with chat hidden: video stays above the hinge. Portrait tabletop
+  behaves the same instead of the 16:9 stack.
+- [ ] Tabletop keyboard: tap the chat input; the input and a few chat lines stay
+  above the keyboard; closing it restores the split.
+- [ ] Book posture (hinge down the screen) with chat showing: video on one side,
+  chat on the other, nothing across the hinge; with chat hidden or floating the
+  video keeps the whole screen. Check an RTL language puts chat on the left.
+- [ ] While half-folded: minimize/restore, PiP and back, rotate, close/reopen,
+  switch streams, pinch zoom, double-tap chat, quality/speed/More popups.
+- [ ] Settings → Player settings → Half-folded layout off: postures keep the
+  normal layout. Phones without a hinge and Android TV are unchanged.
+
 ### Spoiler-free VODs
 
 - [ ] Off (default): VoD seek bar, length, Past Broadcasts/Saved/Downloads

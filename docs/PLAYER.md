@@ -35,6 +35,35 @@ transition. Clear the snapshot at pointer-sequence boundaries and view destructi
 Android containers and preferences with fragment attachment/network chat mocked.
 Device gesture timing and playback still need the manual matrix in `MANUAL_QA.md`.
 
+## Half-folded layout
+
+Half-opening a foldable does not change the configuration, so `PlayerFragment`
+follows Jetpack Window Manager's `FoldingFeature` while the player view is
+started and splits the maximized player at a `HALF_OPENED` hinge:
+
+- Tabletop (hinge across the window): video above the hinge, chat below. Floating
+  chat is docked below the hinge and the chat cycle skips floating, because a
+  floating window would cover the video pane. Docked chat floats again once the
+  posture ends, unless the viewer changed the chat mode meanwhile. Hidden chat
+  leaves the lower pane empty rather than drawing video across the hinge.
+- Book (hinge down the window): video and chat side by side only while chat is
+  showing; hidden or floating chat keeps the whole screen for video.
+
+`PlayerFoldLayoutPolicy` maps the hinge and the sliding layout's content area
+(both in window pixels, so status-bar and cutout padding are excluded) to pane
+sizes, and returns no split when the hinge does not cross the whole window, as in
+split screen, or a pane would be under 160dp. While the keyboard is open in
+tabletop, chat keeps at least 120dp above it even if that covers the bottom of
+the video. Minimize, PiP, an unfold, or the "Half-folded layout" setting being
+turned off restore the normal portrait or landscape geometry. Every chat
+transition, orientation change, minimize/maximize, PiP change and sliding layout
+resize re-runs the split; geometry changes are idempotent, so repeated calls do
+not relayout.
+
+`PlayerFoldLayoutPolicyTest` covers the pane math and `PlayerFoldLayoutTest`
+drives the real fragment geometry and chat transitions with a simulated hinge.
+Hinge timing and real postures still need the device matrix in `MANUAL_QA.md`.
+
 ## Android TV remote input
 
 Television UI mode enables remote focus routing; phone/tablet input is unchanged.

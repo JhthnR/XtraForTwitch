@@ -71,6 +71,8 @@ import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.TimeBar
 import androidx.navigation.fragment.findNavController
 import androidx.recyclerview.widget.RecyclerView
+import androidx.window.layout.FoldingFeature
+import androidx.window.layout.WindowInfoTracker
 import com.github.andreyasadchy.xtra.R
 import com.github.andreyasadchy.xtra.databinding.FragmentPlayerBinding
 import com.github.andreyasadchy.xtra.databinding.LayoutPlayerMorePopupBinding
@@ -160,6 +162,12 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
     private lateinit var displayModeStore: PlayerDisplayModeStore
     protected var videoAspectRatio = 0f
     private var chatWidthLandscape = 0
+    /** Latest half-open hinge, or null when the device is flat, closed or not foldable. */
+    private var foldHinge: FoldHinge? = null
+    /** The split currently applied, or null while the normal layout is in use. */
+    private var foldLayout: PlayerFoldLayout? = null
+    /** Tabletop docked the viewer's floating chat; it floats again once the posture ends. */
+    private var foldDockedFloatingChat = false
 
     private var activePointerId = -1
     private var lastX = 0f
@@ -239,6 +247,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
         val isOpen: Boolean,
         val isFloating: Boolean,
         val savedOpen: Boolean?,
+        val foldDockedFloating: Boolean,
     )
     private var doubleTapChatSnapshot: ChatModeSnapshot? = null
     private var dX = 0f
@@ -728,6 +737,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
         watchLiveRewindCatchUp()
+        watchFoldPosture()
         with(binding) {
             viewLifecycleOwner.lifecycleScope.launch {
                 repeatOnLifecycle(Lifecycle.State.STARTED) {
@@ -808,6 +818,12 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
             playerLayout.addOnLayoutChangeListener { _, left, top, right, bottom, oldLeft, oldTop, oldRight, oldBottom ->
                 if (right - left != oldRight - oldLeft || bottom - top != oldBottom - oldTop) {
                     refreshDisplayZoom()
+                }
+            }
+            slidingLayout.addOnLayoutChangeListener { _, left, top, right, bottom, oldLeft, oldTop, oldRight, oldBottom ->
+                if (right - left != oldRight - oldLeft || bottom - top != oldBottom - oldTop) {
+                    // Not during this layout pass: the split changes child layout params.
+                    slidingLayout.post { updateFoldLayout() }
                 }
             }
             playerLayout.post { maybeShowGestureGuide() }
@@ -1369,20 +1385,26 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                                 if (!isKeyboardShown) {
                                     isKeyboardShown = true
                                     if (!isPortrait) {
-                                        chatLayout.updateLayoutParams { width = (slidingLayout.width / 1.8f).toInt() }
+                                        if (foldLayout == null) {
+                                            chatLayout.updateLayoutParams { width = (slidingLayout.width / 1.8f).toInt() }
+                                        }
                                         showStatusBar()
                                     }
+                                    updateFoldLayout()
                                 }
                             } else {
                                 if (isKeyboardShown) {
                                     isKeyboardShown = false
                                     chatLayout.clearFocus()
                                     if (!isPortrait) {
-                                        chatLayout.updateLayoutParams { width = chatWidthLandscape }
+                                        if (foldLayout == null) {
+                                            chatLayout.updateLayoutParams { width = chatWidthLandscape }
+                                        }
                                         if (isMaximized) {
                                             hideStatusBar()
                                         }
                                     }
+                                    updateFoldLayout()
                                 }
                             }
                         }
@@ -1876,6 +1898,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                 }
             }
             updateQuickPlayerControls()
+            updateFoldLayout()
         }
     }
 
@@ -2466,6 +2489,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
             chatLayout.clearFocus()
             chatLayout.visibility = View.GONE
         }
+        updateFoldLayout()
     }
 
     private fun showChatLayout() {
@@ -2482,6 +2506,170 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
             }
             chatLayout.visibility = View.VISIBLE
         }
+        updateFoldLayout()
+    }
+
+    /**
+     * Follows the hinge while the player view is started. Half-opening a foldable
+     * does not change the configuration, so this is the only posture signal.
+     */
+    private fun watchFoldPosture() {
+        val activity = requireActivity()
+        viewLifecycleOwner.lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                WindowInfoTracker.getOrCreate(activity).windowLayoutInfo(activity).collect { info ->
+                    val fold = info.displayFeatures.filterIsInstance<FoldingFeature>().firstOrNull {
+                        it.state == FoldingFeature.State.HALF_OPENED
+                    }
+                    val hinge = fold?.let {
+                        FoldHinge(
+                            horizontal = it.orientation == FoldingFeature.Orientation.HORIZONTAL,
+                            bounds = FoldBounds(it.bounds.left, it.bounds.top, it.bounds.right, it.bounds.bottom),
+                        )
+                    }
+                    if (hinge != foldHinge) {
+                        foldHinge = hinge
+                        hidePlayerPopup(restoreFocus = false, animate = false)
+                        updateFoldLayout()
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * Splits the maximized player at a half-open hinge: video above and chat below in
+     * tabletop posture, side by side in book posture when chat is showing. Every other
+     * state gets the normal layout back. Safe to call often; params change only when needed.
+     */
+    private fun updateFoldLayout() {
+        val binding = _binding ?: return
+        val hinge = foldHinge
+        val container = foldContainerBounds(binding)
+        val enabled = prefs.getBoolean(C.PLAYER_FOLD_LAYOUT, true)
+        var layout = if (hinge != null && container != null && isMaximized && !isInPipMode() && enabled) {
+            val minPane = (PlayerFoldLayoutPolicy.MIN_PANE_DP * resources.displayMetrics.density).toInt()
+            PlayerFoldLayoutPolicy.resolve(hinge, container, minPane)
+        } else {
+            null
+        }
+        if (layout is PlayerFoldLayout.Book && !binding.chatLayout.isVisible) {
+            // Hidden or floating chat: the video keeps the whole screen.
+            layout = null
+        }
+        if (layout is PlayerFoldLayout.Tabletop && isFloatingChatEnabled) {
+            // Floating chat would cover the video pane; dock it below the hinge instead.
+            isFloatingChatEnabled = false
+            binding.floatingChatRoot.animate().cancel()
+            binding.floatingChatRoot.visibility = View.GONE
+            reparentChatView(toFloating = false)
+            isChatOpen = true
+            binding.chatLayout.visibility = View.VISIBLE
+            updateChatButtonIcon()
+            foldDockedFloatingChat = true
+        }
+        with(binding) {
+            when (layout) {
+                null -> if (foldLayout != null) restoreDefaultPlayerGeometry()
+                is PlayerFoldLayout.Tabletop -> {
+                    // Keep the chat input usable above the keyboard, even if that
+                    // means covering the bottom of the video while typing.
+                    val minChat = (PlayerFoldLayoutPolicy.MIN_CHAT_DP * resources.displayMetrics.density).toInt()
+                    val chatHeight = max(layout.chatHeight, chatLayout.paddingBottom + minChat)
+                    playerLayout.setFrameGeometry(ViewGroup.LayoutParams.MATCH_PARENT, layout.videoHeight, Gravity.TOP or Gravity.START, 0)
+                    chatLayout.setFrameGeometry(ViewGroup.LayoutParams.MATCH_PARENT, chatHeight, Gravity.BOTTOM)
+                    setPortraitMeasure(false)
+                    aspectRatioFrameLayout.setFrameGravity(Gravity.CENTER)
+                }
+                is PlayerFoldLayout.Book -> {
+                    val rtl = slidingLayout.layoutDirection == View.LAYOUT_DIRECTION_RTL
+                    val videoWidth = if (rtl) layout.rightWidth else layout.leftWidth
+                    val chatWidth = if (rtl) layout.leftWidth else layout.rightWidth
+                    playerLayout.setFrameGeometry(videoWidth, ViewGroup.LayoutParams.MATCH_PARENT, Gravity.TOP or Gravity.START, 0)
+                    chatLayout.setFrameGeometry(chatWidth, ViewGroup.LayoutParams.MATCH_PARENT, Gravity.END)
+                    setPortraitMeasure(false)
+                    aspectRatioFrameLayout.setFrameGravity(Gravity.CENTER)
+                }
+            }
+        }
+        foldLayout = layout
+        // Only once the hinge is gone: a rotation briefly reports the old hinge in the new orientation.
+        if (foldDockedFloatingChat && (hinge == null || !enabled) && isMaximized && !isPortrait && !isInPipMode()) {
+            foldDockedFloatingChat = false
+            if (isChatOpen && !isFloatingChatEnabled) toggleFloatingChat()
+        }
+    }
+
+    /** The geometry [initLayout] gives the current orientation; chat visibility is kept. */
+    private fun restoreDefaultPlayerGeometry() {
+        with(binding) {
+            if (isPortrait) {
+                playerLayout.setFrameGeometry(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT, Gravity.TOP or Gravity.START, 0)
+                chatLayout.setFrameGeometry(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT, Gravity.BOTTOM)
+                setPortraitMeasure(true)
+                aspectRatioFrameLayout.setFrameGravity(Gravity.NO_GRAVITY)
+            } else {
+                val sidebar = isMaximized && chatLayout.isVisible
+                val chatWidth = if (isKeyboardShown) (slidingLayout.width / 1.8f).toInt() else chatWidthLandscape
+                playerLayout.setFrameGeometry(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT, Gravity.TOP or Gravity.START, if (sidebar) chatWidthLandscape else 0)
+                chatLayout.setFrameGeometry(chatWidth, ViewGroup.LayoutParams.MATCH_PARENT, Gravity.END)
+                setPortraitMeasure(false)
+                aspectRatioFrameLayout.setFrameGravity(Gravity.CENTER)
+            }
+        }
+        foldLayout = null
+    }
+
+    /** The sliding container's content area in window pixels, or null before layout. */
+    private fun foldContainerBounds(binding: FragmentPlayerBinding): FoldBounds? {
+        val sliding = binding.slidingLayout
+        if (sliding.width == 0 || sliding.height == 0) return null
+        // The root is never translated or scaled, unlike the sliding layout while minimizing.
+        val location = IntArray(2)
+        binding.root.getLocationInWindow(location)
+        return FoldBounds(
+            left = location[0] + sliding.left + sliding.paddingLeft,
+            top = location[1] + sliding.top + sliding.paddingTop,
+            right = location[0] + sliding.right - sliding.paddingRight,
+            bottom = location[1] + sliding.bottom - sliding.paddingBottom,
+        )
+    }
+
+    /** Portrait measuring forces a 16:9 video with chat below; a fold split sets sizes itself. */
+    private fun setPortraitMeasure(portrait: Boolean) {
+        with(binding) {
+            if (playerLayout.isPortrait != portrait) {
+                playerLayout.isPortrait = portrait
+                playerLayout.requestLayout()
+            }
+            if (chatLayout.isPortrait != portrait) {
+                chatLayout.isPortrait = portrait
+                chatLayout.requestLayout()
+            }
+        }
+    }
+
+    private fun View.setFrameGeometry(width: Int, height: Int, gravity: Int, marginEnd: Int? = null) {
+        val params = layoutParams as FrameLayout.LayoutParams
+        if (params.width == width && params.height == height && params.gravity == gravity &&
+            (marginEnd == null || params.marginEnd == marginEnd)
+        ) return
+        params.width = width
+        params.height = height
+        params.gravity = gravity
+        if (marginEnd != null) params.marginEnd = marginEnd
+        layoutParams = params
+    }
+
+    private fun View.setFrameGravity(gravity: Int) {
+        val params = layoutParams as FrameLayout.LayoutParams
+        if (params.gravity == gravity) return
+        params.gravity = gravity
+        layoutParams = params
+    }
+
+    private fun isInPipMode(): Boolean {
+        return Build.VERSION.SDK_INT >= Build.VERSION_CODES.N && activity?.isInPictureInPictureMode == true
     }
 
     fun setQualityText() {
@@ -2964,6 +3152,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                 hideChatLayout()
             }
             useController = false
+            updateFoldLayout()
         }
     }
 
@@ -3209,6 +3398,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                 useController = true
             }
         }
+        updateFoldLayout()
         refreshDisplayZoom()
     }
 
@@ -3263,6 +3453,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
             hideController(true)
             focusTvMiniPlayer()
             applyMinimizedPlayerVisualState()
+            updateFoldLayout()
             fun animate() {
                 val (minimizedScaleX, minimizedScaleY) = getScaleValues()
                 val windowInsets = ViewCompat.getRootWindowInsets(requireView())
@@ -3359,6 +3550,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                     showChatLayout()
                 }
             }
+            updateFoldLayout()
             slidingLayout.animate().apply {
                 translationX(0f)
                 translationY(0f)
@@ -3892,8 +4084,11 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
     }
 
     override fun cycleChatMode() {
+        // The viewer picked a chat mode, so unfolding should not restore floating chat.
+        foldDockedFloatingChat = false
         // Check if floating chat is enabled in settings
-        val floatingChatAllowed = prefs.getBoolean(C.FLOATING_CHAT_ENABLED, true)
+        val floatingChatAllowed = prefs.getBoolean(C.FLOATING_CHAT_ENABLED, true) &&
+            foldLayout !is PlayerFoldLayout.Tabletop
 
         if (!isChatOpen && !isFloatingChatEnabled) {
             // Hidden -> Show sidebar chat
@@ -3923,6 +4118,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
         doubleTapChatSnapshot = null
         isChatOpen = snapshot.isOpen
         isFloatingChatEnabled = snapshot.isFloating
+        foldDockedFloatingChat = snapshot.foldDockedFloating
         binding.floatingChatRoot.animate().cancel()
         binding.floatingChatRoot.alpha = 1f
         binding.floatingChatRoot.visibility = if (isFloatingChatEnabled) View.VISIBLE else View.GONE
@@ -3936,7 +4132,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
     }
 
     private fun toggleFloatingChat() {
-        if (isPortrait) return
+        if (isPortrait || foldLayout is PlayerFoldLayout.Tabletop) return
 
         isFloatingChatEnabled = !isFloatingChatEnabled
 
@@ -3960,6 +4156,8 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
             val transparency = prefs.getInt(C.FLOATING_CHAT_TRANSPARENCY, 0)
             val alpha = (transparency * 255 / 100).coerceIn(0, 255)
             binding.floatingChatContainer.setBackgroundColor(ColorUtils.setAlphaComponent(Color.BLACK, alpha))
+            // A book split sized the video for sidebar chat; floating chat gives it the whole screen.
+            updateFoldLayout()
         } else {
             // Hide with fade-out animation
             binding.floatingChatRoot.animate().alpha(0f).setDuration(200)
@@ -4110,6 +4308,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
             isOpen = isChatOpen,
             isFloating = isFloatingChatEnabled,
             savedOpen = if (prefs.contains(C.KEY_CHAT_OPENED)) prefs.getBoolean(C.KEY_CHAT_OPENED, true) else null,
+            foldDockedFloating = foldDockedFloatingChat,
         )
         return true
     }
