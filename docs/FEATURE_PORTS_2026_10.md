@@ -81,6 +81,46 @@ on initial selection; capability changes do not interrupt their active
 scrubbing/playback. Audio-only and chat-only transitions retain ThystTV's
 existing controls and readable labels.
 
+### Recording-backed live rewind
+
+Open **More → Rewind live stream**, or the ⏪ button next to volume in the
+landscape full-screen player, and choose the beginning or the last 30 seconds,
+minute, or five minutes of the available recording. Live playback continues while
+ThystTV discovers the current broadcast, matches a recording, obtains playback
+access and preflights its playlist. No suitable recording, subscriber restrictions,
+an API failure, timeout or a changed broadcast leaves the live player untouched.
+If the player is minimized or the app is backgrounded before the search finishes,
+the rewind is not opened over browsing; a message on return says it was canceled.
+
+A successful handoff uses the existing single-active-player VoD path. It supplies
+normal seeking, playback speed, recording chat replay and the existing floating
+chat/TV controls. The title labels it as a recording. **Go live** is available on
+the toolbar and in More. It replaces the recording through the same guarded
+single-player entrypoint; stale callbacks cannot replace a newer user-selected
+player or reopen one after Close.
+
+This is a server recording, not local DVR. Availability, indexing delay, duration
+and newly appended portions depend on Twitch. The options are measured from the
+recording's own media playlist, falling back to Twitch's reported length, and
+can lag the live stream. This first port uses the ordinary VoD timeline rather
+than the donor's continuously predicted live-edge UI; Go Live remains the
+reliable way to return to current live playback.
+
+Faster playback catches up with the recording. When a recording played faster
+than 1x comes within a few seconds of its recorded edge, it drops back to 1x and
+a "Caught up · back to 1x" pill says so. The edge is checked every 500 ms, also
+with the controls hidden, and the window grows with speed so the reset lands
+before playback stalls. Speed changes during a rewind are not saved, so the
+viewer's VoD speed is unchanged afterward.
+
+Errors and timeouts during the initial handoff return to live. Once the recording
+has started, later errors use normal VoD recovery so a network blip does not
+discard the viewer's position. If the player is minimized or the app is
+backgrounded, recovery waits for restore/resume instead of expanding playback
+over browsing. Reattachment checks the actual ready recording source, so a READY
+event missed while backgrounded cannot cause a false timeout. Explicit rewind
+startup offsets are consumed once and do not override later saved progress.
+
 ## Source provenance
 
 All ports are manual adaptations, not whole-fork merges or claims of patch
@@ -97,6 +137,8 @@ identity. The existing AGPL-3.0 license and Xtra attribution remain.
   `a3cbb0325`, hidden portrait variants `01f981ab0` and clip codecs `edd8ae257`.
 - Metered Wi-Fi: thiscallnet/Xtra [PR #433](https://github.com/thiscallnet/Xtra/pull/433),
   `42ab1d2cb0a07842748c278dfd874e0fddb43208`.
+- Live rewind: thiscallnet/Xtra `fbffe567381dfca9970860e2976ab0021c2602eb`
+  `ui/player/LiveRewind.kt` matching and failure-recovery concepts.
 
 The donor's new minimum SDK, GeckoView, Cronet/service rewrites, EventSub,
 multiview, local clips, captions and dependency upgrades are not included.
@@ -132,5 +174,12 @@ Required device matrix before merge/release:
   manual-quality override and background reconnection
 - No overlapping old audio; minimize/restore, close/reopen, PiP, sleep timer,
   gestures, floating chat, replay chat timing and local viewing totals
+- Rewind absent/stale/subscriber-only recording, stream restart during discovery,
+  source/child-playlist failure, background READY, interrupted startup, minimize
+  failure then restore, mid-recording network loss, Go Live, close or choose
+  another stream during discovery
+- Full-screen ⏪ button next to volume, distinct from restart; catching up at 2x/4x
+  drops to 1x with the pill before playback stalls, with controls shown or hidden;
+  the saved VoD speed is unchanged after Go Live
 
 Releasing remains a separate approval and verification step.

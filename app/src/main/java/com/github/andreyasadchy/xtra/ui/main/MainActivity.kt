@@ -74,6 +74,8 @@ import com.github.andreyasadchy.xtra.ui.common.UpdateDialogController
 import com.github.andreyasadchy.xtra.ui.game.GameMediaFragmentDirections
 import com.github.andreyasadchy.xtra.ui.game.GamePagerFragmentDirections
 import com.github.andreyasadchy.xtra.ui.games.GamesFragmentDirections
+import com.github.andreyasadchy.xtra.ui.player.LiveRewind
+import com.github.andreyasadchy.xtra.ui.player.PreparedLiveRewind
 import com.github.andreyasadchy.xtra.ui.player.ExoPlayerFragment
 import com.github.andreyasadchy.xtra.ui.player.Media3Fragment
 import com.github.andreyasadchy.xtra.ui.player.MediaPlayerFragment
@@ -794,7 +796,11 @@ class MainActivity : AppCompatActivity() {
     }
 
     fun startVideo(video: Video, offset: Long?, ignoreSavedPosition: Boolean = false) {
-        val fragment = when (prefs.getString(C.PLAYER, "ExoPlayer")) {
+        startPlayer(createVideoPlayer(video, offset, ignoreSavedPosition))
+    }
+
+    private fun createVideoPlayer(video: Video, offset: Long?, ignoreSavedPosition: Boolean): PlayerFragment =
+        when (prefs.getString(C.PLAYER, "ExoPlayer")) {
             "MediaPlayer" -> MediaPlayerFragment.newInstance(video, offset, ignoreSavedPosition)
             else -> {
                 if (prefs.getBoolean(C.DEBUG_USE_CUSTOM_PLAYBACK_SERVICE, false)) {
@@ -804,8 +810,34 @@ class MainActivity : AppCompatActivity() {
                 }
             }
         }
+
+    internal fun startLiveRewind(source: PlayerFragment, prepared: PreparedLiveRewind): Boolean {
+        if (!canReplacePlayer(source)) return false
+        val fragment = createVideoPlayer(prepared.video, prepared.positionMs, true)
+        fragment.arguments?.apply {
+            putParcelable(LiveRewind.ORIGIN, prepared.origin)
+            putString(LiveRewind.PLAYLIST, prepared.playlistUrl)
+            putLong(LiveRewind.POSITION, prepared.positionMs)
+        }
         startPlayer(fragment)
+        return true
     }
+
+    internal fun returnFromLiveRewind(source: PlayerFragment, origin: Stream): Boolean {
+        if (!canReplacePlayer(source)) return false
+        // The broadcaster may have restarted while the recording was playing.
+        // Keep channel identity, but force fresh live-session metadata lookup.
+        startStream(Stream(
+            channelId = origin.channelId, channelLogin = origin.channelLogin,
+            channelName = origin.channelName, channelImageURL = origin.channelImageURL,
+        ))
+        return true
+    }
+
+    /** Reject late discovery/error callbacks after navigation, close or state save. */
+    private fun canReplacePlayer(source: PlayerFragment): Boolean =
+        !supportFragmentManager.isStateSaved && playerFragment === source &&
+            supportFragmentManager.findFragmentById(R.id.playerContainer) === source
 
     fun startClip(clip: Clip) {
         val fragment = when (prefs.getString(C.PLAYER, "ExoPlayer")) {

@@ -83,6 +83,7 @@ class ExoPlayerFragment : PlayerFragment() {
                     val listener = object : Player.Listener {
 
                         override fun onPlaybackStateChanged(playbackState: Int) {
+                            if (playbackState == Player.STATE_READY) markLiveRewindReady()
                             binding.bufferingIndicator.isVisible = playbackState == Player.STATE_BUFFERING
                             val showPlayButton = Util.shouldShowPlayButton(player)
                             if (showPlayButton) {
@@ -288,6 +289,7 @@ class ExoPlayerFragment : PlayerFragment() {
                         }
 
                         override fun onPlayerError(error: PlaybackException) {
+                            if (handleLiveRewindFailure()) return
                             Log.e(tag, "Player error", error)
                             when (videoType) {
                                 STREAM -> {
@@ -389,6 +391,7 @@ class ExoPlayerFragment : PlayerFragment() {
                             viewModel.started = false
                         }
                         if (viewModel.started && player.currentMediaItem != null) {
+                            markLiveRewindReady()
                             chatFragment?.startReplayChatLoad()
                         }
                         if (!requireContext().prefs().getBoolean(C.PLAYER_KEEP_SCREEN_ON_WHEN_PAUSED, false) && canEnterPictureInPicture()) {
@@ -430,6 +433,10 @@ class ExoPlayerFragment : PlayerFragment() {
         }
         super.initialize()
     }
+
+    override fun isLiveRewindPlaybackReady(): Boolean =
+        player?.playbackState == Player.STATE_READY &&
+            playbackService?.videoId?.toString() == arguments?.getString(KEY_VIDEO_ID)
 
     override fun startStream(url: String?) {
         player?.let { player ->
@@ -658,6 +665,7 @@ class ExoPlayerFragment : PlayerFragment() {
     }
 
     override fun updateProgress() {
+        checkLiveRewindCatchUp()
         with(binding.playerControls) {
             if (root.isVisible && !progressBar.isPressed) {
                 val currentPosition = player?.currentPosition ?: 0
