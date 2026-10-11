@@ -4,6 +4,7 @@ import android.graphics.Rect
 import android.content.Context
 import android.view.inputmethod.InputMethodManager
 import android.view.View
+import android.view.ViewTreeObserver
 import androidx.recyclerview.widget.RecyclerView
 import androidx.viewpager2.widget.ViewPager2
 
@@ -18,6 +19,19 @@ val View.isKeyboardShown: Boolean
         val keypadHeight = screenHeight - rect.bottom
         return keypadHeight > screenHeight * 0.15
     }
+
+/**
+ * Adds [listener] to the window's tree observer only while this view is attached.
+ * A listener added straight to `viewTreeObserver` stays on the window after the
+ * view is gone and keeps whatever it captured, such as a closed player fragment.
+ */
+fun View.addWindowGlobalLayoutListener(listener: ViewTreeObserver.OnGlobalLayoutListener) {
+    if (isAttachedToWindow) viewTreeObserver.addOnGlobalLayoutListener(listener)
+    addOnAttachStateChangeListener(object : View.OnAttachStateChangeListener {
+        override fun onViewAttachedToWindow(view: View) = view.viewTreeObserver.addOnGlobalLayoutListener(listener)
+        override fun onViewDetachedFromWindow(view: View) = view.viewTreeObserver.removeOnGlobalLayoutListener(listener)
+    })
+}
 
 fun ViewPager2.reduceDragSensitivity() {
     try {
