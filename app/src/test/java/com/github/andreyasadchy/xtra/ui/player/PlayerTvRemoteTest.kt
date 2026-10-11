@@ -228,6 +228,22 @@ class PlayerTvRemoteTest {
         volumeBinder.dispose()
     }
 
+    @Test fun `speed changes during a live rewind keep the saved VoD speed`() {
+        context.prefs().edit { putFloat(C.PLAYER_SPEED, 1.5f) }
+        val speedBinding = LayoutPlayerSpeedPopupBinding.inflate(LayoutInflater.from(context))
+        var speed = 1.5f
+        val binder = PlayerSpeedPopupBinder(context, speedBinding, 1.5f, 384, { speed = it }, {}, persistSpeed = false)
+        binder.bind()
+        speedBinding.root.prepareTvPlayerFocus()
+        activity.get().setContentView(speedBinding.root)
+        measure(speedBinding.root, 384, 400)
+        assertTrue(speedBinding.speedSlider.requestFocus())
+        press(speedBinding.speedSlider, KeyEvent.KEYCODE_DPAD_RIGHT)
+        assertTrue(speed > 1.5f)
+        assertEquals(1.5f, context.prefs().getFloat(C.PLAYER_SPEED, 1f), 0.001f)
+        binder.dispose()
+    }
+
     @Test fun `toolbar speed rounds the remote slider value and keeps compact labels`() {
         val (fragment, playerBinding) = player()
         val updateSpeed = PlayerFragment::class.java.getDeclaredMethod("updatePlaybackSpeedUi", java.lang.Float::class.java).apply {

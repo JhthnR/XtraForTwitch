@@ -50,6 +50,7 @@ import androidx.annotation.OptIn
 import androidx.core.content.edit
 import androidx.core.graphics.ColorUtils
 import androidx.core.os.bundleOf
+import androidx.core.os.BundleCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
@@ -103,6 +104,11 @@ import com.google.android.material.timepicker.MaterialTimePicker
 import com.google.android.material.timepicker.TimeFormat
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import kotlin.math.abs
@@ -267,6 +273,195 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
     open fun startAudioOnly() {}
     open fun downloadVideo() {}
     open fun close() {}
+
+    private var liveRewindDiscovery: Job? = null
+    private var liveRewindStartup: Job? = null
+    private var liveRewindDialog: androidx.appcompat.app.AlertDialog? = null
+
+    internal fun liveRewindOrigin(): Stream? = arguments?.let {
+        BundleCompat.getParcelable(it, LiveRewind.ORIGIN, Stream::class.java)
+    }
+
+    internal fun showLiveRewindOptions() {
+        if (videoType != STREAM || liveRewindDiscovery?.isActive == true || liveRewindDialog != null) return
+        liveRewindDialog = requireContext().getAlertDialogBuilder()
+            .setTitle(R.string.live_rewind)
+            .setItems(arrayOf(
+                getString(R.string.live_rewind_30_seconds), getString(R.string.live_rewind_1_minute),
+                getString(R.string.live_rewind_5_minutes), getString(R.string.live_rewind_beginning),
+            )) { _, which -> requestLiveRewind(listOf(30_000L, 60_000L, 300_000L, null)[which]) }
+            .setNegativeButton(android.R.string.cancel, null)
+            .create().also { dialog ->
+                dialog.setOnDismissListener { liveRewindDialog = null }
+                dialog.show()
+            }
+    }
+
+    private fun requestLiveRewind(rewindMs: Long?) {
+        if (videoType != STREAM || liveRewindDiscovery?.isActive == true || !isResumed) return
+        val source = Stream(
+            id = viewModel.stream.value?.id ?: requireArguments().getString(KEY_STREAM_ID),
+            channelId = requireArguments().getString(KEY_CHANNEL_ID),
+            channelLogin = requireArguments().getString(KEY_CHANNEL_LOGIN),
+            createdAt = viewModel.stream.value?.createdAt ?: requireArguments().getString(KEY_STARTED_AT),
+        )
+        val context = requireContext()
+        Toast.makeText(context, R.string.live_rewind_searching, Toast.LENGTH_SHORT).show()
+        liveRewindDiscovery = viewLifecycleOwner.lifecycleScope.launch {
+            try {
+                val prepared = withTimeoutOrNull(20_000L) {
+                    viewModel.prepareLiveRewind(
+                        source, rewindMs, context.prefs().getString(C.NETWORK_LIBRARY, "OkHttp"),
+                        TwitchApiHelper.getGQLHeaders(context),
+                        TwitchApiHelper.getGQLHeaders(context, context.prefs().getBoolean(C.TOKEN_INCLUDE_TOKEN_VIDEO, true)),
+                        context.prefs().getString(C.TOKEN_PLAYERTYPE_VIDEO, "channel_home_live"),
+                        context.prefs().getString(C.TOKEN_SUPPORTED_CODECS, "av1,h265,h264"),
+                        context.prefs().getBoolean(C.ENABLE_INTEGRITY, false),
+                    )
+                }
+                currentCoroutineContext().ensureActive()
+                finishLiveRewindDiscovery(prepared)
+            } catch (error: CancellationException) {
+                throw error
+            } catch (_: Exception) {
+                finishLiveRewindDiscovery(null)
+            }
+        }
+    }
+
+    /** Never expand over browsing: a result that arrives while minimized or backgrounded is dropped. */
+    internal fun finishLiveRewindDiscovery(prepared: PreparedLiveRewind?) {
+        if (!isResumed || !isMaximized) {
+            viewModel.liveRewindDropped = true
+            return
+        }
+        if (prepared == null) {
+            Toast.makeText(requireContext(), R.string.live_rewind_unavailable, Toast.LENGTH_LONG).show()
+        } else {
+            (activity as? MainActivity)?.startLiveRewind(this, prepared)
+        }
+    }
+
+    /** Tells the viewer once, on return, that a rewind they asked for did not happen. */
+    private fun showDroppedLiveRewindNotice() {
+        if (!viewModel.liveRewindDropped || !isResumed || !isMaximized) return
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N && activity?.isInPictureInPictureMode == true) return
+        viewModel.liveRewindDropped = false
+        Toast.makeText(requireContext(), R.string.live_rewind_canceled_minimized, Toast.LENGTH_LONG).show()
+    }
+
+    internal fun returnToLiveFromRecording() {
+        val origin = liveRewindOrigin() ?: return
+        (activity as? MainActivity)?.returnFromLiveRewind(this, origin)
+    }
+
+    /**
+     * A recording played faster than realtime drops back to 1x once it reaches
+     * the edge, and says so. Speed changes during a rewind are never saved, so
+     * the viewer's VoD speed survives the round trip.
+     */
+    internal fun resetLiveRewindSpeed() {
+        if (liveRewindOrigin() == null) return
+        setPlaybackSpeed(1f)
+        updatePlaybackSpeedUi(1f)
+        showLiveRewindCaughtUp()
+    }
+
+    private fun showLiveRewindCaughtUp() {
+        if (!isMaximized || _binding == null) return
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N && activity?.isInPictureInPictureMode == true) return
+        val feedback = binding.playerLayout.findViewById<View>(R.id.gestureFeedback) ?: return
+        val text = getString(R.string.live_rewind_caught_up)
+        PlayerSurfacePolicy.presentFeedback(
+            context = requireContext(),
+            feedbackRoot = feedback,
+            kind = PlayerGestureFeedbackKind.PLAYBACK_SPEED,
+            surfaceWidthPx = binding.playerLayout.width,
+            surfaceHeightPx = binding.playerLayout.height,
+            insets = gestureInsets,
+            presentation = PlayerGestureFeedbackState.presentation(
+                kind = PlayerGestureFeedbackKind.PLAYBACK_SPEED,
+                surfaceClass = PlayerSurfacePolicy.classify(binding.playerLayout.width, resources.displayMetrics.density),
+                text = text,
+            ),
+            iconRes = R.drawable.baseline_speed_black_24,
+            a11yText = text,
+            hideRunnable = hideGestureRunnable,
+            holdMs = LIVE_REWIND_CAUGHT_UP_HOLD_MS,
+        )
+    }
+
+    /**
+     * Checks the edge while a recording plays, including with the controls hidden.
+     * The origin is fixed in the arguments, so one watch per view is enough.
+     */
+    private fun watchLiveRewindCatchUp() {
+        if (liveRewindOrigin() == null) return
+        viewLifecycleOwner.lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                while (true) {
+                    delay(LiveRewind.LIVE_CATCH_UP_POLL_MS)
+                    checkLiveRewindCatchUp()
+                }
+            }
+        }
+    }
+
+    /** True while a live-rewind recording is close enough to live to drop catch-up speed. */
+    internal fun checkLiveRewindCatchUp(): Boolean {
+        if (liveRewindOrigin() == null) return false
+        if (!LiveRewind.shouldResetSpeedAtLiveEdge(true, getCurrentSpeed(), getCurrentPosition(), getDuration())) {
+            return false
+        }
+        resetLiveRewindSpeed()
+        return true
+    }
+
+    private fun updateFullscreenLiveRewind() {
+        val show = LiveRewind.shouldShowFullscreenLiveRewind(videoType, liveRewindOrigin() != null, isMaximized, isPortrait)
+        with(binding.playerControls) {
+            liveRewind.isVisible = show
+            if (show) {
+                liveRewind.setOnClickListener { showLiveRewindOptions() }
+            } else {
+                liveRewind.setOnClickListener(null)
+            }
+        }
+    }
+
+    protected open fun isLiveRewindPlaybackReady(): Boolean = false
+
+    protected fun markLiveRewindReady() {
+        if (liveRewindOrigin() == null || !viewModel.liveRewindPending || !viewModel.started || !isLiveRewindPlaybackReady()) return
+        viewModel.liveRewindPending = false
+        liveRewindStartup?.cancel()
+        liveRewindStartup = null
+    }
+
+    /**
+     * Only the initial recording handoff falls back to live. Once the recording has played,
+     * errors use ordinary VoD recovery so a network blip does not discard the viewer's position.
+     */
+    protected fun handleLiveRewindFailure(): Boolean {
+        val origin = liveRewindOrigin() ?: return false
+        if (!viewModel.liveRewindPending && !viewModel.liveRewindFailed) return false
+        if (!viewModel.started) return true
+        viewModel.liveRewindPending = false
+        viewModel.liveRewindFailed = true
+        liveRewindStartup?.cancel()
+        if (isResumed && isMaximized && (activity as? MainActivity)?.returnFromLiveRewind(this, origin) == true) {
+            Toast.makeText(requireContext(), R.string.live_rewind_failed_returning, Toast.LENGTH_LONG).show()
+        }
+        return true
+    }
+
+    private fun watchLiveRewindStartup() {
+        if (liveRewindOrigin() == null || !viewModel.liveRewindPending || liveRewindStartup?.isActive == true) return
+        liveRewindStartup = viewLifecycleOwner.lifecycleScope.launch {
+            delay(30_000L)
+            if (viewModel.liveRewindPending) handleLiveRewindFailure()
+        }
+    }
 
     /** Reveal on the first remote press; visible controls retain native key handling. */
     fun dispatchTvKeyEvent(event: KeyEvent): Boolean {
@@ -484,6 +679,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
     @SuppressLint("ClickableViewAccessibility")
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
+        watchLiveRewindCatchUp()
         with(binding) {
             viewLifecycleOwner.lifecycleScope.launch {
                 repeatOnLifecycle(Lifecycle.State.STARTED) {
@@ -1033,7 +1229,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                 val titleText = requireArguments().getString(KEY_TITLE)
                 if (!titleText.isNullOrBlank() && requireContext().prefs().getBoolean(C.PLAYER_TITLE, true)) {
                     title.visibility = View.VISIBLE
-                    title.text = titleText
+                    title.text = if (liveRewindOrigin() != null) getString(R.string.live_rewind_recording_title, titleText) else titleText
                 }
                 val gameName = requireArguments().getString(KEY_GAME_NAME)
                 if (!gameName.isNullOrBlank() && requireContext().prefs().getBoolean(C.PLAYER_CATEGORY, true)) {
@@ -1172,6 +1368,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                         restart.visibility = View.VISIBLE
                         restart.setOnClickListener { restartPlayer() }
                     }
+                    updateFullscreenLiveRewind()
                     if (requireContext().prefs().getBoolean(C.PLAYER_SEEKLIVE, false)) {
                         seekLive.visibility = View.VISIBLE
                         seekLive.setOnClickListener { seekToLivePosition() }
@@ -1215,6 +1412,11 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                     duration.visibility = View.GONE
                 }
                 if (videoType == VIDEO) {
+                    if (liveRewindOrigin() != null) {
+                        seekLive.visibility = View.VISIBLE
+                        seekLive.contentDescription = getString(R.string.live_rewind_go_live)
+                        seekLive.setOnClickListener { returnToLiveFromRecording() }
+                    }
                     viewLifecycleOwner.lifecycleScope.launch {
                         repeatOnLifecycle(Lifecycle.State.STARTED) {
                             viewModel.videoResult.collectLatest {
@@ -1524,6 +1726,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                         }
                     }
                     toggleChat.visibility = View.GONE
+                    updateFullscreenLiveRewind()
                 }            } else {
                 systemUiListener.attach(requireActivity().window.decorView, viewLifecycleOwner) {
                     if (!isKeyboardShown && isMaximized && activity != null) {
@@ -1615,6 +1818,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                         }
                         // Separate floating chat button is now hidden as functionality is merged
                         toggleFloatingChat.visibility = View.GONE
+                    updateFullscreenLiveRewind()
                 }
             }
             updateQuickPlayerControls()
@@ -1654,37 +1858,13 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
     }
 
     fun getQualityMap(): Map<String, VideoQuality>? {
-        val qualities = viewModel.qualities
-        return if (!qualities.isNullOrEmpty()) {
-            val hideCodecs = qualities.all {
-                val codec = it.codecs?.substringBefore('.')
-                codec == "avc1" || codec == "mp4a" || codec.isNullOrBlank()
-            }
-            qualities.filterNot { quality ->
-                quality.name.isNumericQualityFallback()
-            }.associateBy { quality ->
-                when (normalizeQualityName(quality.name)) {
-                    "auto" -> getString(R.string.auto)
-                    "source" -> getString(R.string.source)
-                    "audio_only" -> getString(R.string.audio_only)
-                    "chat_only" -> getString(R.string.chat_only)
-                    else -> {
-                        if (hideCodecs) {
-                            quality.name.toString()
-                        } else {
-                            val codec = quality.codecs?.substringBefore('.')
-                            val codecName = when {
-                                codec == "av01" -> "AV1"
-                                codec == "hev1" || codec == "hvc1" -> "H.265"
-                                codec == "avc1" || codec.isNullOrBlank() -> "H.264"
-                                else -> codec
-                            }
-                            "${quality.name} $codecName"
-                        }
-                    }
-                }
-            }
-        } else null
+        val qualities = viewModel.qualities?.takeIf { it.isNotEmpty() } ?: return null
+        return PlayerQualityPopupModel.build(
+            qualities,
+            PlayerQualityPopupLabels(getString(R.string.auto), getString(R.string.source), getString(R.string.audio_only), getString(R.string.chat_only)),
+        ).associate { option ->
+            listOfNotNull(option.primaryLabel, option.codecLabel).joinToString(" ") to option.quality
+        }
     }
 
     fun showQualityDialog() {
@@ -1707,9 +1887,9 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
             context = requireContext(),
             binding = popupBinding,
             qualities = qualities,
-            selectedTag = viewModel.quality?.name,
+            selectedQuality = viewModel.quality,
             panelWidthPx = panelWidth,
-            onQualitySelected = ::selectQuality,
+            onQualitySelected = ::selectQualityOption,
             onDismissRequested = { hidePlayerPopup() },
         ).also { it.bind() }
         showPlayerPopup(
@@ -1722,12 +1902,18 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
     }
 
     fun selectQuality(qualityName: String?) {
-        viewModel.userHasChangedQuality = true
         val normalizedQualityName = normalizeQualityName(qualityName)
-        changeQuality(
-            viewModel.qualities?.find { it.name == qualityName }
+        selectQualityOption(
+            getQualityMap()?.get(qualityName)
+                ?: viewModel.qualities?.find { it.name == qualityName }
                 ?: viewModel.qualities?.find { normalizeQualityName(it.name) == normalizedQualityName }
         )
+    }
+
+    private fun selectQualityOption(quality: VideoQuality?) {
+        if (quality == null) return
+        viewModel.userHasChangedQuality = true
+        changeQuality(quality)
         changePlayerMode()
         setQualityText()
     }
@@ -1764,6 +1950,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
             panelWidthPx = panelWidth,
             onSpeedChanged = ::setPlaybackSpeed,
             onDismissRequested = { hidePlayerPopup() },
+            persistSpeed = liveRewindOrigin() == null,
         ).also { it.bind() }
         showPlayerPopup(
             type = PlayerPopupType.SPEED,
@@ -2398,41 +2585,45 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
     protected fun setDefaultQuality() {
         val connectivityManager = requireContext().getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
         val networkCapabilities = connectivityManager.getNetworkCapabilities(connectivityManager.activeNetwork)
-        val cellular = networkCapabilities?.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) == true
-        val defaultQuality = if (cellular) {
-            requireContext().prefs().getString(C.PLAYER_DEFAULT_CELLULAR_QUALITY, "saved")
-        } else {
-            requireContext().prefs().getString(C.PLAYER_DEFAULTQUALITY, "saved")
-        }?.substringBefore(" ")
-        viewModel.quality = when (defaultQuality) {
-            "saved" -> {
-                val savedQuality = requireContext().prefs().getString(C.PLAYER_QUALITY, "720p60")?.substringBefore(" ")
-                when (savedQuality) {
-                    AUTO_QUALITY -> viewModel.qualities?.find { it.name == AUTO_QUALITY }
-                    AUDIO_ONLY_QUALITY -> viewModel.qualities?.find { it.name == AUDIO_ONLY_QUALITY }
-                    CHAT_ONLY_QUALITY -> viewModel.qualities?.find { it.name == CHAT_ONLY_QUALITY }
-                    else -> findQuality(savedQuality)
-                }
-            }
-            AUTO_QUALITY -> viewModel.qualities?.find { it.name == AUTO_QUALITY }
-            "Source" -> viewModel.qualities?.find { it.name != AUTO_QUALITY }
-            AUDIO_ONLY_QUALITY -> viewModel.qualities?.find { it.name == AUDIO_ONLY_QUALITY }
-            CHAT_ONLY_QUALITY -> viewModel.qualities?.find { it.name == CHAT_ONLY_QUALITY }
-            else -> findQuality(defaultQuality)
-        } ?: viewModel.qualities?.firstOrNull()
+        val profile = PlayerQualityNetworkProfile.from(networkCapabilities)
+        val qualities = viewModel.qualities.orEmpty()
+        viewModel.previousQuality = viewModel.previousQuality?.let { selectDownloadQuality(qualities, it) }
+        viewModel.quality = preserveRefreshedQuality(qualities, viewModel.quality, viewModel.userHasChangedQuality)
+            ?: resolveDefaultQuality(profile)
     }
 
-    private fun findQuality(targetQualityString: String?): VideoQuality? {
-        val targetQuality = targetQualityString?.split("p")
-        return targetQuality?.getOrNull(0)?.takeWhile { it.isDigit() }?.toIntOrNull()?.let { targetResolution ->
-            val targetFps = targetQuality.getOrNull(1)?.takeWhile { it.isDigit() }?.toIntOrNull() ?: 30
-            val last = viewModel.qualities?.last { it.name != AUDIO_ONLY_QUALITY && it.name != CHAT_ONLY_QUALITY }
-            viewModel.qualities?.find { qualityString ->
-                val quality = qualityString.name?.split("p")
-                val resolution = quality?.getOrNull(0)?.takeWhile { it.isDigit() }?.toIntOrNull()
-                val fps = quality?.getOrNull(1)?.takeWhile { it.isDigit() }?.toIntOrNull() ?: 30
-                resolution != null && ((targetResolution == resolution && targetFps >= fps) || targetResolution > resolution || qualityString == last)
-            }
+    private fun resolveDefaultQuality(profile: PlayerQualityNetworkProfile): VideoQuality? {
+        val configured = profile.qualityPreference(requireContext().prefs())?.substringBefore(" ")
+        val qualities = viewModel.qualities.orEmpty()
+        return if (configured == "saved") {
+            PlayerQualityPreferences.resolve(requireContext().prefs(), qualities)
+        } else {
+            selectPreferredQuality(qualities, configured)
+        } ?: qualities.firstOrNull()
+    }
+
+    private var applyingNetworkQuality = false
+
+    internal fun shouldPersistQualitySelection(profile: PlayerQualityNetworkProfile): Boolean =
+        !applyingNetworkQuality && profile.qualityPreference(requireContext().prefs())?.substringBefore(" ") == "saved"
+
+    internal fun reapplyNetworkDefaultQuality(profile: PlayerQualityNetworkProfile) {
+        if (!isAdded || _binding == null || viewModel.qualities.isNullOrEmpty()) return
+        if (!shouldReapplyNetworkQuality(videoType == STREAM, viewModel.userHasChangedQuality)) return
+        val target = resolveDefaultQuality(profile) ?: return
+        if (viewModel.restoreQuality) {
+            // Background audio keeps playing; foreground restore uses the new network's default.
+            viewModel.previousQuality = target
+            return
+        }
+        if (target == viewModel.quality) return
+        applyingNetworkQuality = true
+        try {
+            changeQuality(target)
+            changePlayerMode()
+            setQualityText()
+        } finally {
+            applyingNetworkQuality = false
         }
     }
 
@@ -2703,6 +2894,10 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
 
     override fun onResume() {
         super.onResume()
+        if (viewModel.liveRewindFailed && isMaximized && handleLiveRewindFailure()) return
+        markLiveRewindReady()
+        watchLiveRewindStartup()
+        showDroppedLiveRewindNotice()
         val isInPIPMode = when {
             Build.VERSION.SDK_INT >= Build.VERSION_CODES.R -> requireActivity().isInPictureInPictureMode
             Build.VERSION.SDK_INT >= Build.VERSION_CODES.O -> !useController && isMaximized
@@ -2745,6 +2940,24 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
 
     protected fun startPlayer() {
         viewModel.started = true
+        if (videoType == VIDEO && liveRewindOrigin() != null) {
+            requireArguments().getString(LiveRewind.PLAYLIST)?.let { preparedUrl ->
+                viewModel.liveRewindPending = true
+                watchLiveRewindStartup()
+                requireArguments().remove(LiveRewind.PLAYLIST)
+                requireArguments().putBoolean(KEY_IGNORE_SAVED_POSITION, false)
+                requireArguments().putLong(KEY_OFFSET, -1L)
+                viewModel.playbackPosition = requireArguments().getLong(LiveRewind.POSITION)
+                try {
+                    startVideo(preparedUrl, viewModel.playbackPosition, true)
+                } catch (error: CancellationException) {
+                    throw error
+                } catch (error: Exception) {
+                    if (!handleLiveRewindFailure()) throw error
+                }
+                return
+            }
+        }
         when (videoType) {
             STREAM -> {
                 viewModel.useCustomProxy = requireContext().prefs().getBoolean(C.PLAYER_STREAM_PROXY, false)
@@ -2795,6 +3008,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                     networkLibrary = requireContext().prefs().getString(C.NETWORK_LIBRARY, "OkHttp"),
                     gqlHeaders = TwitchApiHelper.getGQLHeaders(requireContext()),
                     id = requireArguments().getString(KEY_CLIP_ID),
+                    supportedCodecs = requireContext().prefs().getString(C.TOKEN_SUPPORTED_CODECS, "av1,h265,h264"),
                     enableIntegrity = requireContext().prefs().getBoolean(C.ENABLE_INTEGRITY, false),
                 )
             }
@@ -2907,6 +3121,8 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
     override fun onPictureInPictureModeChanged(isInPictureInPictureMode: Boolean) {
         with(binding) {
             if (isInPictureInPictureMode) {
+                liveRewindDiscovery?.cancel()
+                liveRewindDialog?.dismiss()
                 restoreBrightness()
                 hidePlayerPopup(restoreFocus = false, animate = false)
                 if (!isMaximized) {
@@ -2942,6 +3158,10 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
     }
 
     override fun onStop() {
+        liveRewindDiscovery?.cancel()
+        liveRewindStartup?.cancel()
+        liveRewindStartup = null
+        liveRewindDialog?.dismiss()
         restoreBrightness()
         super.onStop()
         binding.playerControls.root.removeCallbacks(controllerHideAction)
@@ -2969,6 +3189,8 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
     }
 
     fun minimize() {
+        liveRewindDiscovery?.cancel()
+        liveRewindDialog?.dismiss()
         with(binding) {
             isMaximized = false
             // Restore original brightness when minimizing
@@ -3049,6 +3271,8 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
     fun maximize() {
         with(binding) {
             isMaximized = true
+            if (viewModel.liveRewindFailed && handleLiveRewindFailure()) return
+            showDroppedLiveRewindNotice()
             requireActivity().onBackPressedDispatcher.addCallback(viewLifecycleOwner, backPressedCallback)
             if (videoType == STREAM && chatFragment?.emoteMenuIsVisible() == true) {
                 chatFragment?.toggleBackPressedCallback(true)
@@ -3060,6 +3284,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                 showTvController()
             }
             applyMaximizedPlayerVisualState()
+            updateFullscreenLiveRewind()
             if (!controllerHideOnTouch) {
                 showController(true)
                 updateProgress()
@@ -3126,6 +3351,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                         qualityNames = qualities?.map { it.name.toString() }?.toTypedArray(),
                         qualityCodecs = qualities?.map { it.codecs.toString() }?.toTypedArray(),
                         qualityUrls = qualities?.map { it.url.toString() }?.toTypedArray(),
+                        qualityBitrates = qualities?.map { it.bitrate ?: -1 }?.toIntArray(),
                     ).show(childFragmentManager, null)
                 }
                 VIDEO -> {
@@ -3150,6 +3376,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                         qualityNames = qualities?.map { it.name.toString() }?.toTypedArray(),
                         qualityCodecs = qualities?.map { it.codecs.toString() }?.toTypedArray(),
                         qualityUrls = qualities?.map { it.url.toString() }?.toTypedArray(),
+                        qualityBitrates = qualities?.map { it.bitrate ?: -1 }?.toIntArray(),
                     ).show(childFragmentManager, null)
                 }
             }
@@ -3195,7 +3422,9 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                 requireContext().prefs().getString(C.PLAYER_SPEED_LIST, "0.25\n0.5\n0.75\n1.0\n1.25\n1.5\n1.75\n2.0\n3.0\n4.0\n8.0")?.split("\n")?.let { speeds ->
                     speeds.getOrNull(index)?.toFloatOrNull()?.let { speed ->
                         setPlaybackSpeed(speed)
-                        requireContext().prefs().edit { putFloat(C.PLAYER_SPEED, speed) }
+                        if (liveRewindOrigin() == null) {
+                            requireContext().prefs().edit { putFloat(C.PLAYER_SPEED, speed) }
+                        }
                         updatePlaybackSpeedUi(speed)
                     }
                 }
@@ -3269,6 +3498,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                                 networkLibrary = requireContext().prefs().getString(C.NETWORK_LIBRARY, "OkHttp"),
                                 gqlHeaders = TwitchApiHelper.getGQLHeaders(requireContext()),
                                 id = requireArguments().getString(KEY_CLIP_ID),
+                                supportedCodecs = requireContext().prefs().getString(C.TOKEN_SUPPORTED_CODECS, "av1,h265,h264"),
                                 enableIntegrity = requireContext().prefs().getBoolean(C.ENABLE_INTEGRITY, false),
                             )
                             viewModel.isFollowingChannel(
@@ -3388,6 +3618,9 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
     }
 
     override fun onDestroyView() {
+        liveRewindDiscovery?.cancel()
+        liveRewindStartup?.cancel()
+        liveRewindDialog?.dismiss()
         doubleTapChatSnapshot = null
         systemUiListener.detach()
         finalizePinchSurface()
@@ -3422,6 +3655,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
         private const val PINCH_SETTLE_MS = 240L
         private const val PINCH_SETTLE_EPSILON = 0.001f
         private const val VOLUME_OVERLAY_DISMISS_MS = 1500L
+        private const val LIVE_REWIND_CAUGHT_UP_HOLD_MS = 2500L
         private const val PINCH_HINT_LINGER_MS = 3000L
         private const val PLAYER_POPUP_OPEN_MS = 220L
         private const val PLAYER_POPUP_CLOSE_MS = 140L

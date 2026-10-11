@@ -15,6 +15,7 @@ internal data class PlayerQualityPopupOption(
     val codecLabel: String?,
     val tag: String,
     val kind: Kind,
+    val quality: VideoQuality,
 ) {
     enum class Kind { VIDEO, AUDIO_ONLY, CHAT_ONLY }
 }
@@ -47,20 +48,38 @@ internal object PlayerQualityPopupModel {
                     "chat_only" -> labels.chatOnly
                     else -> tag
                 },
-                codecLabel = if (showCodecs && kind == PlayerQualityPopupOption.Kind.VIDEO && normalized !in setOf("auto", "source")) {
+                codecLabel = if (showCodecs && kind == PlayerQualityPopupOption.Kind.VIDEO && normalized != "auto") {
                     codecDisplayName(quality.codecs)
                 } else {
                     null
                 },
                 tag = tag,
+                quality = quality,
                 kind = kind,
             )
         }
 
-        val video = options.filter { it.kind == PlayerQualityPopupOption.Kind.VIDEO }
-        val utilities = options
+        // A label is presentation, never identity. Disambiguate every member of a
+        // duplicate set, then number only otherwise indistinguishable variants.
+        val duplicateLabels = options.groupingBy { it.primaryLabel to it.codecLabel }.eachCount()
+        val usedLabels = mutableSetOf<String>()
+        val distinctOptions = options.map { option ->
+            val duplicate = duplicateLabels.getValue(option.primaryLabel to option.codecLabel) > 1
+            val bitrate = option.quality.bitrate?.takeIf { it > 0 }
+                ?.let { "${it / 1000} Kbps" }
+            val detail = listOfNotNull(option.codecLabel, bitrate.takeIf { duplicate }).joinToString(" · ").ifBlank { null }
+            val baseLabel = listOfNotNull(option.primaryLabel, detail).joinToString(" ")
+            var suffix = 1
+            var label = baseLabel
+            while (!usedLabels.add(label)) {
+                suffix++
+                label = "$baseLabel ($suffix)"
+            }
+            option.copy(codecLabel = if (suffix > 1) listOfNotNull(detail, "($suffix)").joinToString(" ") else detail)
+        }
+        val video = distinctOptions.filter { it.kind == PlayerQualityPopupOption.Kind.VIDEO }
+        val utilities = distinctOptions
             .filter { it.kind != PlayerQualityPopupOption.Kind.VIDEO }
-            .distinctBy { it.kind }
             .sortedBy { it.kind.ordinal }
         return video + utilities
     }
@@ -75,11 +94,12 @@ internal object PlayerQualityPopupModel {
         }
     }
 
-    private fun String?.codecPrefix(): String? = this
-        ?.substringBefore('.')
-        ?.trim()
-        ?.lowercase(Locale.US)
-        ?.takeIf { it.isNotBlank() }
+    private fun String?.codecPrefix(): String? {
+        val codecs = this?.split(',')?.mapNotNull {
+            it.trim().substringBefore('.').lowercase(Locale.US).takeIf(String::isNotBlank)
+        }.orEmpty()
+        return codecs.firstOrNull { it !in setOf("mp4a", "opus") } ?: codecs.firstOrNull()
+    }
 
     private fun String.normalizedPopupValue(): String = trim()
         .lowercase(Locale.US)

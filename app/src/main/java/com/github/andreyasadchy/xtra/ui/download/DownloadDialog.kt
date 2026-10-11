@@ -31,6 +31,8 @@ import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import com.github.andreyasadchy.xtra.R
 import com.github.andreyasadchy.xtra.databinding.DialogVideoDownloadBinding
+import com.github.andreyasadchy.xtra.ui.player.PlayerQualityPopupLabels
+import com.github.andreyasadchy.xtra.ui.player.PlayerQualityPopupModel
 import com.github.andreyasadchy.xtra.model.VideoQuality
 import com.github.andreyasadchy.xtra.ui.common.IntegrityDialog
 import com.github.andreyasadchy.xtra.ui.main.MainActivity
@@ -74,9 +76,10 @@ class DownloadDialog : DialogFragment(), IntegrityDialog.CallbackListener {
         private const val KEY_VIDEO_CURRENT_POSITION = "currentPosition"
         private const val KEY_QUALITY_NAMES = "quality_names"
         private const val KEY_QUALITY_CODECS = "quality_codecs"
+        private const val KEY_QUALITY_BITRATES = "quality_bitrates"
         private const val KEY_QUALITY_URLS = "quality_urls"
 
-        fun newStreamInstance(id: String?, channelId: String?, channelLogin: String?, channelName: String?, channelImage: String?, gameId: String?, gameSlug: String?, gameName: String?, title: String?, thumbnail: String?, createdAt: String?, qualityNames: Array<String>? = null, qualityCodecs: Array<String>? = null, qualityUrls: Array<String>? = null): DownloadDialog {
+        fun newStreamInstance(id: String?, channelId: String?, channelLogin: String?, channelName: String?, channelImage: String?, gameId: String?, gameSlug: String?, gameName: String?, title: String?, thumbnail: String?, createdAt: String?, qualityNames: Array<String>? = null, qualityCodecs: Array<String>? = null, qualityUrls: Array<String>? = null, qualityBitrates: IntArray? = null): DownloadDialog {
             return DownloadDialog().apply {
                 arguments = Bundle().apply {
                     putString(KEY_TYPE, STREAM)
@@ -94,11 +97,12 @@ class DownloadDialog : DialogFragment(), IntegrityDialog.CallbackListener {
                     putStringArray(KEY_QUALITY_NAMES, qualityNames)
                     putStringArray(KEY_QUALITY_CODECS, qualityCodecs)
                     putStringArray(KEY_QUALITY_URLS, qualityUrls)
+                    putIntArray(KEY_QUALITY_BITRATES, qualityBitrates)
                 }
             }
         }
 
-        fun newVideoInstance(id: String?, channelId: String?, channelLogin: String?, channelName: String?, channelImage: String?, gameId: String?, gameSlug: String?, gameName: String?, title: String?, thumbnail: String?, createdAt: String?, durationSeconds: Int?, type: String?, animatedPreviewUrl: String?, totalDuration: Long? = null, currentPosition: Long? = null, qualityNames: Array<String>? = null, qualityCodecs: Array<String>? = null, qualityUrls: Array<String>? = null): DownloadDialog {
+        fun newVideoInstance(id: String?, channelId: String?, channelLogin: String?, channelName: String?, channelImage: String?, gameId: String?, gameSlug: String?, gameName: String?, title: String?, thumbnail: String?, createdAt: String?, durationSeconds: Int?, type: String?, animatedPreviewUrl: String?, totalDuration: Long? = null, currentPosition: Long? = null, qualityNames: Array<String>? = null, qualityCodecs: Array<String>? = null, qualityUrls: Array<String>? = null, qualityBitrates: IntArray? = null): DownloadDialog {
             return DownloadDialog().apply {
                 arguments = Bundle().apply {
                     putString(KEY_TYPE, VIDEO)
@@ -121,11 +125,12 @@ class DownloadDialog : DialogFragment(), IntegrityDialog.CallbackListener {
                     putStringArray(KEY_QUALITY_NAMES, qualityNames)
                     putStringArray(KEY_QUALITY_CODECS, qualityCodecs)
                     putStringArray(KEY_QUALITY_URLS, qualityUrls)
+                    putIntArray(KEY_QUALITY_BITRATES, qualityBitrates)
                 }
             }
         }
 
-        fun newClipInstance(id: String?, channelId: String?, channelLogin: String?, channelName: String?, channelImage: String?, gameId: String?, gameSlug: String?, gameName: String?, title: String?, thumbnail: String?, createdAt: String?, videoId: String?, videoOffsetSeconds: Int?, qualityNames: Array<String>? = null, qualityCodecs: Array<String>? = null, qualityUrls: Array<String>? = null): DownloadDialog {
+        fun newClipInstance(id: String?, channelId: String?, channelLogin: String?, channelName: String?, channelImage: String?, gameId: String?, gameSlug: String?, gameName: String?, title: String?, thumbnail: String?, createdAt: String?, videoId: String?, videoOffsetSeconds: Int?, qualityNames: Array<String>? = null, qualityCodecs: Array<String>? = null, qualityUrls: Array<String>? = null, qualityBitrates: IntArray? = null): DownloadDialog {
             return DownloadDialog().apply {
                 arguments = Bundle().apply {
                     putString(KEY_TYPE, CLIP)
@@ -145,6 +150,7 @@ class DownloadDialog : DialogFragment(), IntegrityDialog.CallbackListener {
                     putStringArray(KEY_QUALITY_NAMES, qualityNames)
                     putStringArray(KEY_QUALITY_CODECS, qualityCodecs)
                     putStringArray(KEY_QUALITY_URLS, qualityUrls)
+                    putIntArray(KEY_QUALITY_BITRATES, qualityBitrates)
                 }
             }
         }
@@ -209,7 +215,7 @@ class DownloadDialog : DialogFragment(), IntegrityDialog.CallbackListener {
                         requireArguments().getStringArray(KEY_QUALITY_CODECS)?.let { codecs ->
                             requireArguments().getStringArray(KEY_QUALITY_URLS)?.let { urls ->
                                 names.mapIndexed { index, name ->
-                                    VideoQuality(name, codecs.getOrNull(index).takeIf { it != "null" }, urls.getOrNull(index))
+                                    VideoQuality(name, codecs.getOrNull(index).takeIf { it != "null" }, urls.getOrNull(index), requireArguments().getIntArray(KEY_QUALITY_BITRATES)?.getOrNull(index)?.takeIf { it > 0 })
                                 }
                             }
                         }
@@ -257,7 +263,7 @@ class DownloadDialog : DialogFragment(), IntegrityDialog.CallbackListener {
                         requireArguments().getStringArray(KEY_QUALITY_CODECS)?.let { codecs ->
                             requireArguments().getStringArray(KEY_QUALITY_URLS)?.let { urls ->
                                 names.mapIndexed { index, name ->
-                                    VideoQuality(name, codecs.getOrNull(index).takeIf { it != "null" }, urls.getOrNull(index))
+                                    VideoQuality(name, codecs.getOrNull(index).takeIf { it != "null" }, urls.getOrNull(index), requireArguments().getIntArray(KEY_QUALITY_BITRATES)?.getOrNull(index)?.takeIf { it > 0 })
                                 }
                             }
                         }
@@ -286,11 +292,12 @@ class DownloadDialog : DialogFragment(), IntegrityDialog.CallbackListener {
                         requireArguments().getStringArray(KEY_QUALITY_CODECS)?.let { codecs ->
                             requireArguments().getStringArray(KEY_QUALITY_URLS)?.let { urls ->
                                 names.mapIndexed { index, name ->
-                                    VideoQuality(name, codecs.getOrNull(index).takeIf { it != "null" }, urls.getOrNull(index))
+                                    VideoQuality(name, codecs.getOrNull(index).takeIf { it != "null" }, urls.getOrNull(index), requireArguments().getIntArray(KEY_QUALITY_BITRATES)?.getOrNull(index)?.takeIf { it > 0 })
                                 }
                             }
                         }
                     },
+                    supportedCodecs = requireContext().prefs().getString(C.TOKEN_SUPPORTED_CODECS, "av1,h265,h264"),
                     enableIntegrity = requireContext().prefs().getBoolean(C.ENABLE_INTEGRITY, false),
                 )
             }
@@ -316,33 +323,15 @@ class DownloadDialog : DialogFragment(), IntegrityDialog.CallbackListener {
             }
         }
         with(binding) {
-            val hideCodecs = qualities.all {
-                val codec = it.codecs?.substringBefore('.')
-                codec == "avc1" || codec == "mp4a" || codec.isNullOrBlank()
-            }
-            val qualityMap = qualities.associateBy { quality ->
-                when (quality.name) {
-                    "source" -> getString(R.string.source)
-                    "audio_only" -> getString(R.string.audio_only)
-                    else -> {
-                        if (hideCodecs) {
-                            quality.name
-                        } else {
-                            val codec = quality.codecs?.substringBefore('.')
-                            val codecName = when {
-                                codec == "av01" -> "AV1"
-                                codec == "hev1" || codec == "hvc1" -> "H.265"
-                                codec == "avc1" || codec.isNullOrBlank() -> "H.264"
-                                else -> codec
-                            }
-                            "${quality.name} $codecName"
-                        }
-                    }
-                }
+            val qualityMap = PlayerQualityPopupModel.build(
+                qualities,
+                PlayerQualityPopupLabels(getString(R.string.auto), getString(R.string.source), getString(R.string.audio_only), getString(R.string.chat_only)),
+            ).associate { option ->
+                listOfNotNull(option.primaryLabel, option.codecLabel).joinToString(" ") to option.quality
             }
             (spinner.editText as? MaterialAutoCompleteTextView)?.apply {
                 val array = qualityMap.keys.toTypedArray()
-                val selectedQuality = viewModel.selectedQuality ?: array.first()
+                val selectedQuality = viewModel.selectedQuality?.takeIf { it in qualityMap } ?: array.firstOrNull().orEmpty()
                 setSimpleItems(array)
                 setText(selectedQuality, false)
             }
@@ -489,6 +478,8 @@ class DownloadDialog : DialogFragment(), IntegrityDialog.CallbackListener {
                                 gameName = requireArguments().getString(KEY_GAME_NAME),
                                 downloadPath = path,
                                 quality = quality.name,
+                                qualityCodecs = quality.codecs,
+                                qualityBitrate = quality.bitrate,
                                 downloadChat = downloadChat,
                                 downloadChatEmotes = downloadChatEmotes,
                                 wifiOnly = requireContext().prefs().getBoolean(C.DOWNLOAD_WIFI_ONLY, false)
@@ -678,7 +669,7 @@ class DownloadDialog : DialogFragment(), IntegrityDialog.CallbackListener {
                             requireArguments().getStringArray(KEY_QUALITY_CODECS)?.let { codecs ->
                                 requireArguments().getStringArray(KEY_QUALITY_URLS)?.let { urls ->
                                     names.mapIndexed { index, name ->
-                                        VideoQuality(name, codecs.getOrNull(index).takeIf { it != "null" }, urls.getOrNull(index))
+                                        VideoQuality(name, codecs.getOrNull(index).takeIf { it != "null" }, urls.getOrNull(index), requireArguments().getIntArray(KEY_QUALITY_BITRATES)?.getOrNull(index)?.takeIf { it > 0 })
                                     }
                                 }
                             }
@@ -701,7 +692,7 @@ class DownloadDialog : DialogFragment(), IntegrityDialog.CallbackListener {
                             requireArguments().getStringArray(KEY_QUALITY_CODECS)?.let { codecs ->
                                 requireArguments().getStringArray(KEY_QUALITY_URLS)?.let { urls ->
                                     names.mapIndexed { index, name ->
-                                        VideoQuality(name, codecs.getOrNull(index).takeIf { it != "null" }, urls.getOrNull(index))
+                                        VideoQuality(name, codecs.getOrNull(index).takeIf { it != "null" }, urls.getOrNull(index), requireArguments().getIntArray(KEY_QUALITY_BITRATES)?.getOrNull(index)?.takeIf { it > 0 })
                                     }
                                 }
                             }
@@ -721,11 +712,12 @@ class DownloadDialog : DialogFragment(), IntegrityDialog.CallbackListener {
                             requireArguments().getStringArray(KEY_QUALITY_CODECS)?.let { codecs ->
                                 requireArguments().getStringArray(KEY_QUALITY_URLS)?.let { urls ->
                                     names.mapIndexed { index, name ->
-                                        VideoQuality(name, codecs.getOrNull(index).takeIf { it != "null" }, urls.getOrNull(index))
+                                        VideoQuality(name, codecs.getOrNull(index).takeIf { it != "null" }, urls.getOrNull(index), requireArguments().getIntArray(KEY_QUALITY_BITRATES)?.getOrNull(index)?.takeIf { it > 0 })
                                     }
                                 }
                             }
                         },
+                        supportedCodecs = requireContext().prefs().getString(C.TOKEN_SUPPORTED_CODECS, "av1,h265,h264"),
                         enableIntegrity = requireContext().prefs().getBoolean(C.ENABLE_INTEGRITY, false),
                     )
                 }

@@ -19,6 +19,9 @@ import com.github.andreyasadchy.xtra.model.ui.LocalFollowChannel
 import com.github.andreyasadchy.xtra.model.ui.Stream
 import com.github.andreyasadchy.xtra.model.ui.TranslateAllMessagesUser
 import com.github.andreyasadchy.xtra.model.ui.User
+import com.github.andreyasadchy.xtra.model.ui.Video
+import com.github.andreyasadchy.xtra.graphql.type.BroadcastType
+import com.github.andreyasadchy.xtra.graphql.type.VideoSort
 import com.github.andreyasadchy.xtra.player.lowlatency.CronetDataSource
 import com.github.andreyasadchy.xtra.player.lowlatency.HttpEngineDataSource
 import com.github.andreyasadchy.xtra.player.lowlatency.OkHttpDataSource
@@ -29,6 +32,7 @@ import com.github.andreyasadchy.xtra.repository.LocalFollowChannelRepository
 import com.github.andreyasadchy.xtra.repository.NotificationUsersRepository
 import com.github.andreyasadchy.xtra.repository.OfflineRepository
 import com.github.andreyasadchy.xtra.repository.PlayerRepository
+import com.github.andreyasadchy.xtra.repository.liveNotificationStartedAt
 import com.github.andreyasadchy.xtra.repository.ShownNotificationsRepository
 import com.github.andreyasadchy.xtra.repository.TranslateAllMessagesUsersRepository
 import com.github.andreyasadchy.xtra.ui.player.PlaybackService.Companion.MEDIA_PLAYLIST_REGEX
@@ -36,6 +40,7 @@ import com.github.andreyasadchy.xtra.ui.player.PlaybackService.Companion.MULTIVA
 import com.github.andreyasadchy.xtra.util.C
 import com.github.andreyasadchy.xtra.util.HttpEngineUtils
 import com.github.andreyasadchy.xtra.util.TwitchApiHelper
+import com.github.andreyasadchy.xtra.util.parsePlaylistQualities
 import com.github.andreyasadchy.xtra.util.getByteArrayCronetCallback
 import com.github.andreyasadchy.xtra.util.m3u8.PlaylistUtils
 import dagger.Lazy
@@ -46,6 +51,8 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.isActive
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
@@ -100,6 +107,11 @@ class PlayerViewModel @Inject constructor(
     val isBookmarked = MutableStateFlow<Boolean?>(null)
     val gamesList = MutableStateFlow<List<Game>?>(null)
     var shouldRetry = true
+    /** True only while the initial recording handoff is starting; not restored after process death. */
+    internal var liveRewindPending = false
+    internal var liveRewindFailed = false
+    /** A rewind result arrived while minimized or backgrounded and was not applied. */
+    internal var liveRewindDropped = false
 
     val clipUrls = MutableStateFlow<List<VideoQuality>?>(null)
 
@@ -119,6 +131,83 @@ class PlayerViewModel @Inject constructor(
     private val _isFollowing = MutableStateFlow<Boolean?>(null)
     val isFollowing: StateFlow<Boolean?> = _isFollowing
     val follow = MutableStateFlow<Pair<Boolean, String?>?>(null)
+
+    /** Resolve and preflight without disturbing the currently playing live source. */
+    internal suspend fun prepareLiveRewind(
+        expected: Stream,
+        rewindMs: Long?,
+        networkLibrary: String?,
+        gqlHeaders: Map<String, String>,
+        videoHeaders: Map<String, String>,
+        playerType: String?,
+        supportedCodecs: String?,
+        enableIntegrity: Boolean,
+    ): PreparedLiveRewind? {
+        if (expected.channelId.isNullOrBlank() && expected.channelLogin.isNullOrBlank()) return null
+        suspend fun currentStream(): Stream? {
+            val response = graphQLRepository.loadQueryUsersStream(
+                networkLibrary, gqlHeaders,
+                expected.channelId?.takeIf { it.isNotBlank() }?.let(::listOf),
+                expected.channelLogin?.takeIf { expected.channelId.isNullOrBlank() }?.let(::listOf),
+            )
+            currentCoroutineContext().ensureActive()
+            if (!response.errors.isNullOrEmpty()) return null
+            val user = response.data?.users?.firstOrNull() ?: return null
+            val live = user.stream ?: return null
+            return Stream(
+                id = live.id, channelId = user.id, channelLogin = user.login,
+                channelName = user.displayName, channelImageURL = user.profileImageURL,
+                gameId = live.game?.id, gameSlug = live.game?.slug, gameName = live.game?.displayName,
+                title = live.broadcaster?.broadcastSettings?.title, thumbnailURL = live.previewImageURL,
+                createdAt = live.createdAt?.toString(), viewerCount = live.viewersCount,
+            )
+        }
+        val live = currentStream() ?: return null
+        if (!LiveRewind.sameSession(expected.id, expected.createdAt, live.id, live.createdAt)) return null
+        val start = live.createdAt?.let(TwitchApiHelper::parseIso8601DateUTC) ?: return null
+        val response = graphQLRepository.loadQueryUserVideos(
+            networkLibrary, gqlHeaders, live.channelId, live.channelLogin.takeIf { live.channelId.isNullOrBlank() },
+            VideoSort.TIME, listOf(BroadcastType.ARCHIVE), 5, null,
+        )
+        currentCoroutineContext().ensureActive()
+        if (!response.errors.isNullOrEmpty()) return null
+        val candidates = response.data?.user?.videos?.edges.orEmpty().mapNotNull { edge ->
+            val node = edge?.node ?: return@mapNotNull null
+            val createdAt = node.createdAt?.toString() ?: return@mapNotNull null
+            val createdAtMs = TwitchApiHelper.parseIso8601DateUTC(createdAt) ?: return@mapNotNull null
+            val duration = node.lengthSeconds?.toLong()?.times(1000L) ?: return@mapNotNull null
+            LiveRewindCandidate(
+                Video(
+                    id = node.id, channelId = live.channelId, channelLogin = live.channelLogin,
+                    channelName = live.channelName, channelImageURL = live.channelImageURL,
+                    title = node.title, thumbnailURL = node.previewThumbnailURL, createdAt = createdAt,
+                    durationSeconds = node.lengthSeconds, type = "ARCHIVE", animatedPreviewURL = node.animatedPreviewURL,
+                    gameId = node.game?.id, gameSlug = node.game?.slug, gameName = node.game?.displayName,
+                ), createdAtMs, duration,
+            )
+        }
+        val candidate = LiveRewind.selectRecording(candidates, start, System.currentTimeMillis()) ?: return null
+        val url = playerRepository.loadVideoPlaylistUrl(
+            networkLibrary, videoHeaders, candidate.video.id, playerType, supportedCodecs, enableIntegrity,
+        ).first
+        currentCoroutineContext().ensureActive()
+        val playlist = loadPlaylist(url, networkLibrary)
+        currentCoroutineContext().ensureActive()
+        if (!LiveRewind.isPlayablePlaylist(playlist?.first, playlist?.second)) return null
+        // GQL lengthSeconds can trail the archive, so measure the recording itself when possible.
+        val durationMs = playlist?.first?.let { loadRecordingDurationMs(it, url, networkLibrary) } ?: candidate.durationMs
+        // Token/playlist discovery may take time. Never hand off into an old broadcast.
+        val latest = currentStream() ?: return null
+        if (!LiveRewind.sameSession(live.id, live.createdAt, latest.id, latest.createdAt)) return null
+        return PreparedLiveRewind(live, candidate.video, url, LiveRewind.targetPosition(durationMs, rewindMs))
+    }
+
+    private suspend fun loadRecordingDurationMs(multivariantPlaylist: String, url: String, networkLibrary: String?): Long? {
+        val variant = parsePlaylistQualities(multivariantPlaylist, url).firstOrNull { it.name != "audio_only" }?.url ?: return null
+        val media = loadPlaylist(variant, networkLibrary)
+        currentCoroutineContext().ensureActive()
+        return LiveRewind.mediaPlaylistDurationMs(media?.first?.takeIf { media.second == null })
+    }
 
     @OptIn(UnstableApi::class)
     fun getDataSourceFactory(networkLibrary: String?, proxyMultivariantPlaylist: Boolean = false, proxyMediaPlaylist: Boolean = false, proxyHost: String? = null, proxyPort: Int? = null, proxyUser: String? = null, proxyPassword: String? = null, useProxy: (() -> Boolean)? = { false }): HttpDataSource.Factory {
@@ -690,11 +779,11 @@ class PlayerViewModel @Inject constructor(
         }
     }
 
-    fun loadClip(networkLibrary: String?, gqlHeaders: Map<String, String>, id: String?, enableIntegrity: Boolean) {
+    fun loadClip(networkLibrary: String?, gqlHeaders: Map<String, String>, id: String?, supportedCodecs: String?, enableIntegrity: Boolean) {
         if (clipUrls.value == null) {
             viewModelScope.launch {
                 try {
-                    clipUrls.value = playerRepository.loadClipQualities(networkLibrary, gqlHeaders, id, enableIntegrity) ?: emptyList()
+                    clipUrls.value = playerRepository.loadClipQualities(networkLibrary, gqlHeaders, id, supportedCodecs, enableIntegrity) ?: emptyList()
                 } catch (e: Exception) {
                     if (e.message == "failed integrity check" && integrity.value == null) {
                         integrity.value = "refreshClip"
@@ -774,10 +863,11 @@ class PlayerViewModel @Inject constructor(
                         if (!errorMessage.isNullOrBlank()) {
                             follow.value = Pair(true, errorMessage)
                         } else {
+                            shownNotificationsRepository.accountNotificationChanged(userId, channelId, !disableNotifications)
                             _isFollowing.value = true
                             follow.value = Pair(true, null)
                             if (liveNotificationsEnabled) {
-                                startedAt.takeUnless { it.isNullOrBlank() }?.let { TwitchApiHelper.parseIso8601DateUTC(it) }?.let {
+                                startedAt.takeUnless { it.isNullOrBlank() }?.let { liveNotificationStartedAt(it) }?.let {
                                     shownNotificationsRepository.saveList(listOf(ShownNotification(channelId, it)))
                                 }
                             }
@@ -790,7 +880,7 @@ class PlayerViewModel @Inject constructor(
                             notificationUsersRepository.saveUser(NotificationUser(channelId))
                         }
                         if (liveNotificationsEnabled) {
-                            startedAt.takeUnless { it.isNullOrBlank() }?.let { TwitchApiHelper.parseIso8601DateUTC(it) }?.let {
+                            startedAt.takeUnless { it.isNullOrBlank() }?.let { liveNotificationStartedAt(it) }?.let {
                                 shownNotificationsRepository.saveList(listOf(ShownNotification(channelId, it)))
                             }
                         }
@@ -818,6 +908,7 @@ class PlayerViewModel @Inject constructor(
                         if (!errorMessage.isNullOrBlank()) {
                             follow.value = Pair(false, errorMessage)
                         } else {
+                            shownNotificationsRepository.accountNotificationChanged(userId, channelId, false)
                             _isFollowing.value = false
                             follow.value = Pair(false, null)
                         }
