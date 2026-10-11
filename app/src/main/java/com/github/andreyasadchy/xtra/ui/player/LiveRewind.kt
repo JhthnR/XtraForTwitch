@@ -68,11 +68,20 @@ internal object LiveRewind {
         body?.trimStart()?.startsWith("#EXTM3U") == true &&
         (body.contains("#EXT-X-STREAM-INF:") || body.contains("#EXTINF:"))
 
-    /** Playback at or above this multiple of realtime counts as catching up to live. */
+    /** Playback above this multiple of realtime counts as catching up to live. */
     const val LIVE_CATCH_UP_SPEED = 1.05f
 
     /** Recording positions within this distance of the reported edge count as caught up. */
     const val LIVE_EDGE_SLACK_MS = 5_000L
+
+    /** How often the edge is checked while a recording plays, controls shown or not. */
+    const val LIVE_CATCH_UP_POLL_MS = 500L
+
+    /** Real time left before the edge when the reset happens, so a poll always lands first. */
+    const val LIVE_EDGE_REACTION_MS = 1_500L
+
+    /** Faster playback covers more media per poll, so the caught-up zone grows with speed. */
+    fun edgeSlackMs(speed: Float): Long = max(LIVE_EDGE_SLACK_MS, (speed * LIVE_EDGE_REACTION_MS).toLong())
 
     fun shouldResetSpeedAtLiveEdge(
         hasLiveRewindOrigin: Boolean,
@@ -83,7 +92,7 @@ internal object LiveRewind {
         if (!hasLiveRewindOrigin) return false
         if (currentSpeed == null || currentSpeed <= LIVE_CATCH_UP_SPEED) return false
         if (positionMs == null || durationMs == null || durationMs <= 0L) return false
-        return durationMs - positionMs <= LIVE_EDGE_SLACK_MS
+        return durationMs - positionMs <= edgeSlackMs(currentSpeed)
     }
 
     fun shouldShowFullscreenLiveRewind(

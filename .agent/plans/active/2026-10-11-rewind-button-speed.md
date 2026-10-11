@@ -45,26 +45,29 @@ Reason: narrow reversible player UI plus tightly scoped recording speed handling
 ## Implementation steps
 
 1. Add live-only fullscreen rewind button before volume, opening existing rewind options.
-2. Use history icon distinct from restart replay icon.
-3. Reset recording speed to 1x on Go-live and live-edge catch-up, including UI plus persisted pref.
-4. Add unit tests for visibility and speed-reset triggers.
+2. Use the ⏪ rewind icon, distinct from the restart arrow.
+3. Reset recording speed to 1x at live-edge catch-up, with a visible pill; never
+   save speed changes made during a rewind.
+4. Add unit tests for visibility, speed-reset triggers and unsaved rewind speed.
 5. Run assembleDebug, test, lintDebug.
 
 ## Verification
 
 Automated checks:
 
-- [ ] `./gradlew assembleDebug`
-- [ ] `./gradlew test`
-- [ ] `./gradlew lintDebug`
+- [x] `./gradlew assembleDebug`
+- [x] `./gradlew test`
+- [x] `./gradlew lintDebug`
 - [ ] `./gradlew assembleRelease`, if release-risk
 
 Human QA required:
 
 - [ ] live, VoD, switching, minimize/restore, close/reopen, orientation, PiP/background, speed/quality, gestures, floating chat
 - [ ] fullscreen rewind button only on live fullscreen near volume and opens rewind options
-- [ ] recording at 4x returns to live at 1x with updated UI and persisted pref
-- [ ] automatic catch-up to live edge also resets to 1x
+- [ ] recording at 4x catches up, drops to 1x with the "Caught up" pill before
+      stalling, with controls shown and hidden
+- [ ] Go live and later VoDs keep the VoD speed saved before the rewind
+- [ ] after minimize and restore in landscape, the ⏪ button is still there
 
 Human QA completed:
 
@@ -73,12 +76,25 @@ Human QA completed:
 ## Progress log
 
 - 2026-10-11: Created plan.
+- 2026-10-11: Review fixes after owner feedback and code review. The reset no
+  longer writes `C.PLAYER_SPEED` (streams never read it, and it erased the saved
+  VoD speed); instead, speed changes during a rewind are not saved. The edge check
+  runs every 500 ms from a lifecycle-bound loop, because `updateProgress()` only
+  reschedules while controls are visible, and its window scales with speed. The
+  reset shows a "Caught up · back to 1x" pill. The button uses ⏪
+  (`exo_icon_rewind`), since the history icon read as the restart arrow, and is
+  refreshed on `maximize()` as well as layout.
 
 ## Decisions
 
-- Decision: place button before volume and use history icon.
-  Reason: near volume without colliding with restart replay metaphor.
-  Alternatives considered: top-right row; farther from volume and crowded.
+- Decision: place button before volume and use the ⏪ rewind icon.
+  Reason: near volume as requested; ⏪ pairs with the ⏩ Go live button and does
+  not share the restart button's circular arrow.
+  Alternatives considered: history icon (too close to restart); top-right row
+  (farther from volume and crowded).
+- Decision: don't save speed changes during a rewind instead of resetting the
+  saved speed. Reason: the recording starts at the saved VoD speed, so writing 1x
+  erased the viewer's VoD preference.
 
 ## Final PR summary draft
 

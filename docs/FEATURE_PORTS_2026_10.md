@@ -83,7 +83,8 @@ existing controls and readable labels.
 
 ### Recording-backed live rewind
 
-Open **More → Rewind live stream** and choose the beginning or the last 30 seconds,
+Open **More → Rewind live stream**, or the ⏪ button next to volume in the
+landscape full-screen player, and choose the beginning or the last 30 seconds,
 minute, or five minutes of the available recording. Live playback continues while
 ThystTV discovers the current broadcast, matches a recording, obtains playback
 access and preflights its playlist. No suitable recording, subscriber restrictions,
@@ -104,6 +105,13 @@ recording's own media playlist, falling back to Twitch's reported length, and
 can lag the live stream. This first port uses the ordinary VoD timeline rather
 than the donor's continuously predicted live-edge UI; Go Live remains the
 reliable way to return to current live playback.
+
+Faster playback catches up with the recording. When a recording played faster
+than 1x comes within a few seconds of its recorded edge, it drops back to 1x and
+a "Caught up · back to 1x" pill says so. The edge is checked every 500 ms, also
+with the controls hidden, and the window grows with speed so the reset lands
+before playback stalls. Speed changes during a rewind are not saved, so the
+viewer's VoD speed is unchanged afterward.
 
 Errors and timeouts during the initial handoff return to live. Once the recording
 has started, later errors use normal VoD recovery so a network blip does not
@@ -170,5 +178,8 @@ Required device matrix before merge/release:
   source/child-playlist failure, background READY, interrupted startup, minimize
   failure then restore, mid-recording network loss, Go Live, close or choose
   another stream during discovery
+- Full-screen ⏪ button next to volume, distinct from restart; catching up at 2x/4x
+  drops to 1x with the pill before playback stalls, with controls shown or hidden;
+  the saved VoD speed is unchanged after Go Live
 
 Releasing remains a separate approval and verification step.

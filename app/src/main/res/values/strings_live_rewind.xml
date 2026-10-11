@@ -7,6 +7,7 @@
     <string name="live_rewind_5_minutes" tools:ignore="MissingTranslation">Watch last 5 minutes of recording</string>
     <string name="live_rewind_beginning" tools:ignore="MissingTranslation">Watch from beginning</string>
     <string name="live_rewind_go_live" tools:ignore="MissingTranslation">Go live</string>
+    <string name="live_rewind_caught_up" tools:ignore="MissingTranslation">Caught up · back to 1x</string>
     <string name="live_rewind_recording_title" tools:ignore="MissingTranslation">Recording · %1$s</string>
     <string name="live_rewind_searching" tools:ignore="MissingTranslation">Looking for this broadcast’s recording…</string>
     <string name="live_rewind_unavailable" tools:ignore="MissingTranslation">No playable recording is available for this live broadcast. Staying live.</string>

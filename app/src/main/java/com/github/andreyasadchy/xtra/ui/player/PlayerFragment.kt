@@ -277,6 +277,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
     private var liveRewindDiscovery: Job? = null
     private var liveRewindStartup: Job? = null
     private var liveRewindDialog: androidx.appcompat.app.AlertDialog? = null
+    private var liveRewindCatchUpWatch: Job? = null
 
     internal fun liveRewindOrigin(): Stream? = arguments?.let {
         BundleCompat.getParcelable(it, LiveRewind.ORIGIN, Stream::class.java)
@@ -352,19 +353,56 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
 
     internal fun returnToLiveFromRecording() {
         val origin = liveRewindOrigin() ?: return
-        resetLiveRewindSpeed()
         (activity as? MainActivity)?.returnFromLiveRewind(this, origin)
     }
 
     /**
-     * Recording playback can run faster than realtime to catch up. Returning to
-     * live must not leave that multiple persisted or displayed.
+     * A recording played faster than realtime drops back to 1x once it reaches
+     * the edge, and says so. Speed changes during a rewind are never saved, so
+     * the viewer's VoD speed survives the round trip.
      */
     internal fun resetLiveRewindSpeed() {
         if (liveRewindOrigin() == null) return
         setPlaybackSpeed(1f)
         updatePlaybackSpeedUi(1f)
-        requireContext().prefs().edit { putFloat(C.PLAYER_SPEED, 1f) }
+        showLiveRewindCaughtUp()
+    }
+
+    private fun showLiveRewindCaughtUp() {
+        if (!isMaximized || _binding == null) return
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N && activity?.isInPictureInPictureMode == true) return
+        val feedback = binding.playerLayout.findViewById<View>(R.id.gestureFeedback) ?: return
+        val text = getString(R.string.live_rewind_caught_up)
+        PlayerSurfacePolicy.presentFeedback(
+            context = requireContext(),
+            feedbackRoot = feedback,
+            kind = PlayerGestureFeedbackKind.PLAYBACK_SPEED,
+            surfaceWidthPx = binding.playerLayout.width,
+            surfaceHeightPx = binding.playerLayout.height,
+            insets = gestureInsets,
+            presentation = PlayerGestureFeedbackState.presentation(
+                kind = PlayerGestureFeedbackKind.PLAYBACK_SPEED,
+                surfaceClass = PlayerSurfacePolicy.classify(binding.playerLayout.width, resources.displayMetrics.density),
+                text = text,
+            ),
+            iconRes = R.drawable.baseline_speed_black_24,
+            a11yText = text,
+            hideRunnable = hideGestureRunnable,
+            holdMs = LIVE_REWIND_CAUGHT_UP_HOLD_MS,
+        )
+    }
+
+    /** Checks the edge while a recording plays, including with the controls hidden. */
+    private fun watchLiveRewindCatchUp() {
+        if (liveRewindOrigin() == null || liveRewindCatchUpWatch?.isActive == true) return
+        liveRewindCatchUpWatch = viewLifecycleOwner.lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                while (true) {
+                    delay(LiveRewind.LIVE_CATCH_UP_POLL_MS)
+                    checkLiveRewindCatchUp()
+                }
+            }
+        }
     }
 
     /** True while a live-rewind recording is close enough to live to drop catch-up speed. */
@@ -382,7 +420,6 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
         with(binding.playerControls) {
             liveRewind.isVisible = show
             if (show) {
-                liveRewind.contentDescription = getString(R.string.live_rewind)
                 liveRewind.setOnClickListener { showLiveRewindOptions() }
             } else {
                 liveRewind.setOnClickListener(null)
@@ -1901,6 +1938,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
             panelWidthPx = panelWidth,
             onSpeedChanged = ::setPlaybackSpeed,
             onDismissRequested = { hidePlayerPopup() },
+            persistSpeed = liveRewindOrigin() == null,
         ).also { it.bind() }
         showPlayerPopup(
             type = PlayerPopupType.SPEED,
@@ -2847,6 +2885,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
         if (viewModel.liveRewindFailed && isMaximized && handleLiveRewindFailure()) return
         markLiveRewindReady()
         watchLiveRewindStartup()
+        watchLiveRewindCatchUp()
         showDroppedLiveRewindNotice()
         val isInPIPMode = when {
             Build.VERSION.SDK_INT >= Build.VERSION_CODES.R -> requireActivity().isInPictureInPictureMode
@@ -3234,6 +3273,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                 showTvController()
             }
             applyMaximizedPlayerVisualState()
+            updateFullscreenLiveRewind()
             if (!controllerHideOnTouch) {
                 showController(true)
                 updateProgress()
@@ -3371,7 +3411,9 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                 requireContext().prefs().getString(C.PLAYER_SPEED_LIST, "0.25\n0.5\n0.75\n1.0\n1.25\n1.5\n1.75\n2.0\n3.0\n4.0\n8.0")?.split("\n")?.let { speeds ->
                     speeds.getOrNull(index)?.toFloatOrNull()?.let { speed ->
                         setPlaybackSpeed(speed)
-                        requireContext().prefs().edit { putFloat(C.PLAYER_SPEED, speed) }
+                        if (liveRewindOrigin() == null) {
+                            requireContext().prefs().edit { putFloat(C.PLAYER_SPEED, speed) }
+                        }
                         updatePlaybackSpeedUi(speed)
                     }
                 }
@@ -3602,6 +3644,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
         private const val PINCH_SETTLE_MS = 240L
         private const val PINCH_SETTLE_EPSILON = 0.001f
         private const val VOLUME_OVERLAY_DISMISS_MS = 1500L
+        private const val LIVE_REWIND_CAUGHT_UP_HOLD_MS = 2500L
         private const val PINCH_HINT_LINGER_MS = 3000L
         private const val PLAYER_POPUP_OPEN_MS = 220L
         private const val PLAYER_POPUP_CLOSE_MS = 140L
