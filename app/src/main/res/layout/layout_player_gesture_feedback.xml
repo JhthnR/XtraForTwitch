@@ -50,19 +50,17 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginStart="12dp"
-            android:ellipsize="none"
-            android:fontFamily="monospace"
-            android:gravity="center"
+            android:ellipsize="end"
+            android:gravity="end"
             android:maxLines="1"
             android:shadowColor="#80000000"
             android:shadowDx="1"
             android:shadowDy="1"
             android:shadowRadius="2"
-            android:textAlignment="center"
             android:textColor="@android:color/white"
             android:textSize="14sp"
             android:textStyle="bold"
-            tools:text="Zoom 200%" />
+            tools:text="100%" />
 
     </LinearLayout>
 </FrameLayout>

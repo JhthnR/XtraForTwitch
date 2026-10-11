@@ -36,13 +36,6 @@ object PlayerGestureFeedbackState {
     const val PINCH_LEVEL_NEUTRAL = 50
 
     /**
-     * Widest pinch label the fixed-width pill must hold without relayout:
-     * `Zoom 200%` covers the plausible free-zoom range with room for wider
-     * translations. Shorter Fit/Fill/ZOOM labels center inside it.
-     */
-    const val PINCH_LABEL_WIDEST = "Zoom 200%"
-
-    /**
      * Minimum pinch label/bar change worth a view write. Successive pinch
      * updates arrive faster than a frame; smaller deltas only churn layout
      * and the progress drawable.

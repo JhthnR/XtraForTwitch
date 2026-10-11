@@ -110,14 +110,22 @@ Human QA completed:
   animated bar, Fill edge flash with reduced-motion path, plus unit/render
   tests. Fixed a `setMinEms`-overwrites-`setMinWidth` slot bug found by the
   render test (ems is now the sole mechanism).
+- 2026-10-11: Review fixes. `setMinEms(9)` counts line heights, not characters,
+  so the slot was about twice the widest label (~148dp). The slot is now measured
+  from the widest real label (Fit, Fill, Stretch, `Zoom 888%`) with the label's
+  paint and tabular digits. Monospace, centering and no-ellipsis had been set in
+  the shared layout, changing brightness, volume, seek and speed pills too; the
+  layout is restored and pinch styling is applied in code only for pinch. The
+  animated bar is pinch-only and jumps when the pill first appears.
 
 ## Decisions
 
-- Decision: fixed pill slot via `setMinEms(9)` with monospace, not pixel
-  minWidth. `setMinEms` and `setMinWidth` share one field, so only one can
-  win; ems scales with text size for large fonts.
-  Reason: render test showed `getMinWidth()` returning -1 after both calls.
-  Alternatives considered: pixel minWidth only (breaks large fonts).
+- Decision: pixel `minWidth` measured from the widest label with the label's
+  own paint, plus tabular digits in the app font.
+  Reason: measuring follows font scale and translations, and stays tight;
+  `setMinEms` multiplies line height and was twice too wide.
+  Alternatives considered: `setMinEms(9)` with monospace (too wide, and the
+  monospace font leaked into other gesture pills).
 
 ## Final PR summary draft
 

@@ -108,6 +108,9 @@ behavior remain unverified; emulator results are recorded separately in
   enabled. Open another stream or VoD: the zoom is kept.
 - [ ] Landscape phone: a short pinch still reaches Fill and back to Fit; ends snap
   within about 5%. Pinching past either end resists and settles back.
+- [ ] The pill keeps one width through Fit, Zoom N% and Fill, its bar moves
+  smoothly, and reaching Fill flashes a white outline once. Brightness, volume,
+  seek and speed pills keep their usual font and size.
 - [ ] While zoomed, rotate, fold/unfold, open/close side chat, resize split screen,
   minimize/restore, enter/leave PiP and close/reopen. Portrait, the mini-player and
   PiP show plain Fit; full-screen landscape returns to the zoom, never past Fill.

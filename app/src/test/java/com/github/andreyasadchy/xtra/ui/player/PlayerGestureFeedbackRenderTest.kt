@@ -5,6 +5,7 @@ import android.app.Application
 import android.content.Context
 import android.graphics.Color
 import android.graphics.drawable.GradientDrawable
+import android.view.Gravity
 import android.view.ContextThemeWrapper
 import android.view.LayoutInflater
 import android.view.View
@@ -117,16 +118,24 @@ class PlayerGestureFeedbackRenderTest {
             val pill = feedback.findViewById<LinearLayout>(R.id.feedbackContainer)
             val text = feedback.findViewById<TextView>(R.id.feedbackText)
             assertEquals(label, text.text.toString())
-            assertEquals(
-                "pinch labels keep a fixed ems slot",
-                PlayerSurfacePolicy.PINCH_LABEL_MIN_EMS,
-                text.minEms,
-            )
+            assertEquals(Gravity.CENTER, text.gravity)
+            // The slot is the widest real label, not a generous guess.
+            assertEquals(PlayerSurfacePolicy.pinchLabelSlotWidth(context, text), text.width)
+            assertTrue("slot hugs the widest label", text.width <= text.paint.measureText("Zoom 888%") + 2)
             widths += pill.width
             assertContentsFit(pill)
+            if (label == "Fill") UiTestRender.save(surface, "gesture-pinch-fixed-pill")
+            if (label == "Zoom 134%") UiTestRender.save(surface, "gesture-pinch-zoom-pill")
         }
         assertEquals("pinch pill width must not depend on the label: $widths", 1, widths.size)
-        UiTestRender.save(surface, "gesture-pinch-fixed-pill")
+
+        // Other gestures share the view and get their own label back.
+        present(surface, feedback, PlayerGestureFeedbackKind.SEEK, 1280, 720)
+        val text = feedback.findViewById<TextView>(R.id.feedbackText)
+        assertEquals(0, text.minWidth)
+        assertNull(text.fontFeatureSettings)
+        assertEquals(Gravity.END, text.gravity and Gravity.RELATIVE_HORIZONTAL_GRAVITY_MASK)
+        assertEquals(text.paint.measureText("65%"), text.width.toFloat(), 2f)
     }
 
     @Test fun `same overlay restores compact geometry after resize and other gestures`() {

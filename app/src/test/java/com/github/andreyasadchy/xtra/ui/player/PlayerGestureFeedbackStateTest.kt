@@ -136,18 +136,6 @@ class PlayerGestureFeedbackStateTest {
     }
 
     @Test
-    fun `pinch labels share one fixed-width slot`() {
-        // The widest label must hold every other label without resizing the
-        // pill; shorter labels center inside the same slot.
-        val widest = PlayerGestureFeedbackState.PINCH_LABEL_WIDEST
-        for (label in listOf("Fit", "Fill", "Zoom 100%", "Zoom 134%", "Zoom 200%")) {
-            assertTrue("$label must fit in $widest", label.length <= widest.length)
-        }
-        assertEquals(9, widest.length)
-        assertEquals(PlayerSurfacePolicy.PINCH_LABEL_MIN_EMS, widest.length)
-    }
-
-    @Test
     fun `zoom percent rounds the Fit-relative zoom`() {
         assertEquals(100, PlayerGestureFeedbackState.zoomPercent(1f))
         assertEquals(134, PlayerGestureFeedbackState.zoomPercent(1.335f))
