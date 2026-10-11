@@ -12,6 +12,7 @@ import android.widget.TextView
 import androidx.core.view.isVisible
 import com.github.andreyasadchy.xtra.R
 import com.google.android.material.progressindicator.LinearProgressIndicator
+import kotlin.math.ceil
 
 /**
  * Classifies the active player surface and derives gesture-feedback placement
@@ -66,6 +67,12 @@ object PlayerSurfacePolicy {
     private const val COMPACT_ICON_SIZE_DP = 24
     private const val COMPACT_LEVEL_WIDTH_DP = 4
     private const val ICON_SPACING_DP = 12
+
+    /** Tabular digits keep every `Zoom N%` the same width in the app font. */
+    private const val TABULAR_DIGITS = "tnum"
+
+    /** Three digits cover any zoom up to 999%; a wider label only grows the slot. */
+    private const val PINCH_SLOT_ZOOM_PERCENT = 888
 
     fun classify(surfaceWidthPx: Int, density: Float): PlayerSurfaceClass {
         if (density <= 0f || surfaceWidthPx <= 0) {
@@ -195,6 +202,21 @@ object PlayerSurfacePolicy {
     }
 
     /**
+     * Width of the widest label a pinch can show (Fit, Fill, Stretch or a
+     * three-digit zoom), measured with the label's own paint so large fonts and
+     * translations size the slot too.
+     */
+    internal fun pinchLabelSlotWidth(context: Context, text: TextView): Int {
+        val widest = listOf(
+            context.getString(R.string.display_mode_fit),
+            context.getString(R.string.display_mode_fill),
+            context.getString(R.string.display_mode_stretch),
+            context.getString(R.string.display_mode_zoom, PINCH_SLOT_ZOOM_PERCENT),
+        ).maxOf { text.paint.measureText(it) }
+        return ceil(widest).toInt() + text.compoundPaddingLeft + text.compoundPaddingRight
+    }
+
+    /**
      * A visible pill visibly jumps when its geometry changes, so a placement
      * change must be applied while hidden; an already-hidden pill can
      * reposition freely, and an unchanged placement just refreshes content.
@@ -278,8 +300,19 @@ object PlayerSurfacePolicy {
             params.marginEnd = trailing
             icon.layoutParams = params
         }
+        val pinchLabel = kind == PlayerGestureFeedbackKind.PINCH && !vertical
+        val newText = presentation.text.orEmpty()
         horizontalProgress?.visibility = if (presentation.levelVisible && !vertical) View.VISIBLE else View.GONE
-        horizontalProgress?.progress = presentation.level
+        if (pinchLabel && presentation.levelVisible && feedbackRoot.isVisible) {
+            // Pinch updates arrive per touch event, so the bar glides between
+            // them. A freshly shown pill jumps instead of sweeping from the
+            // previous gesture's level; other gestures keep exact steps.
+            if (horizontalProgress?.progress != presentation.level) {
+                horizontalProgress?.setProgressCompat(presentation.level, true)
+            }
+        } else {
+            horizontalProgress?.progress = presentation.level
+        }
         verticalLevel?.visibility = if (presentation.levelVisible && vertical) View.VISIBLE else View.GONE
         verticalLevel?.progress = presentation.level
         verticalLevel?.let { level ->
@@ -288,8 +321,25 @@ object PlayerSurfacePolicy {
             }
         }
         text?.visibility = if (presentation.text != null && !vertical) View.VISIBLE else View.GONE
-        text?.text = presentation.text.orEmpty()
+        if (text?.text?.toString() != newText) {
+            text?.text = newText
+        }
         text?.maxLines = 1
+        text?.let { label ->
+            // Pinch keeps one centered label slot so Fit, Zoom N% and Fill swaps
+            // never resize the pill. Other gestures share this view and get
+            // their wrap-to-content, end-aligned label back.
+            if (pinchLabel) {
+                label.fontFeatureSettings = TABULAR_DIGITS
+                label.gravity = Gravity.CENTER
+                val slot = pinchLabelSlotWidth(context, label)
+                if (label.minWidth != slot) label.minWidth = slot
+            } else {
+                label.fontFeatureSettings = null
+                label.gravity = Gravity.END
+                if (label.minWidth != 0) label.minWidth = 0
+            }
+        }
 
         feedbackRoot.contentDescription = a11yText
         feedbackRoot.alpha = 1f

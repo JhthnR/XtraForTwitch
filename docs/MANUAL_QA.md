@@ -100,6 +100,25 @@ behavior remain unverified; emulator results are recorded separately in
   APK. The previous destroyed pager/RecyclerView retention groups must not recur.
   Keep heap dumps and private analysis out of public issues and commits.
 
+### Pinch free zoom
+
+- [ ] Near-square foldable inner screen (or a tablet in landscape): pinch out
+  partway, release, and confirm the picture stays centered at that zoom. The pill
+  reads "Zoom N%" between Fit and Fill, with a haptic tick at each end when
+  enabled. Open another stream or VoD: the zoom is kept.
+- [ ] Landscape phone: a short pinch still reaches Fill and back to Fit; ends snap
+  within about 5%. Pinching past either end resists and settles back.
+- [ ] The pill keeps one width through Fit, Zoom N% and Fill, its bar moves
+  smoothly, and reaching Fill flashes a white outline once. Brightness, volume,
+  seek and speed pills keep their usual font and size.
+- [ ] While zoomed, rotate, fold/unfold, open/close side chat, resize split screen,
+  minimize/restore, enter/leave PiP and close/reopen. Portrait, the mini-player and
+  PiP show plain Fit; full-screen landscape returns to the zoom, never past Fill.
+- [ ] More → Display mode shows the zoom as the current choice; choosing Fit, Fill
+  or Stretch clears it. Stretch and Android 6 keep the Fit/Fill toggle.
+- [ ] Live, VoD and clips on all three backends; a double tap followed by a pinch
+  still restores chat.
+
 ### Spoiler-free VODs
 
 - [ ] Off (default): VoD seek bar, length, Past Broadcasts/Saved/Downloads
