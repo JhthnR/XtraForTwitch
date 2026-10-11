@@ -74,9 +74,12 @@ import com.github.andreyasadchy.xtra.ui.common.UpdateDialogController
 import com.github.andreyasadchy.xtra.ui.game.GameMediaFragmentDirections
 import com.github.andreyasadchy.xtra.ui.game.GamePagerFragmentDirections
 import com.github.andreyasadchy.xtra.ui.games.GamesFragmentDirections
+import com.github.andreyasadchy.xtra.ui.player.LiveRewind
+import com.github.andreyasadchy.xtra.ui.player.PreparedLiveRewind
 import com.github.andreyasadchy.xtra.ui.player.ExoPlayerFragment
 import com.github.andreyasadchy.xtra.ui.player.Media3Fragment
 import com.github.andreyasadchy.xtra.ui.player.MediaPlayerFragment
+import com.github.andreyasadchy.xtra.ui.player.PlayerQualityNetworkProfile
 import com.github.andreyasadchy.xtra.ui.player.PlayerFragment
 import com.github.andreyasadchy.xtra.ui.team.TeamFragmentDirections
 import com.github.andreyasadchy.xtra.ui.top.TopStreamsFragmentDirections
@@ -123,19 +126,36 @@ class MainActivity : AppCompatActivity() {
     }
     var playerFragment: PlayerFragment? = null
         private set
+    private var lastPlaybackNetworkProfile: PlayerQualityNetworkProfile? = null
     private val networkCallback = object : ConnectivityManager.NetworkCallback() {
         override fun onAvailable(network: Network) {
             lifecycleScope.launch {
                 viewModel.checkNetworkStatus.value = true
+                updatePlaybackNetworkProfile()
             }
         }
 
         override fun onLost(network: Network) {
             lifecycleScope.launch {
                 viewModel.checkNetworkStatus.value = true
+                updatePlaybackNetworkProfile()
             }
         }
+        override fun onCapabilitiesChanged(network: Network, networkCapabilities: NetworkCapabilities) {
+            lifecycleScope.launch { updatePlaybackNetworkProfile() }
+        }
     }
+    private fun updatePlaybackNetworkProfile() {
+        val manager = getSystemService(CONNECTIVITY_SERVICE) as ConnectivityManager
+        val capabilities = manager.getNetworkCapabilities(manager.activeNetwork) ?: return
+        if (!capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) ||
+            !capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)) return
+        val profile = PlayerQualityNetworkProfile.from(capabilities)
+        val previous = lastPlaybackNetworkProfile
+        lastPlaybackNetworkProfile = profile
+        if (previous != null && previous != profile) playerFragment?.reapplyNetworkDefaultQuality(profile)
+    }
+
     private val pipActionReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
             when (intent?.action) {
@@ -776,7 +796,11 @@ class MainActivity : AppCompatActivity() {
     }
 
     fun startVideo(video: Video, offset: Long?, ignoreSavedPosition: Boolean = false) {
-        val fragment = when (prefs.getString(C.PLAYER, "ExoPlayer")) {
+        startPlayer(createVideoPlayer(video, offset, ignoreSavedPosition))
+    }
+
+    private fun createVideoPlayer(video: Video, offset: Long?, ignoreSavedPosition: Boolean): PlayerFragment =
+        when (prefs.getString(C.PLAYER, "ExoPlayer")) {
             "MediaPlayer" -> MediaPlayerFragment.newInstance(video, offset, ignoreSavedPosition)
             else -> {
                 if (prefs.getBoolean(C.DEBUG_USE_CUSTOM_PLAYBACK_SERVICE, false)) {
@@ -786,8 +810,34 @@ class MainActivity : AppCompatActivity() {
                 }
             }
         }
+
+    internal fun startLiveRewind(source: PlayerFragment, prepared: PreparedLiveRewind): Boolean {
+        if (!canReplacePlayer(source)) return false
+        val fragment = createVideoPlayer(prepared.video, prepared.positionMs, true)
+        fragment.arguments?.apply {
+            putParcelable(LiveRewind.ORIGIN, prepared.origin)
+            putString(LiveRewind.PLAYLIST, prepared.playlistUrl)
+            putLong(LiveRewind.POSITION, prepared.positionMs)
+        }
         startPlayer(fragment)
+        return true
     }
+
+    internal fun returnFromLiveRewind(source: PlayerFragment, origin: Stream): Boolean {
+        if (!canReplacePlayer(source)) return false
+        // The broadcaster may have restarted while the recording was playing.
+        // Keep channel identity, but force fresh live-session metadata lookup.
+        startStream(Stream(
+            channelId = origin.channelId, channelLogin = origin.channelLogin,
+            channelName = origin.channelName, channelImageURL = origin.channelImageURL,
+        ))
+        return true
+    }
+
+    /** Reject late discovery/error callbacks after navigation, close or state save. */
+    private fun canReplacePlayer(source: PlayerFragment): Boolean =
+        !supportFragmentManager.isStateSaved && playerFragment === source &&
+            supportFragmentManager.findFragmentById(R.id.playerContainer) === source
 
     fun startClip(clip: Clip) {
         val fragment = when (prefs.getString(C.PLAYER, "ExoPlayer")) {
@@ -904,8 +954,8 @@ class MainActivity : AppCompatActivity() {
         return viewModel.sleepTimerEndTime - System.currentTimeMillis()
     }
 
-    fun downloadStream(filesDir: String, id: String?, title: String?, createdAt: String?, channelId: String?, channelLogin: String?, channelName: String?, channelImage: String?, thumbnail: String?, gameId: String?, gameSlug: String?, gameName: String?, downloadPath: String, quality: String, downloadChat: Boolean, downloadChatEmotes: Boolean, wifiOnly: Boolean) {
-        viewModel.downloadStream(prefs.getString(C.NETWORK_LIBRARY, "OkHttp"), filesDir, id, title, createdAt, channelId, channelLogin, channelName, channelImage, thumbnail, gameId, gameSlug, gameName, downloadPath, quality, downloadChat, downloadChatEmotes, wifiOnly)
+    fun downloadStream(filesDir: String, id: String?, title: String?, createdAt: String?, channelId: String?, channelLogin: String?, channelName: String?, channelImage: String?, thumbnail: String?, gameId: String?, gameSlug: String?, gameName: String?, downloadPath: String, quality: String, downloadChat: Boolean, downloadChatEmotes: Boolean, wifiOnly: Boolean, qualityCodecs: String? = null, qualityBitrate: Int? = null) {
+        viewModel.downloadStream(prefs.getString(C.NETWORK_LIBRARY, "OkHttp"), filesDir, id, title, createdAt, channelId, channelLogin, channelName, channelImage, thumbnail, gameId, gameSlug, gameName, downloadPath, quality, downloadChat, downloadChatEmotes, wifiOnly, qualityCodecs, qualityBitrate)
     }
 
     fun downloadVideo(filesDir: String, id: String?, title: String?, createdAt: String?, type: String?, channelId: String?, channelLogin: String?, channelName: String?, channelImage: String?, thumbnail: String?, gameId: String?, gameSlug: String?, gameName: String?, url: String, downloadPath: String, quality: String, from: Long, to: Long, downloadChat: Boolean, downloadChatEmotes: Boolean, playlistToFile: Boolean, wifiOnly: Boolean) {

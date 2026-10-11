@@ -132,7 +132,7 @@ class PlayerPopupContentTest {
                 VideoQuality("1080p60", "avc1.64002a"), VideoQuality("720p60", "avc1.64002a"),
                 VideoQuality("480p"), VideoQuality("360p"), VideoQuality("160p"),
                 VideoQuality("audio_only"), VideoQuality("chat_only"),
-            ), "1080p60", 288, {}, {})
+            ), VideoQuality("1080p60", "avc1.64002a"), 288, {}, {})
             binder.bind()
             PlayerPopupContent.prepare(binding.root)
             measure(binding.root, 288, 0, View.MeasureSpec.UNSPECIFIED)
@@ -157,6 +157,39 @@ class PlayerPopupContentTest {
             checkLabels(binding.qualityVideoRows)
             checkLabels(binding.qualityUtilityRows)
             UiTestRender.save(binding.root, "quality-font-$fontScale")
+            binder.dispose()
+        }
+    }
+
+    @Test fun `duplicate quality chips highlight and dispatch the exact variant at large font`() {
+        for (fontScale in listOf(1f, 2f)) {
+            val scaled = ContextThemeWrapper(context.createConfigurationContext(
+                Configuration(context.resources.configuration).apply { this.fontScale = fontScale },
+            ), R.style.BaseDarkTheme)
+            val binding = LayoutPlayerQualityPopupBinding.inflate(LayoutInflater.from(scaled))
+            val first = VideoQuality("1080p60", "avc1.64002a", "https://example.com/first", 6000000)
+            val selected = first.copy(url = "https://example.com/second", bitrate = 3000000)
+            val third = first.copy(url = "https://example.com/third", codecs = "av01.0.08M.08")
+            var clicked: VideoQuality? = null
+            val binder = PlayerQualityPopupBinder(scaled, binding, listOf(first, selected, third), selected, 288, { clicked = it }, {})
+            binder.bind()
+            measure(binding.root, 288, 0, View.MeasureSpec.UNSPECIFIED)
+            val chips = (0 until binding.qualityVideoRows.childCount).flatMap { row ->
+                val group = binding.qualityVideoRows.getChildAt(row) as ViewGroup
+                (0 until group.childCount).map { group.getChildAt(it) as ViewGroup }
+            }
+            assertEquals(3, chips.size)
+            assertEquals(listOf(false, true, false), chips.map { it.isSelected })
+            chips[1].performClick()
+            assertSame(selected, clicked)
+            chips[2].performClick()
+            assertSame(third, clicked)
+            chips.forEach { chip ->
+                (0 until chip.childCount).forEach { index ->
+                    val label = chip.getChildAt(index) as TextView
+                    assertEquals("variant label fits at $fontScale: ${label.text}", 0, label.layout.getEllipsisCount(0))
+                }
+            }
             binder.dispose()
         }
     }

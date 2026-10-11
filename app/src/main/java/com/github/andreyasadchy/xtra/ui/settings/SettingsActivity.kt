@@ -90,7 +90,6 @@ import com.google.mlkit.nl.translate.TranslateRemoteModel
 import dagger.hilt.android.AndroidEntryPoint
 import io.noties.markwon.Markwon
 import io.noties.markwon.linkify.LinkifyPlugin
-import java.util.Collections
 import java.util.Locale
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -206,8 +205,7 @@ class SettingsActivity : AppCompatActivity() {
         val itemTouchHelper = ItemTouchHelper(
             object : ItemTouchHelper.SimpleCallback(ItemTouchHelper.UP or ItemTouchHelper.DOWN, 0) {
                 override fun onMove(recyclerView: RecyclerView, viewHolder: RecyclerView.ViewHolder, target: RecyclerView.ViewHolder): Boolean {
-                    Collections.swap(list, viewHolder.bindingAdapterPosition, target.bindingAdapterPosition)
-                    listAdapter.notifyItemMoved(viewHolder.bindingAdapterPosition, target.bindingAdapterPosition)
+                    moveDragListItem(list, viewHolder.bindingAdapterPosition, target.bindingAdapterPosition, listAdapter::notifyItemMoved)
                     return true
                 }
 
@@ -1723,8 +1721,7 @@ class SettingsActivity : AppCompatActivity() {
                     val itemTouchHelper = ItemTouchHelper(
                         object : ItemTouchHelper.SimpleCallback(ItemTouchHelper.UP or ItemTouchHelper.DOWN, 0) {
                             override fun onMove(recyclerView: RecyclerView, viewHolder: RecyclerView.ViewHolder, target: RecyclerView.ViewHolder): Boolean {
-                                Collections.swap(list, viewHolder.bindingAdapterPosition, target.bindingAdapterPosition)
-                                listAdapter.notifyItemMoved(viewHolder.bindingAdapterPosition, target.bindingAdapterPosition)
+                                moveDragListItem(list, viewHolder.bindingAdapterPosition, target.bindingAdapterPosition, listAdapter::notifyItemMoved)
                                 return true
                             }
 

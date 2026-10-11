@@ -47,6 +47,10 @@ class OfflineVideo(
     var videoId: String? = null,
     val clipId: String? = null,
     val quality: String? = null,
+    @ColumnInfo(name = "quality_codecs")
+    val qualityCodecs: String? = null,
+    @ColumnInfo(name = "quality_bitrate")
+    val qualityBitrate: Int? = null,
     val downloadChat: Boolean = false,
     val downloadChatEmotes: Boolean = false,
     var chatProgress: Int = 0,

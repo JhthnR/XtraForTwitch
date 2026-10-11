@@ -166,6 +166,11 @@ apollo {
     }
 }
 
+// Keep the authoritative Room schema alongside migration fixtures after compilation.
+ksp {
+    arg("room.schemaLocation", "$projectDir/schemas")
+}
+
 // Delete large build log files from ~/.gradle/daemon/X.X/daemon-XXX.out.log
 // Source: https://discuss.gradle.org/t/gradle-daemon-produces-a-lot-of-logs/9905
 File("${project.gradle.gradleUserHomeDir.absolutePath}/daemon/${project.gradle.gradleVersion}").listFiles()?.forEach {
