@@ -95,6 +95,14 @@ Human QA completed:
 
 ## Progress log
 
+- 2026-10-12: Resumed in the Android checkout from prepared branch `3115a4b32`.
+  Verified the latest Command Code findings: chat padding is already set by the
+  root inset listener (so the claimed dead code is incorrect), and the PiP query
+  exists from API 24 (Android reference), so its N guard is correct. Confirmed
+  two related gaps: inset-only keyboard height changes do not reapply fold
+  geometry, and a resized tabletop chat pane below 160dp loses the split. Added
+  inset-driven reapplication and a keyboard-only minimum-pane exception, keeping
+  video above the hinge. Regression tests and full release checks pending.
 - 2026-10-11: Created plan and implemented the policy, fragment wiring, setting
   and docs. `PlayerFoldLayoutPolicyTest` (7) and `PlayerFoldLayoutTest` (9,
   Robolectric with a simulated hinge) pass; `PlayerPinchChatTest` still passes.

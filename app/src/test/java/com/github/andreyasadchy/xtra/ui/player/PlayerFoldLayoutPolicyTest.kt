@@ -74,4 +74,11 @@ class PlayerFoldLayoutPolicyTest {
 
         assertNull(PlayerFoldLayoutPolicy.resolve(hinge, FoldBounds(0, 0, 0, 0), minPane))
     }
+
+    @Test fun `a keyboard resized tabletop window keeps the video pane`() {
+        val hinge = FoldHinge(horizontal = true, bounds = FoldBounds(0, 1076, 2076, 1076))
+        assertEquals(PlayerFoldLayout.Tabletop(1076, 44),
+            PlayerFoldLayoutPolicy.resolve(hinge, FoldBounds(0, 0, 2076, 1120), minPane, minChatPanePx = 0))
+        assertNull(PlayerFoldLayoutPolicy.resolve(hinge, FoldBounds(0, 0, 2076, 1000), minPane, minChatPanePx = 0))
+    }
 }

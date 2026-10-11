@@ -142,7 +142,9 @@ behavior remain unverified; emulator results are recorded separately in
 - [ ] Tabletop with chat hidden: video stays above the hinge. Portrait tabletop
   behaves the same instead of the 16:9 stack.
 - [ ] Tabletop keyboard: tap the chat input; the input and a few chat lines stay
-  above the keyboard; closing it restores the split.
+  above the keyboard; switch to its emoji panel or change keyboard height and
+  confirm the input stays reachable. Closing it restores the split. Repeat in
+  a resized window; video stays above the hinge while typing.
 - [ ] Book posture (hinge down the screen) with chat showing: video on one side,
   chat on the other, nothing across the hinge; with chat hidden or floating the
   video keeps the whole screen. Check an RTL language puts chat on the left.

@@ -26,15 +26,17 @@ object PlayerFoldLayoutPolicy {
      * Splits [container] at [hinge], both in window pixels; pane sizes are container pixels.
      * Returns null when the hinge does not cross the whole container, for example in a
      * split-screen window, or when either side would be smaller than [minPanePx].
+     * [minChatPanePx] allows a resized tabletop chat pane to shrink while the IME is open;
+     * the fragment keeps a usable chat area above the IME without moving the video.
      */
-    fun resolve(hinge: FoldHinge, container: FoldBounds, minPanePx: Int): PlayerFoldLayout? {
+    fun resolve(hinge: FoldHinge, container: FoldBounds, minPanePx: Int, minChatPanePx: Int = minPanePx): PlayerFoldLayout? {
         val h = hinge.bounds
         if (container.right <= container.left || container.bottom <= container.top) return null
         return if (hinge.horizontal) {
             if (h.left > container.left || h.right < container.right) return null
             val videoHeight = h.top - container.top
             val chatHeight = container.bottom - h.bottom
-            if (videoHeight < minPanePx || chatHeight < minPanePx) return null
+            if (videoHeight < minPanePx || chatHeight < minChatPanePx) return null
             PlayerFoldLayout.Tabletop(videoHeight, chatHeight)
         } else {
             if (h.top > container.top || h.bottom < container.bottom) return null

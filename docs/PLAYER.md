@@ -52,9 +52,11 @@ started and splits the maximized player at a `HALF_OPENED` hinge:
 `PlayerFoldLayoutPolicy` maps the hinge and the sliding layout's content area
 (both in window pixels, so status-bar and cutout padding are excluded) to pane
 sizes, and returns no split when the hinge does not cross the whole window, as in
-split screen, or a pane would be under 160dp. While the keyboard is open in
-tabletop, chat keeps at least 120dp above it even if that covers the bottom of
-the video. Minimize, PiP, an unfold, or the "Half-folded layout" setting being
+split screen, or a pane would be under 160dp. With the keyboard open, a smaller
+tabletop chat pane is allowed: chat reserves 120dp above the keyboard where the
+window has room, even if that covers the bottom of the video. IME inset changes
+reapply the split, including keyboard height changes without a window resize.
+Minimize, PiP, an unfold, or the "Half-folded layout" setting being
 turned off restore the normal portrait or landscape geometry. Every chat
 transition, orientation change, minimize/maximize, PiP change and sliding layout
 resize re-runs the split; geometry changes are idempotent, so repeated calls do
