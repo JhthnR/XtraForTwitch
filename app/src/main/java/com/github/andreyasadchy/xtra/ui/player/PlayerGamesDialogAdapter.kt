@@ -14,7 +14,9 @@ import coil3.request.target
 import com.github.andreyasadchy.xtra.R
 import com.github.andreyasadchy.xtra.databinding.FragmentGamesListItemBinding
 import com.github.andreyasadchy.xtra.model.ui.Game
+import com.github.andreyasadchy.xtra.util.C
 import com.github.andreyasadchy.xtra.util.TwitchApiHelper
+import com.github.andreyasadchy.xtra.util.prefs
 
 class PlayerGamesDialogAdapter(
     private val fragment: Fragment,
@@ -65,15 +67,17 @@ class PlayerGamesDialogAdapter(
                 } else {
                     gameName.visibility = View.GONE
                 }
+                // Chapter times add up to the VoD length, so spoiler-free VoDs hide them; rows still seek.
+                val hideTimes = SpoilerFreeVideos.hideListSpoilers(context.prefs().getBoolean(C.PLAYER_SPOILER_FREE_VODS, false))
                 val position = item?.vodPosition?.div(1000)?.toString()?.let { TwitchApiHelper.getDurationFromSeconds(context, it, true) }
-                if (!position.isNullOrBlank()) {
+                if (!position.isNullOrBlank() && !hideTimes) {
                     viewers.visibility = View.VISIBLE
                     viewers.text = context.getString(R.string.position, position)
                 } else {
                     viewers.visibility = View.GONE
                 }
                 val duration = item?.vodDuration?.div(1000)?.toString()?.let { TwitchApiHelper.getDurationFromSeconds(context, it, true) }
-                if (!duration.isNullOrBlank()) {
+                if (!duration.isNullOrBlank() && !hideTimes) {
                     broadcastersCount.visibility = View.VISIBLE
                     broadcastersCount.text = context.getString(R.string.duration, duration)
                 } else {
