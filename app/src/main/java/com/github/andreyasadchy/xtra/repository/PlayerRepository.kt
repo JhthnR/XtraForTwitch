@@ -351,15 +351,16 @@ class PlayerRepository @Inject constructor(
         }
     }
 
-    suspend fun loadClipQualities(networkLibrary: String?, gqlHeaders: Map<String, String>, clipId: String?, enableIntegrity: Boolean): List<VideoQuality>? = withContext(Dispatchers.IO) {
+    suspend fun loadClipQualities(networkLibrary: String?, gqlHeaders: Map<String, String>, clipId: String?, supportedCodecs: String?, enableIntegrity: Boolean): List<VideoQuality>? = withContext(Dispatchers.IO) {
         try {
-            val response = graphQLRepository.loadClipUrls(networkLibrary, gqlHeaders, clipId)
+            val response = graphQLRepository.loadClipUrls(networkLibrary, gqlHeaders, clipId, clipCodecs(supportedCodecs))
             if (enableIntegrity) {
                 response.errors?.find { it.message == "failed integrity check" }?.let { throw Exception(it.message) }
             }
             val accessToken = response.data?.clip?.playbackAccessToken
             response.data!!.clip.assets.let { assets ->
-                (assets.find { it.portraitMetadata?.portraitClipLayout.isNullOrBlank() } ?: assets.firstOrNull())?.videoQualities?.mapIndexedNotNull { index, quality ->
+                // The widest asset is the landscape one; portrait clips add a cropped asset.
+                assets.maxByOrNull { it.aspectRatio ?: 0f }?.videoQualities?.mapIndexedNotNull { index, quality ->
                     if (quality.sourceURL.isNotBlank()) {
                         val name = if (!quality.quality.isNullOrBlank()) {
                             val frameRate = quality.frameRate?.roundToInt() ?: 0
@@ -375,7 +376,7 @@ class PlayerRepository @Inject constructor(
                             appendQueryParameter("sig", accessToken?.signature)
                             appendQueryParameter("token", accessToken?.value)
                         }.build().toString()
-                        VideoQuality(name, quality.codecs, url)
+                        VideoQuality(name, quality.codecs, url, quality.bitrate, quality.quality?.toIntOrNull(), quality.frameRate?.toFloat())
                     } else null
                 }
             }
@@ -387,7 +388,7 @@ class PlayerRepository @Inject constructor(
             }
             val accessToken = response.data?.clip?.playbackAccessToken
             response.data?.clip?.assets?.let { assets ->
-                (assets.find { it?.portraitMetadata?.portraitClipLayout.isNullOrBlank() } ?: assets.firstOrNull())?.videoQualities?.mapIndexedNotNull { index, quality ->
+                assets.maxByOrNull { it?.aspectRatio ?: 0.0 }?.videoQualities?.mapIndexedNotNull { index, quality ->
                     if (!quality?.sourceURL.isNullOrBlank()) {
                         val name = if (!quality.quality.isNullOrBlank()) {
                             val frameRate = quality.frameRate?.roundToInt() ?: 0
@@ -403,7 +404,7 @@ class PlayerRepository @Inject constructor(
                             appendQueryParameter("sig", accessToken?.signature)
                             appendQueryParameter("token", accessToken?.value)
                         }.build().toString()
-                        VideoQuality(name, quality.codecs, url)
+                        VideoQuality(name, quality.codecs, url, quality.bitrate, quality.quality?.toIntOrNull(), quality.frameRate?.toFloat())
                     } else null
                 }
             }
@@ -1486,4 +1487,14 @@ class PlayerRepository @Inject constructor(
     suspend fun deleteVideoPositions() = withContext(Dispatchers.IO) {
         videoPositions.deleteAll()
     }
+}
+
+/** Maps the playback codec preference to the clip query's codec names. */
+internal fun clipCodecs(supportedCodecs: String?): List<String> {
+    val codecs = supportedCodecs?.split(',')?.map { it.trim().lowercase() }.orEmpty()
+    return listOfNotNull(
+        "AVC".takeIf { "h264" in codecs },
+        "HEVC".takeIf { "h265" in codecs },
+        "AV1".takeIf { "av1" in codecs },
+    )
 }

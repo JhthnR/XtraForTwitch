@@ -63,4 +63,34 @@ class PlayerQualityPopupModelTest {
 
         assertEquals(listOf("1080p60"), options.map { it.tag })
     }
+    @Test
+    fun `same name variants retain exact identity and show bitrate for every duplicate`() {
+        val high = VideoQuality("1080p60", "avc1.64002a", "https://example.com/high.m3u8", 6000000)
+        val low = high.copy(url = "https://example.com/low.m3u8", bitrate = 3000000)
+        val options = PlayerQualityPopupModel.build(listOf(high, low), labels)
+        assertEquals(listOf("6000 Kbps", "3000 Kbps"), options.map { it.codecLabel })
+        assertEquals(listOf(high, low), options.map { it.quality })
+    }
+
+    @Test
+    fun `unknown and identical bitrates never collapse duplicate labels`() {
+        val first = VideoQuality("720p60", "avc1", "https://example.com/first.m3u8")
+        val second = first.copy(url = "https://example.com/second.m3u8")
+        val third = first.copy(url = "https://example.com/third.m3u8")
+        val options = PlayerQualityPopupModel.build(listOf(first, second, third), labels)
+        assertEquals(3, options.map { listOfNotNull(it.primaryLabel, it.codecLabel).joinToString(" ") }.distinct().size)
+        assertEquals(listOf(null, "(2)", "(3)"), options.map { it.codecLabel })
+        assertEquals(listOf(first, second, third), options.map { it.quality })
+    }
+
+    @Test
+    fun `source variants also expose codec identity`() {
+        val options = PlayerQualityPopupModel.build(listOf(VideoQuality("source", "av01.0.08M.08"), VideoQuality("source", "avc1.64002a")), labels)
+        assertEquals(listOf("AV1", "H.264"), options.map { it.codecLabel })
+    }
+    @Test
+    fun `audio-first codec declarations still show the video codec`() {
+        val options = PlayerQualityPopupModel.build(listOf(VideoQuality("1080p60", "mp4a.40.2,av01.0.08M.08")), labels)
+        assertEquals("AV1", options.single().codecLabel)
+    }
 }

@@ -54,11 +54,12 @@ internal fun String?.isNumericQualityFallback(): Boolean {
 internal fun List<VideoQuality>.toSelectableQualities(includeChatOnly: Boolean): List<VideoQuality> {
     return asSequence()
         .filterNot { it.name.isNumericQualityFallback() }
+        .sortedByDescending { it.bitrate }
         .sortedByDescending {
-            it.name?.substringAfter("p", "")?.takeWhile { char -> char.isDigit() }?.toIntOrNull()
+            it.frameRate ?: it.name?.substringAfter("p", "")?.takeWhile { char -> char.isDigit() }?.toFloatOrNull()
         }
         .sortedByDescending {
-            it.name?.substringBefore("p", "")?.takeWhile { char -> char.isDigit() }?.toIntOrNull()
+            it.resolution ?: it.name?.substringBefore("p", "")?.takeWhile { char -> char.isDigit() }?.toIntOrNull()
         }
         .sortedByDescending {
             it.name == "source"
@@ -105,9 +106,7 @@ private fun List<VideoQuality>.videoQualityOptionCount(): Int {
             "", AUTO_QUALITY_NAME, AUDIO_ONLY_QUALITY_NAME, CHAT_ONLY_QUALITY_NAME -> false
             else -> !quality.name.isNumericQualityFallback()
         }
-    }.distinctBy {
-        it.name.normalizedQualityName() to it.codecs?.substringBefore('.')
-    }.size
+    }.distinct().size
 }
 
 private fun String?.isReadableQualityLabel(): Boolean {

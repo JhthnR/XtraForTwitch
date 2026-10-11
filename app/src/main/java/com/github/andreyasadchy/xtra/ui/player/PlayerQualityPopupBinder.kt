@@ -17,16 +17,15 @@ import androidx.core.graphics.ColorUtils
 import com.github.andreyasadchy.xtra.R
 import com.github.andreyasadchy.xtra.databinding.LayoutPlayerQualityPopupBinding
 import com.github.andreyasadchy.xtra.model.VideoQuality
-import java.util.Locale
 
 /** Binds Quality content inside the shared player popup host. */
 internal class PlayerQualityPopupBinder(
     private val context: Context,
     private val binding: LayoutPlayerQualityPopupBinding,
     qualities: List<VideoQuality>,
-    private val selectedTag: String?,
+    private val selectedQuality: VideoQuality?,
     private val panelWidthPx: Int,
-    private val onQualitySelected: (String) -> Unit,
+    private val onQualitySelected: (VideoQuality) -> Unit,
     private val onDismissRequested: () -> Unit,
 ) {
 
@@ -64,7 +63,7 @@ internal class PlayerQualityPopupBinder(
                 binding.qualityUtilityRows,
                 utilities,
                 maxColumns = 2,
-                stableCodecHeight = false,
+                stableCodecHeight = utilities.any { it.codecLabel != null },
             )
         } else {
             binding.qualityUtilitySection.visibility = View.GONE
@@ -97,7 +96,7 @@ internal class PlayerQualityPopupBinder(
         val horizontalGap = dp(6f)
         val availableWidth = panelWidthPx - dp(24f)
         val columns = columnsForLabels(
-            labels = entries.map { it.primaryLabel },
+            labels = entries.flatMap { listOfNotNull(it.primaryLabel, it.codecLabel) },
             availableWidthPx = availableWidth,
             maxColumns = maxColumns,
             gapPx = horizontalGap,
@@ -199,20 +198,13 @@ internal class PlayerQualityPopupBinder(
                 })
             }
             setOnClickListener {
-                onQualitySelected(option.tag)
+                onQualitySelected(option.quality)
                 onDismissRequested()
             }
         }
     }
 
-    private fun isSelected(option: PlayerQualityPopupOption): Boolean {
-        val selected = selectedTag.normalizedValue()
-        return option.tag.normalizedValue() == selected || when (option.kind) {
-            PlayerQualityPopupOption.Kind.AUDIO_ONLY -> selected == "audio_only"
-            PlayerQualityPopupOption.Kind.CHAT_ONLY -> selected == "chat_only"
-            PlayerQualityPopupOption.Kind.VIDEO -> false
-        }
-    }
+    private fun isSelected(option: PlayerQualityPopupOption): Boolean = option.quality == selectedQuality
 
     private fun chipBackground(normalColor: Int, selectedColor: Int) = android.graphics.drawable.RippleDrawable(
         ColorStateList.valueOf(ColorUtils.setAlphaComponent(colors.onPanel, 48)),
@@ -227,13 +219,6 @@ internal class PlayerQualityPopupBinder(
         setColor(color)
         cornerRadius = dp(radiusDp).toFloat()
     }
-
-    private fun String?.normalizedValue(): String = this
-        ?.trim()
-        ?.lowercase(Locale.US)
-        ?.replace(' ', '_')
-        ?.replace('-', '_')
-        .orEmpty()
 
     private fun dp(value: Float): Int = (value * density).toInt()
 }

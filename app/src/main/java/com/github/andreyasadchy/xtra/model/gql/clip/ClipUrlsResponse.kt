@@ -27,20 +27,16 @@ class ClipUrlsResponse(
 
     @Serializable
     class ClipAsset(
+        val aspectRatio: Float? = null,
         val videoQualities: List<Quality>,
-        val portraitMetadata: PortraitClipCropping? = null,
     )
 
     @Serializable
     class Quality(
+        val bitrate: Int? = null,
         val codecs: String? = null,
         val sourceURL: String,
         val frameRate: Float? = null,
         val quality: String? = null,
-    )
-
-    @Serializable
-    class PortraitClipCropping(
-        val portraitClipLayout: String? = null,
     )
 }

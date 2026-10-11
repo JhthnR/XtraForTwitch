@@ -53,6 +53,8 @@ internal class PlayerMorePopupBinder(
             }
 
             if (videoType == PlayerFragment.STREAM) {
+                menuLiveRewind.visibility = View.VISIBLE
+                menuLiveRewind.setOnClickListener { dismissThen(fragment::showLiveRewindOptions) }
                 if (prefs.getBoolean(C.PLAYER_MENU_VIEWER_LIST, true)) {
                     menuViewerList.visibility = View.VISIBLE
                     menuViewerList.setOnClickListener { dismissThen(fragment::openViewerList) }
@@ -93,6 +95,10 @@ internal class PlayerMorePopupBinder(
             }
 
             if (videoType == PlayerFragment.VIDEO) {
+                if (fragment.liveRewindOrigin() != null) {
+                    menuGoLive.visibility = View.VISIBLE
+                    menuGoLive.setOnClickListener { dismissThen(fragment::returnToLiveFromRecording) }
+                }
                 if (vodGamesAvailable) setVodGames()
                 if (prefs.getBoolean(C.PLAYER_MENU_BOOKMARK, true)) fragment.checkBookmark()
             }
@@ -264,7 +270,7 @@ internal class PlayerMorePopupBinder(
     private fun updateGroupVisibilities() {
         with(binding) {
             streamGroupHeader.isVisible =
-                listOf(menuViewerList, menuVodGames, menuDownload, menuBookmark, menuTimer, menuRestart).any { it.isVisible }
+                listOf(menuLiveRewind, menuGoLive, menuViewerList, menuVodGames, menuDownload, menuBookmark, menuTimer, menuRestart).any { it.isVisible }
             chatGroupHeader.isVisible =
                 listOf(menuChatBar, menuChatToggle, menuTranslateAll, menuReloadEmotes, menuChatDisconnect).any { it.isVisible }
             playbackGroupHeader.isVisible =
@@ -312,6 +318,8 @@ internal class PlayerMorePopupBinder(
             menuQuality,
             menuSpeed,
             menuViewerList,
+            menuLiveRewind,
+            menuGoLive,
             menuVodGames,
             menuDownload,
             menuBookmark,

@@ -30,6 +30,8 @@ internal class PlayerSpeedPopupBinder(
     private val panelWidthPx: Int,
     private val onSpeedChanged: (Float) -> Unit,
     private val onDismissRequested: () -> Unit,
+    /** False during a live rewind, whose catch-up speed must not become the VoD speed. */
+    private val persistSpeed: Boolean = true,
 ) {
 
     companion object {
@@ -196,6 +198,7 @@ internal class PlayerSpeedPopupBinder(
     }
 
     private fun saveSpeed(speed: Float) {
+        if (!persistSpeed) return
         context.prefs().edit { putFloat(C.PLAYER_SPEED, speed) }
     }
 

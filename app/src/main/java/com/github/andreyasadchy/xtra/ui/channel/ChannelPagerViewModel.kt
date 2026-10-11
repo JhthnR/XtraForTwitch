@@ -17,6 +17,7 @@ import com.github.andreyasadchy.xtra.repository.HelixRepository
 import com.github.andreyasadchy.xtra.repository.LocalFollowChannelRepository
 import com.github.andreyasadchy.xtra.repository.NotificationUsersRepository
 import com.github.andreyasadchy.xtra.repository.OfflineRepository
+import com.github.andreyasadchy.xtra.repository.liveNotificationStartedAt
 import com.github.andreyasadchy.xtra.repository.ShownNotificationsRepository
 import com.github.andreyasadchy.xtra.util.C
 import com.github.andreyasadchy.xtra.util.HttpEngineUtils
@@ -180,10 +181,11 @@ class ChannelPagerViewModel @Inject constructor(
                     if (!errorMessage.isNullOrBlank()) {
                         notifications.value = Pair(true, errorMessage)
                     } else {
+                        shownNotificationsRepository.accountNotificationChanged(userId, channelId, true)
                         _notificationsEnabled.value = true
                         notifications.value = Pair(true, errorMessage)
                         if (notificationsEnabled) {
-                            _stream.value?.createdAt.takeUnless { it.isNullOrBlank() }?.let { TwitchApiHelper.parseIso8601DateUTC(it) }?.let {
+                            _stream.value?.createdAt.takeUnless { it.isNullOrBlank() }?.let { liveNotificationStartedAt(it) }?.let {
                                 shownNotificationsRepository.saveList(listOf(ShownNotification(channelId, it)))
                             }
                         }
@@ -193,7 +195,7 @@ class ChannelPagerViewModel @Inject constructor(
                     _notificationsEnabled.value = true
                     notifications.value = Pair(true, null)
                     if (notificationsEnabled) {
-                        _stream.value?.createdAt.takeUnless { it.isNullOrBlank() }?.let { TwitchApiHelper.parseIso8601DateUTC(it) }?.let {
+                        _stream.value?.createdAt.takeUnless { it.isNullOrBlank() }?.let { liveNotificationStartedAt(it) }?.let {
                             shownNotificationsRepository.saveList(listOf(ShownNotification(channelId, it)))
                         }
                     }
@@ -219,6 +221,7 @@ class ChannelPagerViewModel @Inject constructor(
                     if (!errorMessage.isNullOrBlank()) {
                         notifications.value = Pair(false, errorMessage)
                     } else {
+                        shownNotificationsRepository.accountNotificationChanged(userId, channelId, false)
                         _notificationsEnabled.value = false
                         notifications.value = Pair(false, errorMessage)
                     }
@@ -295,13 +298,14 @@ class ChannelPagerViewModel @Inject constructor(
                         if (!errorMessage.isNullOrBlank()) {
                             follow.value = Pair(true, errorMessage)
                         } else {
+                            shownNotificationsRepository.accountNotificationChanged(userId, channelId, !disableNotifications)
                             _isFollowing.value = true
                             follow.value = Pair(true, null)
                             if (!disableNotifications) {
                                 _notificationsEnabled.value = true
                             }
                             if (liveNotificationsEnabled) {
-                                _stream.value?.createdAt.takeUnless { it.isNullOrBlank() }?.let { TwitchApiHelper.parseIso8601DateUTC(it) }?.let {
+                                _stream.value?.createdAt.takeUnless { it.isNullOrBlank() }?.let { liveNotificationStartedAt(it) }?.let {
                                     shownNotificationsRepository.saveList(listOf(ShownNotification(channelId, it)))
                                 }
                             }
@@ -315,7 +319,7 @@ class ChannelPagerViewModel @Inject constructor(
                             _notificationsEnabled.value = true
                         }
                         if (liveNotificationsEnabled) {
-                            _stream.value?.createdAt.takeUnless { it.isNullOrBlank() }?.let { TwitchApiHelper.parseIso8601DateUTC(it) }?.let {
+                            _stream.value?.createdAt.takeUnless { it.isNullOrBlank() }?.let { liveNotificationStartedAt(it) }?.let {
                                 shownNotificationsRepository.saveList(listOf(ShownNotification(channelId, it)))
                             }
                         }
@@ -343,6 +347,7 @@ class ChannelPagerViewModel @Inject constructor(
                         if (!errorMessage.isNullOrBlank()) {
                             follow.value = Pair(false, errorMessage)
                         } else {
+                            shownNotificationsRepository.accountNotificationChanged(userId, channelId, false)
                             _isFollowing.value = false
                             follow.value = Pair(false, null)
                             _notificationsEnabled.value = false
