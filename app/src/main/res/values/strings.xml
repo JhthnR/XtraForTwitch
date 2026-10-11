@@ -828,6 +828,7 @@
     <string name="display_mode_fit" tools:ignore="MissingTranslation">Fit</string>
     <string name="display_mode_fill" tools:ignore="MissingTranslation">Fill</string>
     <string name="display_mode_stretch" tools:ignore="MissingTranslation">Stretch</string>
+    <string name="display_mode_zoom" tools:ignore="MissingTranslation">Zoom %1$d%%</string>
     <string name="display_mode" tools:ignore="MissingTranslation">Display mode</string>
     <string name="stream_volume" tools:ignore="MissingTranslation">Stream volume</string>
     <string name="more_group_stream" tools:ignore="MissingTranslation">Stream</string>
@@ -875,4 +876,28 @@
     <string name="update_continue_install" tools:ignore="MissingTranslation">Open installer</string>
     <string name="update_invalid_callback" tools:ignore="MissingTranslation">Android returned an unexpected installation response. Nothing was opened. Retry or download the update in your browser.</string>
     <string name="update_installer_timeout" tools:ignore="MissingTranslation">Android did not confirm the installation request. Retry or download the update in your browser.</string>
+    <!-- New feature copy intentionally falls back to English until translations are vetted. -->
+    <string name="settings_metered_wifi_quality" tools:ignore="MissingTranslation">Metered Wi-Fi quality</string>
+    <string name="settings_metered_wifi_quality_use_mobile" tools:ignore="MissingTranslation">Use mobile data quality</string>
+    <string name="channel_rewards_title" tools:ignore="MissingTranslation">Channel Points rewards</string>
+    <string name="channel_rewards_redeem" tools:ignore="MissingTranslation">Redeem</string>
+    <string name="channel_rewards_refresh" tools:ignore="MissingTranslation">Refresh</string>
+    <string name="channel_rewards_loading" tools:ignore="MissingTranslation">Loading rewards…</string>
+    <string name="channel_rewards_sending" tools:ignore="MissingTranslation">Redeeming… Closing this window will not cancel a submitted request.</string>
+    <string name="channel_rewards_balance" tools:ignore="MissingTranslation">Balance: %1$s points</string>
+    <string name="channel_rewards_login" tools:ignore="MissingTranslation">Sign in with a Twitch web account to redeem rewards. A chat-only or Helix login cannot redeem Channel Points.</string>
+    <string name="channel_rewards_load_failed" tools:ignore="MissingTranslation">Rewards could not be loaded. Refresh to try again. No redemption was submitted.</string>
+    <string name="channel_rewards_unavailable" tools:ignore="MissingTranslation">This reward is currently unavailable.</string>
+    <string name="channel_rewards_input_required" tools:ignore="MissingTranslation">Enter a message for this reward.</string>
+    <string name="channel_rewards_insufficient" tools:ignore="MissingTranslation">Not enough points.</string>
+    <string name="channel_rewards_changed" tools:ignore="MissingTranslation">This reward changed. Review its current details before confirming again.</string>
+    <string name="channel_rewards_rejected" tools:ignore="MissingTranslation">Twitch rejected this redemption. Refresh rewards and check your account before trying again.</string>
+    <string name="channel_rewards_unknown" tools:ignore="MissingTranslation">Twitch did not confirm the outcome. Points may have been spent. Check your redemptions on Twitch; this reward will not be retried from this chat.</string>
+    <string name="channel_rewards_success" tools:ignore="MissingTranslation">Reward redeemed. Refresh to see your updated balance.</string>
+    <string name="channel_rewards_empty" tools:ignore="MissingTranslation">This channel has no custom rewards available.</string>
+    <string name="channel_rewards_confirm" tools:ignore="MissingTranslation">Spend %1$s Channel Points to redeem “%2$s”?</string>
+    <string name="channel_rewards_spend" tools:ignore="MissingTranslation">Spend %1$s points</string>
+    <string name="channel_rewards_option" tools:ignore="MissingTranslation">%1$s · %2$s points</string>
+    <string name="channel_rewards_text_input" tools:ignore="MissingTranslation">Message for this reward (required)</string>
+    <string name="channel_rewards_check_twitch" tools:ignore="MissingTranslation">Check the previous redemption on Twitch.</string>
 </resources>

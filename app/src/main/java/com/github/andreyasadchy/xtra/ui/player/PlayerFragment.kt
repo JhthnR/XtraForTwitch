@@ -50,6 +50,7 @@ import androidx.annotation.OptIn
 import androidx.core.content.edit
 import androidx.core.graphics.ColorUtils
 import androidx.core.os.bundleOf
+import androidx.core.os.BundleCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
@@ -59,6 +60,7 @@ import androidx.core.view.doOnPreDraw
 import androidx.core.view.isVisible
 import androidx.core.view.updateLayoutParams
 import androidx.core.view.updatePadding
+import androidx.fragment.app.DialogFragment
 import androidx.fragment.app.viewModels
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
@@ -104,6 +106,11 @@ import com.google.android.material.timepicker.MaterialTimePicker
 import com.google.android.material.timepicker.TimeFormat
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import kotlin.math.abs
@@ -148,6 +155,8 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
     private var isChatOpen = true
     private var isKeyboardShown = false
     protected var displayMode = PlayerDisplayMode.FIT
+    /** Fit-relative pinch zoom kept with Fit; 1 is plain Fit. See [PinchZoomController]. */
+    private var displayZoom = 1f
     private lateinit var displayModeStore: PlayerDisplayModeStore
     protected var videoAspectRatio = 0f
     private var chatWidthLandscape = 0
@@ -187,12 +196,22 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
     private var controllerTapDetector: GestureDetector? = null
     private lateinit var gestureArbiter: PlayerGestureArbiter
     private val pinchController = PinchDisplayModeController()
+    private val pinchZoomController = PinchZoomController()
+    /** The current pinch zooms freely between Fit and Fill instead of toggling. */
+    private var pinchZooming = false
+    /** Fit-relative zoom the pinch's renderer shows at unit scale: 1 for Fit, the Fill ratio for Fill. */
+    private var pinchZoomBase = 1f
+    private var pinchInProgress = false
     private var pinchPointerId1 = -1
     private var pinchPointerId2 = -1
     private var pinchAnchorSpan = 0f
     private var pinchLastArmedTarget: PlayerDisplayMode? = null
     private var pinchSettleAnimator: ViewPropertyAnimator? = null
     private var pinchCommitGeneration = 0
+    /** Last pinch feedback write, used to skip redundant per-touch updates. */
+    private var pinchFeedbackLabel: String? = null
+    private var pinchFeedbackLevel: Int? = null
+    private var pinchFillEdgeAnimator: ViewPropertyAnimator? = null
 
     // Stream volume popup state (ThystTV playback volume, independent of device volume)
     private val volumeOverlayState = PlayerVolumeOverlayState()
@@ -268,6 +287,195 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
     open fun startAudioOnly() {}
     open fun downloadVideo() {}
     open fun close() {}
+
+    private var liveRewindDiscovery: Job? = null
+    private var liveRewindStartup: Job? = null
+    private var liveRewindDialog: androidx.appcompat.app.AlertDialog? = null
+
+    internal fun liveRewindOrigin(): Stream? = arguments?.let {
+        BundleCompat.getParcelable(it, LiveRewind.ORIGIN, Stream::class.java)
+    }
+
+    internal fun showLiveRewindOptions() {
+        if (videoType != STREAM || liveRewindDiscovery?.isActive == true || liveRewindDialog != null) return
+        liveRewindDialog = requireContext().getAlertDialogBuilder()
+            .setTitle(R.string.live_rewind)
+            .setItems(arrayOf(
+                getString(R.string.live_rewind_30_seconds), getString(R.string.live_rewind_1_minute),
+                getString(R.string.live_rewind_5_minutes), getString(R.string.live_rewind_beginning),
+            )) { _, which -> requestLiveRewind(listOf(30_000L, 60_000L, 300_000L, null)[which]) }
+            .setNegativeButton(android.R.string.cancel, null)
+            .create().also { dialog ->
+                dialog.setOnDismissListener { liveRewindDialog = null }
+                dialog.show()
+            }
+    }
+
+    private fun requestLiveRewind(rewindMs: Long?) {
+        if (videoType != STREAM || liveRewindDiscovery?.isActive == true || !isResumed) return
+        val source = Stream(
+            id = viewModel.stream.value?.id ?: requireArguments().getString(KEY_STREAM_ID),
+            channelId = requireArguments().getString(KEY_CHANNEL_ID),
+            channelLogin = requireArguments().getString(KEY_CHANNEL_LOGIN),
+            createdAt = viewModel.stream.value?.createdAt ?: requireArguments().getString(KEY_STARTED_AT),
+        )
+        val context = requireContext()
+        Toast.makeText(context, R.string.live_rewind_searching, Toast.LENGTH_SHORT).show()
+        liveRewindDiscovery = viewLifecycleOwner.lifecycleScope.launch {
+            try {
+                val prepared = withTimeoutOrNull(20_000L) {
+                    viewModel.prepareLiveRewind(
+                        source, rewindMs, context.prefs().getString(C.NETWORK_LIBRARY, "OkHttp"),
+                        TwitchApiHelper.getGQLHeaders(context),
+                        TwitchApiHelper.getGQLHeaders(context, context.prefs().getBoolean(C.TOKEN_INCLUDE_TOKEN_VIDEO, true)),
+                        context.prefs().getString(C.TOKEN_PLAYERTYPE_VIDEO, "channel_home_live"),
+                        context.prefs().getString(C.TOKEN_SUPPORTED_CODECS, "av1,h265,h264"),
+                        context.prefs().getBoolean(C.ENABLE_INTEGRITY, false),
+                    )
+                }
+                currentCoroutineContext().ensureActive()
+                finishLiveRewindDiscovery(prepared)
+            } catch (error: CancellationException) {
+                throw error
+            } catch (_: Exception) {
+                finishLiveRewindDiscovery(null)
+            }
+        }
+    }
+
+    /** Never expand over browsing: a result that arrives while minimized or backgrounded is dropped. */
+    internal fun finishLiveRewindDiscovery(prepared: PreparedLiveRewind?) {
+        if (!isResumed || !isMaximized) {
+            viewModel.liveRewindDropped = true
+            return
+        }
+        if (prepared == null) {
+            Toast.makeText(requireContext(), R.string.live_rewind_unavailable, Toast.LENGTH_LONG).show()
+        } else {
+            (activity as? MainActivity)?.startLiveRewind(this, prepared)
+        }
+    }
+
+    /** Tells the viewer once, on return, that a rewind they asked for did not happen. */
+    private fun showDroppedLiveRewindNotice() {
+        if (!viewModel.liveRewindDropped || !isResumed || !isMaximized) return
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N && activity?.isInPictureInPictureMode == true) return
+        viewModel.liveRewindDropped = false
+        Toast.makeText(requireContext(), R.string.live_rewind_canceled_minimized, Toast.LENGTH_LONG).show()
+    }
+
+    internal fun returnToLiveFromRecording() {
+        val origin = liveRewindOrigin() ?: return
+        (activity as? MainActivity)?.returnFromLiveRewind(this, origin)
+    }
+
+    /**
+     * A recording played faster than realtime drops back to 1x once it reaches
+     * the edge, and says so. Speed changes during a rewind are never saved, so
+     * the viewer's VoD speed survives the round trip.
+     */
+    internal fun resetLiveRewindSpeed() {
+        if (liveRewindOrigin() == null) return
+        setPlaybackSpeed(1f)
+        updatePlaybackSpeedUi(1f)
+        showLiveRewindCaughtUp()
+    }
+
+    private fun showLiveRewindCaughtUp() {
+        if (!isMaximized || _binding == null) return
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N && activity?.isInPictureInPictureMode == true) return
+        val feedback = binding.playerLayout.findViewById<View>(R.id.gestureFeedback) ?: return
+        val text = getString(R.string.live_rewind_caught_up)
+        PlayerSurfacePolicy.presentFeedback(
+            context = requireContext(),
+            feedbackRoot = feedback,
+            kind = PlayerGestureFeedbackKind.PLAYBACK_SPEED,
+            surfaceWidthPx = binding.playerLayout.width,
+            surfaceHeightPx = binding.playerLayout.height,
+            insets = gestureInsets,
+            presentation = PlayerGestureFeedbackState.presentation(
+                kind = PlayerGestureFeedbackKind.PLAYBACK_SPEED,
+                surfaceClass = PlayerSurfacePolicy.classify(binding.playerLayout.width, resources.displayMetrics.density),
+                text = text,
+            ),
+            iconRes = R.drawable.baseline_speed_black_24,
+            a11yText = text,
+            hideRunnable = hideGestureRunnable,
+            holdMs = LIVE_REWIND_CAUGHT_UP_HOLD_MS,
+        )
+    }
+
+    /**
+     * Checks the edge while a recording plays, including with the controls hidden.
+     * The origin is fixed in the arguments, so one watch per view is enough.
+     */
+    private fun watchLiveRewindCatchUp() {
+        if (liveRewindOrigin() == null) return
+        viewLifecycleOwner.lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                while (true) {
+                    delay(LiveRewind.LIVE_CATCH_UP_POLL_MS)
+                    checkLiveRewindCatchUp()
+                }
+            }
+        }
+    }
+
+    /** True while a live-rewind recording is close enough to live to drop catch-up speed. */
+    internal fun checkLiveRewindCatchUp(): Boolean {
+        if (liveRewindOrigin() == null) return false
+        if (!LiveRewind.shouldResetSpeedAtLiveEdge(true, getCurrentSpeed(), getCurrentPosition(), getDuration())) {
+            return false
+        }
+        resetLiveRewindSpeed()
+        return true
+    }
+
+    private fun updateFullscreenLiveRewind() {
+        val show = LiveRewind.shouldShowFullscreenLiveRewind(videoType, liveRewindOrigin() != null, isMaximized, isPortrait)
+        with(binding.playerControls) {
+            liveRewind.isVisible = show
+            if (show) {
+                liveRewind.setOnClickListener { showLiveRewindOptions() }
+            } else {
+                liveRewind.setOnClickListener(null)
+            }
+        }
+    }
+
+    protected open fun isLiveRewindPlaybackReady(): Boolean = false
+
+    protected fun markLiveRewindReady() {
+        if (liveRewindOrigin() == null || !viewModel.liveRewindPending || !viewModel.started || !isLiveRewindPlaybackReady()) return
+        viewModel.liveRewindPending = false
+        liveRewindStartup?.cancel()
+        liveRewindStartup = null
+    }
+
+    /**
+     * Only the initial recording handoff falls back to live. Once the recording has played,
+     * errors use ordinary VoD recovery so a network blip does not discard the viewer's position.
+     */
+    protected fun handleLiveRewindFailure(): Boolean {
+        val origin = liveRewindOrigin() ?: return false
+        if (!viewModel.liveRewindPending && !viewModel.liveRewindFailed) return false
+        if (!viewModel.started) return true
+        viewModel.liveRewindPending = false
+        viewModel.liveRewindFailed = true
+        liveRewindStartup?.cancel()
+        if (isResumed && isMaximized && (activity as? MainActivity)?.returnFromLiveRewind(this, origin) == true) {
+            Toast.makeText(requireContext(), R.string.live_rewind_failed_returning, Toast.LENGTH_LONG).show()
+        }
+        return true
+    }
+
+    private fun watchLiveRewindStartup() {
+        if (liveRewindOrigin() == null || !viewModel.liveRewindPending || liveRewindStartup?.isActive == true) return
+        liveRewindStartup = viewLifecycleOwner.lifecycleScope.launch {
+            delay(30_000L)
+            if (viewModel.liveRewindPending) handleLiveRewindFailure()
+        }
+    }
 
     /** Reveal on the first remote press; visible controls retain native key handling. */
     fun dispatchTvKeyEvent(event: KeyEvent): Boolean {
@@ -411,13 +619,12 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
 
     private fun applyMaximizedPlayerVisualState() {
         cancelPinchSettle()
-        binding.aspectRatioFrameLayout.scaleX = 1f
-        binding.aspectRatioFrameLayout.scaleY = 1f
         binding.aspectRatioFrameLayout.resizeMode = if (isPortrait) {
             AspectRatioFrameLayout.RESIZE_MODE_FIT
         } else {
             displayMode.resizeMode
         }
+        setSurfaceScale(binding.aspectRatioFrameLayout, canonicalSurfaceScale())
         binding.playerLayout.setBackgroundColor(Color.BLACK)
     }
 
@@ -428,6 +635,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
      */
     fun selectDisplayMode(mode: PlayerDisplayMode) {
         displayMode = mode
+        displayZoom = 1f
         displayModeStore.saveDisplayMode(mode)
         finalizePinchSurface()
     }
@@ -435,32 +643,66 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
     /**
      * Commits an armed preview without exposing the asynchronous resize-mode
      * layout. The old renderer plus its completed preview scale already has
-     * the target geometry, so retain that scale until the target renderer has
-     * laid out, then normalize to unit scale before draw.
+     * the target geometry; [finalizePinchSurface] retains that scale until the
+     * target renderer has laid out.
      */
     private fun commitPinchDisplayMode(mode: PlayerDisplayMode) {
         displayMode = mode
+        displayZoom = 1f
         displayModeStore.saveDisplayMode(mode)
-        cancelPinchSettle()
-        val frame = _binding?.aspectRatioFrameLayout ?: return
-        val generation = ++pinchCommitGeneration
-        frame.resizeMode = mode.resizeMode
-        frame.doOnLayout {
-            if (_binding?.aspectRatioFrameLayout === frame &&
-                pinchCommitGeneration == generation &&
-                displayMode == mode
-            ) {
-                frame.scaleX = 1f
-                frame.scaleY = 1f
-            }
-        }
+        finalizePinchSurface()
     }
 
     fun getCurrentDisplayMode(): PlayerDisplayMode = displayMode
 
+    /** Kept pinch zoom relative to Fit; only meaningful with Fit. */
+    fun getDisplayZoom(): Float = displayZoom
+
     open fun updateVideoAspectRatio(aspectRatio: Float) {
         videoAspectRatio = aspectRatio
         binding.aspectRatioFrameLayout.setAspectRatio(aspectRatio)
+        refreshDisplayZoom()
+    }
+
+    private fun setSurfaceScale(frame: View, scale: Float) {
+        frame.scaleX = scale
+        frame.scaleY = scale
+    }
+
+    private fun currentFillRatio(): Float {
+        val layout = _binding?.playerLayout ?: return 1f
+        return PlayerDisplayModePreviewer.fillToFitRatio(videoAspectRatio, layout.width, layout.height)
+    }
+
+    /**
+     * Scale of the committed renderer. A kept zoom draws the Fit renderer
+     * scaled about its center, clamped to this screen's Fill, so the same
+     * value crops the same share of the picture on any screen shape. Other
+     * modes, PiP, pre-N devices and screens too close to the video's shape
+     * (see [PinchZoomController.supports]) draw at unit scale.
+     */
+    private fun canonicalSurfaceScale(): Float {
+        if (isPortrait || !isMaximized || displayMode != PlayerDisplayMode.FIT || displayZoom <= 1f) return 1f
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.N || activity?.isInPictureInPictureMode == true) return 1f
+        val ratio = currentFillRatio()
+        return if (PinchZoomController.supports(ratio)) displayZoom.coerceAtMost(ratio) else 1f
+    }
+
+    /** Fit-relative zoom the committed state draws. */
+    private fun canonicalZoom(): Float {
+        return if (displayMode == PlayerDisplayMode.FILL) currentFillRatio() else canonicalSurfaceScale()
+    }
+
+    /**
+     * Re-applies a kept zoom when the player area or video shape changes
+     * (rotation, folding, side chat, PiP), since its Fill clamp depends on
+     * both. A running pinch or settle owns the scale until it finalizes.
+     */
+    private fun refreshDisplayZoom() {
+        val frame = _binding?.aspectRatioFrameLayout ?: return
+        if (pinchInProgress || pinchSettleAnimator != null || isPortrait || !isMaximized) return
+        if (frame.resizeMode != displayMode.resizeMode) return
+        setSurfaceScale(frame, canonicalSurfaceScale())
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -485,6 +727,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
     @SuppressLint("ClickableViewAccessibility")
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
+        watchLiveRewindCatchUp()
         with(binding) {
             viewLifecycleOwner.lifecycleScope.launch {
                 repeatOnLifecycle(Lifecycle.State.STARTED) {
@@ -558,9 +801,15 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
             chatWidthLandscape = requireContext().prefs().getInt(C.LANDSCAPE_CHAT_WIDTH, 0)
             displayModeStore = PlayerDisplayModeStore(SharedPreferencesDisplayModeStorage(prefs))
             displayMode = displayModeStore.loadDisplayMode()
+            displayZoom = if (displayMode == PlayerDisplayMode.FIT) displayModeStore.loadZoom() else 1f
             aspectRatioFrameLayout.setAspectRatio(16f / 9f)
             initLayout()
             playerLayout.doOnLayout { updateQuickPlayerControls() }
+            playerLayout.addOnLayoutChangeListener { _, left, top, right, bottom, oldLeft, oldTop, oldRight, oldBottom ->
+                if (right - left != oldRight - oldLeft || bottom - top != oldBottom - oldTop) {
+                    refreshDisplayZoom()
+                }
+            }
             playerLayout.post { maybeShowGestureGuide() }
             changePlayerMode()
             val viewConfiguration = ViewConfiguration.get(requireContext())
@@ -1034,7 +1283,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                 val titleText = requireArguments().getString(KEY_TITLE)
                 if (!titleText.isNullOrBlank() && requireContext().prefs().getBoolean(C.PLAYER_TITLE, true)) {
                     title.visibility = View.VISIBLE
-                    title.text = titleText
+                    title.text = if (liveRewindOrigin() != null) getString(R.string.live_rewind_recording_title, titleText) else titleText
                 }
                 val gameName = requireArguments().getString(KEY_GAME_NAME)
                 if (!gameName.isNullOrBlank() && requireContext().prefs().getBoolean(C.PLAYER_CATEGORY, true)) {
@@ -1173,6 +1422,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                         restart.visibility = View.VISIBLE
                         restart.setOnClickListener { restartPlayer() }
                     }
+                    updateFullscreenLiveRewind()
                     if (requireContext().prefs().getBoolean(C.PLAYER_SEEKLIVE, false)) {
                         seekLive.visibility = View.VISIBLE
                         seekLive.setOnClickListener { seekToLivePosition() }
@@ -1207,6 +1457,11 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                     }
                 }
                 if (videoType == VIDEO) {
+                    if (liveRewindOrigin() != null) {
+                        seekLive.visibility = View.VISIBLE
+                        seekLive.contentDescription = getString(R.string.live_rewind_go_live)
+                        seekLive.setOnClickListener { returnToLiveFromRecording() }
+                    }
                     viewLifecycleOwner.lifecycleScope.launch {
                         repeatOnLifecycle(Lifecycle.State.STARTED) {
                             viewModel.videoResult.collectLatest {
@@ -1516,6 +1771,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                         }
                     }
                     toggleChat.visibility = View.GONE
+                    updateFullscreenLiveRewind()
                 }            } else {
                 systemUiListener.attach(requireActivity().window.decorView, viewLifecycleOwner) {
                     if (!isKeyboardShown && isMaximized && activity != null) {
@@ -1607,6 +1863,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                         }
                         // Separate floating chat button is now hidden as functionality is merged
                         toggleFloatingChat.visibility = View.GONE
+                    updateFullscreenLiveRewind()
                 }
             }
             updateQuickPlayerControls()
@@ -1646,37 +1903,13 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
     }
 
     fun getQualityMap(): Map<String, VideoQuality>? {
-        val qualities = viewModel.qualities
-        return if (!qualities.isNullOrEmpty()) {
-            val hideCodecs = qualities.all {
-                val codec = it.codecs?.substringBefore('.')
-                codec == "avc1" || codec == "mp4a" || codec.isNullOrBlank()
-            }
-            qualities.filterNot { quality ->
-                quality.name.isNumericQualityFallback()
-            }.associateBy { quality ->
-                when (normalizeQualityName(quality.name)) {
-                    "auto" -> getString(R.string.auto)
-                    "source" -> getString(R.string.source)
-                    "audio_only" -> getString(R.string.audio_only)
-                    "chat_only" -> getString(R.string.chat_only)
-                    else -> {
-                        if (hideCodecs) {
-                            quality.name.toString()
-                        } else {
-                            val codec = quality.codecs?.substringBefore('.')
-                            val codecName = when {
-                                codec == "av01" -> "AV1"
-                                codec == "hev1" || codec == "hvc1" -> "H.265"
-                                codec == "avc1" || codec.isNullOrBlank() -> "H.264"
-                                else -> codec
-                            }
-                            "${quality.name} $codecName"
-                        }
-                    }
-                }
-            }
-        } else null
+        val qualities = viewModel.qualities?.takeIf { it.isNotEmpty() } ?: return null
+        return PlayerQualityPopupModel.build(
+            qualities,
+            PlayerQualityPopupLabels(getString(R.string.auto), getString(R.string.source), getString(R.string.audio_only), getString(R.string.chat_only)),
+        ).associate { option ->
+            listOfNotNull(option.primaryLabel, option.codecLabel).joinToString(" ") to option.quality
+        }
     }
 
     fun showQualityDialog() {
@@ -1699,9 +1932,9 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
             context = requireContext(),
             binding = popupBinding,
             qualities = qualities,
-            selectedTag = viewModel.quality?.name,
+            selectedQuality = viewModel.quality,
             panelWidthPx = panelWidth,
-            onQualitySelected = ::selectQuality,
+            onQualitySelected = ::selectQualityOption,
             onDismissRequested = { hidePlayerPopup() },
         ).also { it.bind() }
         showPlayerPopup(
@@ -1714,12 +1947,18 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
     }
 
     fun selectQuality(qualityName: String?) {
-        viewModel.userHasChangedQuality = true
         val normalizedQualityName = normalizeQualityName(qualityName)
-        changeQuality(
-            viewModel.qualities?.find { it.name == qualityName }
+        selectQualityOption(
+            getQualityMap()?.get(qualityName)
+                ?: viewModel.qualities?.find { it.name == qualityName }
                 ?: viewModel.qualities?.find { normalizeQualityName(it.name) == normalizedQualityName }
         )
+    }
+
+    private fun selectQualityOption(quality: VideoQuality?) {
+        if (quality == null) return
+        viewModel.userHasChangedQuality = true
+        changeQuality(quality)
         changePlayerMode()
         setQualityText()
     }
@@ -1756,6 +1995,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
             panelWidthPx = panelWidth,
             onSpeedChanged = ::setPlaybackSpeed,
             onDismissRequested = { hidePlayerPopup() },
+            persistSpeed = liveRewindOrigin() == null,
         ).also { it.bind() }
         showPlayerPopup(
             type = PlayerPopupType.SPEED,
@@ -2390,41 +2630,45 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
     protected fun setDefaultQuality() {
         val connectivityManager = requireContext().getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
         val networkCapabilities = connectivityManager.getNetworkCapabilities(connectivityManager.activeNetwork)
-        val cellular = networkCapabilities?.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) == true
-        val defaultQuality = if (cellular) {
-            requireContext().prefs().getString(C.PLAYER_DEFAULT_CELLULAR_QUALITY, "saved")
-        } else {
-            requireContext().prefs().getString(C.PLAYER_DEFAULTQUALITY, "saved")
-        }?.substringBefore(" ")
-        viewModel.quality = when (defaultQuality) {
-            "saved" -> {
-                val savedQuality = requireContext().prefs().getString(C.PLAYER_QUALITY, "720p60")?.substringBefore(" ")
-                when (savedQuality) {
-                    AUTO_QUALITY -> viewModel.qualities?.find { it.name == AUTO_QUALITY }
-                    AUDIO_ONLY_QUALITY -> viewModel.qualities?.find { it.name == AUDIO_ONLY_QUALITY }
-                    CHAT_ONLY_QUALITY -> viewModel.qualities?.find { it.name == CHAT_ONLY_QUALITY }
-                    else -> findQuality(savedQuality)
-                }
-            }
-            AUTO_QUALITY -> viewModel.qualities?.find { it.name == AUTO_QUALITY }
-            "Source" -> viewModel.qualities?.find { it.name != AUTO_QUALITY }
-            AUDIO_ONLY_QUALITY -> viewModel.qualities?.find { it.name == AUDIO_ONLY_QUALITY }
-            CHAT_ONLY_QUALITY -> viewModel.qualities?.find { it.name == CHAT_ONLY_QUALITY }
-            else -> findQuality(defaultQuality)
-        } ?: viewModel.qualities?.firstOrNull()
+        val profile = PlayerQualityNetworkProfile.from(networkCapabilities)
+        val qualities = viewModel.qualities.orEmpty()
+        viewModel.previousQuality = viewModel.previousQuality?.let { selectDownloadQuality(qualities, it) }
+        viewModel.quality = preserveRefreshedQuality(qualities, viewModel.quality, viewModel.userHasChangedQuality)
+            ?: resolveDefaultQuality(profile)
     }
 
-    private fun findQuality(targetQualityString: String?): VideoQuality? {
-        val targetQuality = targetQualityString?.split("p")
-        return targetQuality?.getOrNull(0)?.takeWhile { it.isDigit() }?.toIntOrNull()?.let { targetResolution ->
-            val targetFps = targetQuality.getOrNull(1)?.takeWhile { it.isDigit() }?.toIntOrNull() ?: 30
-            val last = viewModel.qualities?.last { it.name != AUDIO_ONLY_QUALITY && it.name != CHAT_ONLY_QUALITY }
-            viewModel.qualities?.find { qualityString ->
-                val quality = qualityString.name?.split("p")
-                val resolution = quality?.getOrNull(0)?.takeWhile { it.isDigit() }?.toIntOrNull()
-                val fps = quality?.getOrNull(1)?.takeWhile { it.isDigit() }?.toIntOrNull() ?: 30
-                resolution != null && ((targetResolution == resolution && targetFps >= fps) || targetResolution > resolution || qualityString == last)
-            }
+    private fun resolveDefaultQuality(profile: PlayerQualityNetworkProfile): VideoQuality? {
+        val configured = profile.qualityPreference(requireContext().prefs())?.substringBefore(" ")
+        val qualities = viewModel.qualities.orEmpty()
+        return if (configured == "saved") {
+            PlayerQualityPreferences.resolve(requireContext().prefs(), qualities)
+        } else {
+            selectPreferredQuality(qualities, configured)
+        } ?: qualities.firstOrNull()
+    }
+
+    private var applyingNetworkQuality = false
+
+    internal fun shouldPersistQualitySelection(profile: PlayerQualityNetworkProfile): Boolean =
+        !applyingNetworkQuality && profile.qualityPreference(requireContext().prefs())?.substringBefore(" ") == "saved"
+
+    internal fun reapplyNetworkDefaultQuality(profile: PlayerQualityNetworkProfile) {
+        if (!isAdded || _binding == null || viewModel.qualities.isNullOrEmpty()) return
+        if (!shouldReapplyNetworkQuality(videoType == STREAM, viewModel.userHasChangedQuality)) return
+        val target = resolveDefaultQuality(profile) ?: return
+        if (viewModel.restoreQuality) {
+            // Background audio keeps playing; foreground restore uses the new network's default.
+            viewModel.previousQuality = target
+            return
+        }
+        if (target == viewModel.quality) return
+        applyingNetworkQuality = true
+        try {
+            changeQuality(target)
+            changePlayerMode()
+            setQualityText()
+        } finally {
+            applyingNetworkQuality = false
         }
     }
 
@@ -2695,6 +2939,10 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
 
     override fun onResume() {
         super.onResume()
+        if (viewModel.liveRewindFailed && isMaximized && handleLiveRewindFailure()) return
+        markLiveRewindReady()
+        watchLiveRewindStartup()
+        showDroppedLiveRewindNotice()
         val isInPIPMode = when {
             Build.VERSION.SDK_INT >= Build.VERSION_CODES.R -> requireActivity().isInPictureInPictureMode
             Build.VERSION.SDK_INT >= Build.VERSION_CODES.O -> !useController && isMaximized
@@ -2737,6 +2985,24 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
 
     protected fun startPlayer() {
         viewModel.started = true
+        if (videoType == VIDEO && liveRewindOrigin() != null) {
+            requireArguments().getString(LiveRewind.PLAYLIST)?.let { preparedUrl ->
+                viewModel.liveRewindPending = true
+                watchLiveRewindStartup()
+                requireArguments().remove(LiveRewind.PLAYLIST)
+                requireArguments().putBoolean(KEY_IGNORE_SAVED_POSITION, false)
+                requireArguments().putLong(KEY_OFFSET, -1L)
+                viewModel.playbackPosition = requireArguments().getLong(LiveRewind.POSITION)
+                try {
+                    startVideo(preparedUrl, viewModel.playbackPosition, true)
+                } catch (error: CancellationException) {
+                    throw error
+                } catch (error: Exception) {
+                    if (!handleLiveRewindFailure()) throw error
+                }
+                return
+            }
+        }
         when (videoType) {
             STREAM -> {
                 viewModel.useCustomProxy = requireContext().prefs().getBoolean(C.PLAYER_STREAM_PROXY, false)
@@ -2787,6 +3053,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                     networkLibrary = requireContext().prefs().getString(C.NETWORK_LIBRARY, "OkHttp"),
                     gqlHeaders = TwitchApiHelper.getGQLHeaders(requireContext()),
                     id = requireArguments().getString(KEY_CLIP_ID),
+                    supportedCodecs = requireContext().prefs().getString(C.TOKEN_SUPPORTED_CODECS, "av1,h265,h264"),
                     enableIntegrity = requireContext().prefs().getBoolean(C.ENABLE_INTEGRITY, false),
                 )
             }
@@ -2899,6 +3166,8 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
     override fun onPictureInPictureModeChanged(isInPictureInPictureMode: Boolean) {
         with(binding) {
             if (isInPictureInPictureMode) {
+                liveRewindDiscovery?.cancel()
+                liveRewindDialog?.dismiss()
                 restoreBrightness()
                 hidePlayerPopup(restoreFocus = false, animate = false)
                 if (!isMaximized) {
@@ -2921,8 +3190,8 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                 controllerAnimation?.cancel()
                 binding.playerControls.root.alpha = 0f
                 binding.playerControls.root.visibility = View.GONE
-                // player dialog
-                (childFragmentManager.findFragmentByTag("closeOnPip") as? BottomSheetDialogFragment)?.dismiss()
+                // player dialog, including the gesture guide (only its button marks it seen)
+                (childFragmentManager.findFragmentByTag("closeOnPip") as? DialogFragment)?.dismiss()
                 // player chat message dialog
                 (chatFragment?.childFragmentManager?.findFragmentByTag("messageDialog") as? BottomSheetDialogFragment)?.dismiss()
                 (chatFragment?.childFragmentManager?.findFragmentByTag("replyDialog") as? BottomSheetDialogFragment)?.dismiss()
@@ -2931,9 +3200,14 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                 useController = true
             }
         }
+        refreshDisplayZoom()
     }
 
     override fun onStop() {
+        liveRewindDiscovery?.cancel()
+        liveRewindStartup?.cancel()
+        liveRewindStartup = null
+        liveRewindDialog?.dismiss()
         restoreBrightness()
         super.onStop()
         binding.playerControls.root.removeCallbacks(controllerHideAction)
@@ -2961,6 +3235,8 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
     }
 
     fun minimize() {
+        liveRewindDiscovery?.cancel()
+        liveRewindDialog?.dismiss()
         with(binding) {
             isMaximized = false
             // Restore original brightness when minimizing
@@ -3041,6 +3317,8 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
     fun maximize() {
         with(binding) {
             isMaximized = true
+            if (viewModel.liveRewindFailed && handleLiveRewindFailure()) return
+            showDroppedLiveRewindNotice()
             requireActivity().onBackPressedDispatcher.addCallback(viewLifecycleOwner, backPressedCallback)
             if (videoType == STREAM && chatFragment?.emoteMenuIsVisible() == true) {
                 chatFragment?.toggleBackPressedCallback(true)
@@ -3052,6 +3330,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                 showTvController()
             }
             applyMaximizedPlayerVisualState()
+            updateFullscreenLiveRewind()
             if (!controllerHideOnTouch) {
                 showController(true)
                 updateProgress()
@@ -3118,6 +3397,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                         qualityNames = qualities?.map { it.name.toString() }?.toTypedArray(),
                         qualityCodecs = qualities?.map { it.codecs.toString() }?.toTypedArray(),
                         qualityUrls = qualities?.map { it.url.toString() }?.toTypedArray(),
+                        qualityBitrates = qualities?.map { it.bitrate ?: -1 }?.toIntArray(),
                     ).show(childFragmentManager, null)
                 }
                 VIDEO -> {
@@ -3142,6 +3422,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                         qualityNames = qualities?.map { it.name.toString() }?.toTypedArray(),
                         qualityCodecs = qualities?.map { it.codecs.toString() }?.toTypedArray(),
                         qualityUrls = qualities?.map { it.url.toString() }?.toTypedArray(),
+                        qualityBitrates = qualities?.map { it.bitrate ?: -1 }?.toIntArray(),
                     ).show(childFragmentManager, null)
                 }
             }
@@ -3187,7 +3468,9 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                 requireContext().prefs().getString(C.PLAYER_SPEED_LIST, "0.25\n0.5\n0.75\n1.0\n1.25\n1.5\n1.75\n2.0\n3.0\n4.0\n8.0")?.split("\n")?.let { speeds ->
                     speeds.getOrNull(index)?.toFloatOrNull()?.let { speed ->
                         setPlaybackSpeed(speed)
-                        requireContext().prefs().edit { putFloat(C.PLAYER_SPEED, speed) }
+                        if (liveRewindOrigin() == null) {
+                            requireContext().prefs().edit { putFloat(C.PLAYER_SPEED, speed) }
+                        }
                         updatePlaybackSpeedUi(speed)
                     }
                 }
@@ -3261,6 +3544,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                                 networkLibrary = requireContext().prefs().getString(C.NETWORK_LIBRARY, "OkHttp"),
                                 gqlHeaders = TwitchApiHelper.getGQLHeaders(requireContext()),
                                 id = requireArguments().getString(KEY_CLIP_ID),
+                                supportedCodecs = requireContext().prefs().getString(C.TOKEN_SUPPORTED_CODECS, "av1,h265,h264"),
                                 enableIntegrity = requireContext().prefs().getBoolean(C.ENABLE_INTEGRITY, false),
                             )
                             viewModel.isFollowingChannel(
@@ -3380,13 +3664,25 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
     }
 
     override fun onDestroyView() {
+        liveRewindDiscovery?.cancel()
+        liveRewindStartup?.cancel()
+        liveRewindDialog?.dismiss()
         doubleTapChatSnapshot = null
         systemUiListener.detach()
         finalizePinchSurface()
         hidePlayerPopup(restoreFocus = false, animate = false)
+        pinchFillEdgeAnimator?.cancel()
+        pinchFillEdgeAnimator = null
+        pinchFeedbackLabel = null
+        pinchFeedbackLevel = null
         _binding?.playerLayout?.findViewById<View>(R.id.gestureFeedback)?.let { feedback ->
             feedback.animate().cancel()
             feedback.removeCallbacks(hideGestureRunnable)
+        }
+        _binding?.playerLayout?.findViewById<View>(R.id.pinchFillEdge)?.let { edge ->
+            edge.animate().cancel()
+            edge.visibility = View.GONE
+            edge.alpha = 0f
         }
         // Restore original brightness when fragment is destroyed
         restoreBrightness()
@@ -3413,7 +3709,10 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
         private const val PINCH_FEEDBACK_LINGER_MS = 400L
         private const val PINCH_SETTLE_MS = 240L
         private const val PINCH_SETTLE_EPSILON = 0.001f
+        private const val PINCH_FILL_EDGE_MS = 220L
+        private const val PINCH_FILL_EDGE_ALPHA = 0.55f
         private const val VOLUME_OVERLAY_DISMISS_MS = 1500L
+        private const val LIVE_REWIND_CAUGHT_UP_HOLD_MS = 2500L
         private const val PINCH_HINT_LINGER_MS = 3000L
         private const val PLAYER_POPUP_OPEN_MS = 220L
         private const val PLAYER_POPUP_CLOSE_MS = 140L
@@ -3839,8 +4138,22 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
             restoreDoubleTapChat()
         }
         finalizePinchSurface()
-        pinchController.begin(effectivePinchDisplayMode())
+        pinchInProgress = true
+        val ratio = currentFillRatio()
+        // Free zoom scales the surface, which is unreliable before API 24; Stretch
+        // and near-matching shapes keep the Fit/Fill toggle.
+        pinchZooming = Build.VERSION.SDK_INT >= Build.VERSION_CODES.N &&
+            displayMode != PlayerDisplayMode.STRETCH &&
+            PinchZoomController.supports(ratio)
+        if (pinchZooming) {
+            pinchZoomBase = if (displayMode == PlayerDisplayMode.FILL) ratio else 1f
+            pinchZoomController.begin(displayMode, displayZoom, ratio)
+        } else {
+            pinchController.begin(effectivePinchDisplayMode())
+        }
         pinchLastArmedTarget = null
+        pinchFeedbackLabel = null
+        pinchFeedbackLevel = null
         isSwipeGestureInProgress = true
         val cancelEvent = MotionEvent.obtain(event).apply { action = MotionEvent.ACTION_CANCEL }
         if (controlsVisibleAtGestureStart) {
@@ -3858,7 +4171,11 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
         if (span <= 0f) {
             return
         }
-        pinchController.update(span / pinchAnchorSpan).forEach(::applyPinchEvent)
+        if (pinchZooming) {
+            applyPinchZoom(pinchZoomController.update(span / pinchAnchorSpan))
+        } else {
+            pinchController.update(span / pinchAnchorSpan).forEach(::applyPinchEvent)
+        }
     }
 
     private fun applyPinchEvent(pinchEvent: PinchDisplayModeController.Event) {
@@ -3881,14 +4198,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
             is PinchDisplayModeController.Event.Armed -> {
                 if (pinchEvent.target != pinchController.committedMode && pinchEvent.target != pinchLastArmedTarget) {
                     pinchLastArmedTarget = pinchEvent.target
-                    if (prefs.getBoolean(C.PLAYER_GESTURES_HAPTIC, false)) {
-                        try {
-                            binding.playerLayout.findViewById<View>(R.id.gestureFeedback)
-                                ?.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
-                        } catch (e: Exception) {
-                            // Haptic failure must not block gesture completion.
-                        }
-                    }
+                    performPinchHaptic()
                 }
             }
             is PinchDisplayModeController.Event.Disarmed -> Unit
@@ -3907,6 +4217,60 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                 settlePinchPreview(pinchEvent.mode)
                 hidePinchFeedback()
             }
+        }
+    }
+
+    private fun performPinchHaptic() {
+        if (prefs.getBoolean(C.PLAYER_GESTURES_HAPTIC, false)) {
+            try {
+                binding.playerLayout.findViewById<View>(R.id.gestureFeedback)
+                    ?.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+            } catch (e: Exception) {
+                // Haptic failure must not block gesture completion.
+            }
+        }
+    }
+
+    /**
+     * Free zoom: the pinch's renderer stays in place and its view scale follows
+     * the fingers about the center, so no resize-mode layout runs while fingers
+     * are down.
+     */
+    private fun applyPinchZoom(step: PinchZoomController.Frame) {
+        showPinchZoomFeedback(step.target, step.zoom, step.fraction, step.reachedEnd)
+        if (step.reachedEnd) {
+            performPinchHaptic()
+            if (PlayerGestureFeedbackState.shouldFlashFillEdge(step.target, step.reachedEnd)) {
+                flashPinchFillEdge()
+            }
+        }
+        if (isPortrait || !isMaximized) {
+            return
+        }
+        cancelPinchSettle()
+        binding.aspectRatioFrameLayout.resizeMode = displayMode.resizeMode
+        setSurfaceScale(binding.aspectRatioFrameLayout, step.displayZoom / pinchZoomBase)
+    }
+
+    /**
+     * Keeps the released zoom: the surface settles to it in the pinch's
+     * renderer, then [finalizePinchSurface] swaps to the kept mode's renderer
+     * behind an equivalent scale if Fit and Fill traded places.
+     */
+    private fun finishPinchZoom(cancelled: Boolean) {
+        val result = if (cancelled) pinchZoomController.cancel() else pinchZoomController.release()
+        displayMode = result.mode
+        displayZoom = result.zoom
+        if (result.changed) {
+            displayModeStore.saveDisplayMode(result.mode, result.zoom)
+            onSuccessfulPinch()
+            showPinchZoomFeedback(result.target, result.zoom, result.fraction)
+        }
+        hidePinchFeedback()
+        if (isPortrait || !isMaximized) {
+            finalizePinchSurface()
+        } else {
+            animatePinchSurface(canonicalZoom() / pinchZoomBase)
         }
     }
 
@@ -3961,20 +4325,31 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
     /**
      * Single owner of canonical surface geometry: cancels any running settle
      * and applies the committed display mode's canonical resize mode and
-     * unit scale. Every path that interrupts pinch state (new pinch, mode
-     * selection, minimize/restore, orientation or PiP mode changes, view
-     * destruction) must run through here so a partially transformed surface
+     * scale (unit, or a kept zoom with Fit). Every path that interrupts pinch
+     * state (new pinch, mode selection, minimize/restore, orientation or PiP
+     * mode changes, view destruction) must run through here so a partially transformed surface
      * can never survive; a cancelled settle finalizes through the animator's
      * end action, which simply re-enters this function.
      */
     private fun finalizePinchSurface() {
-        pinchCommitGeneration++
+        val generation = ++pinchCommitGeneration
         cancelPinchSettle()
-        _binding?.aspectRatioFrameLayout?.let { frame ->
-            frame.scaleX = 1f
-            frame.scaleY = 1f
-            if (!isPortrait && isMaximized) {
-                frame.resizeMode = displayMode.resizeMode
+        val frame = _binding?.aspectRatioFrameLayout ?: return
+        if (isPortrait || !isMaximized) {
+            setSurfaceScale(frame, 1f)
+            return
+        }
+        if (frame.resizeMode == displayMode.resizeMode) {
+            setSurfaceScale(frame, canonicalSurfaceScale())
+            return
+        }
+        // The current scale already shows the target geometry in the old
+        // renderer (an armed commit or a settled zoom); keep it until the new
+        // renderer has laid out, then normalize before draw.
+        frame.resizeMode = displayMode.resizeMode
+        frame.doOnLayout {
+            if (_binding?.aspectRatioFrameLayout === frame && pinchCommitGeneration == generation) {
+                setSurfaceScale(frame, canonicalSurfaceScale())
             }
         }
     }
@@ -3996,13 +4371,18 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
             finalizePinchSurface()
             return
         }
-        val targetScale = 1f
+        frame.resizeMode = committed.resizeMode
+        animatePinchSurface(1f)
+    }
+
+    /** Animates the surface to [targetScale] in its current renderer, then finalizes. */
+    private fun animatePinchSurface(targetScale: Float) {
+        val frame = _binding?.aspectRatioFrameLayout ?: return
         if (frame.scaleX <= 0f || abs(frame.scaleX - targetScale) < PINCH_SETTLE_EPSILON) {
             finalizePinchSurface()
             return
         }
         cancelPinchSettle()
-        frame.resizeMode = committed.resizeMode
         pinchSettleAnimator = frame.animate()
             .scaleX(targetScale)
             .scaleY(targetScale)
@@ -4016,7 +4396,6 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
     }
 
     private fun showPinchFeedback(target: PlayerDisplayMode, progress: Float) {
-        val feedback = binding.playerLayout.findViewById<View>(R.id.gestureFeedback) ?: return
         val targetLabel = getString(
             when (target) {
                 PlayerDisplayMode.FIT -> R.string.display_mode_fit
@@ -4024,6 +4403,91 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                 PlayerDisplayMode.STRETCH -> R.string.display_mode_stretch
             }
         )
+        presentPinchFeedback(targetLabel) { surfaceClass ->
+            PlayerGestureFeedbackState.pinchPresentation(
+                surfaceClass = surfaceClass,
+                progress = progress,
+                toward = target,
+                targetLabel = targetLabel,
+            )
+        }
+    }
+
+    private fun showPinchZoomFeedback(target: PinchZoomController.Target, zoom: Float, fraction: Float, reachedEnd: Boolean = false) {
+        val label = when (target) {
+            PinchZoomController.Target.FIT -> getString(R.string.display_mode_fit)
+            PinchZoomController.Target.FILL -> getString(R.string.display_mode_fill)
+            PinchZoomController.Target.ZOOM -> getString(R.string.display_mode_zoom, PlayerGestureFeedbackState.zoomPercent(zoom))
+        }
+        val level = (fraction.coerceIn(0f, 1f) * 100).roundToInt()
+        val shouldWrite = reachedEnd || PlayerGestureFeedbackState.shouldUpdatePinchFeedback(
+            lastLabel = pinchFeedbackLabel,
+            lastLevel = pinchFeedbackLevel,
+            label = label,
+            level = level,
+            reachedEnd = false,
+        )
+        if (!shouldWrite) {
+            // Skip the view write, but keep the shared hide timer alive so the
+            // pill cannot fade mid-pinch while throttled.
+            binding.playerLayout.findViewById<View>(R.id.gestureFeedback)?.let { feedback ->
+                feedback.removeCallbacks(hideGestureRunnable)
+                feedback.postDelayed(hideGestureRunnable, PINCH_FEEDBACK_LINGER_MS + PlayerSurfacePolicy.FEEDBACK_HOLD_MS)
+            }
+            return
+        }
+        pinchFeedbackLabel = label
+        pinchFeedbackLevel = level
+        presentPinchFeedback(label) { surfaceClass ->
+            PlayerGestureFeedbackState.pinchZoomPresentation(surfaceClass, fraction, label)
+        }
+    }
+
+    /**
+     * Subtle YouTube-style white edge rectangle when free zoom sticks to Fill.
+     * Fades smoothly; reduced motion shows only a brief static frame so the
+     * overlay never lingers or intercepts touches.
+     */
+    private fun flashPinchFillEdge() {
+        val edge = _binding?.playerLayout?.findViewById<View>(R.id.pinchFillEdge) ?: return
+        pinchFillEdgeAnimator?.cancel()
+        pinchFillEdgeAnimator = null
+        edge.animate().cancel()
+        val reducedMotion = Settings.Global.getFloat(
+            requireContext().contentResolver,
+            Settings.Global.ANIMATOR_DURATION_SCALE,
+            1f,
+        ) == 0f
+        edge.visibility = View.VISIBLE
+        edge.alpha = PINCH_FILL_EDGE_ALPHA
+        if (reducedMotion) {
+            edge.post {
+                if (_binding?.playerLayout?.findViewById<View>(R.id.pinchFillEdge) === edge) {
+                    edge.visibility = View.GONE
+                    edge.alpha = 0f
+                }
+            }
+            return
+        }
+        pinchFillEdgeAnimator = edge.animate()
+            .alpha(0f)
+            .setDuration(PINCH_FILL_EDGE_MS)
+            .setInterpolator(DecelerateInterpolator())
+            .withEndAction {
+                pinchFillEdgeAnimator = null
+                if (_binding?.playerLayout?.findViewById<View>(R.id.pinchFillEdge) === edge) {
+                    edge.visibility = View.GONE
+                    edge.alpha = 0f
+                }
+            }
+            .also { it.start() }
+    }
+
+    private fun presentPinchFeedback(
+        label: String,
+        presentation: (PlayerSurfaceClass) -> PlayerGestureFeedbackPresentation,
+    ) {
+        val feedback = binding.playerLayout.findViewById<View>(R.id.gestureFeedback) ?: return
         PlayerSurfacePolicy.presentFeedback(
             context = requireContext(),
             feedbackRoot = feedback,
@@ -4031,19 +4495,17 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
             surfaceWidthPx = binding.playerLayout.width,
             surfaceHeightPx = binding.playerLayout.height,
             insets = gestureInsets,
-            presentation = PlayerGestureFeedbackState.pinchPresentation(
-                surfaceClass = PlayerSurfacePolicy.classify(binding.playerLayout.width, resources.displayMetrics.density),
-                progress = progress,
-                toward = target,
-                targetLabel = targetLabel,
-            ),
+            presentation = presentation(PlayerSurfacePolicy.classify(binding.playerLayout.width, resources.displayMetrics.density)),
             iconRes = R.drawable.baseline_aspect_ratio_black_24,
-            a11yText = getString(R.string.gesture_feedback_pinch) + " \u00B7 " + targetLabel,
+            a11yText = getString(R.string.gesture_feedback_pinch) + " \u00B7 " + label,
             hideRunnable = hideGestureRunnable,
         )
     }
 
     private fun hidePinchFeedback() {
+        // Reset the skip state so the next pinch starts with a fresh write.
+        pinchFeedbackLabel = null
+        pinchFeedbackLevel = null
         binding.playerLayout.findViewById<View>(R.id.gestureFeedback)?.let { feedback ->
             feedback.removeCallbacks(hideGestureRunnable)
             feedback.postDelayed(hideGestureRunnable, PINCH_FEEDBACK_LINGER_MS)
@@ -4057,6 +4519,8 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
     fun maybeShowGestureGuide() {
         if (context?.isTelevision() == true) return
         if (isPortrait || !isMaximized || gestureGuideShownThisSession) return
+        // PiP reports a landscape configuration, but the guide would cover the small window.
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N && activity?.isInPictureInPictureMode == true) return
         if (activePlayerPopup != null) return
         if (childFragmentManager.findFragmentByTag("closeOnPip") != null) return
         if (PlayerGestureEducationState.shouldShowGuide(prefs.getInt(C.PLAYER_GESTURE_GUIDE_VERSION, 0))) {
@@ -4127,8 +4591,14 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
     }
 
     private fun finishPinch(cancelled: Boolean) {
-        val terminal = if (cancelled) pinchController.cancel() else pinchController.release()
-        applyPinchEvent(terminal)
+        pinchInProgress = false
+        if (pinchZooming) {
+            pinchZooming = false
+            finishPinchZoom(cancelled)
+        } else {
+            val terminal = if (cancelled) pinchController.cancel() else pinchController.release()
+            applyPinchEvent(terminal)
+        }
         pinchLastArmedTarget = null
         isSwipeGestureInProgress = false
     }

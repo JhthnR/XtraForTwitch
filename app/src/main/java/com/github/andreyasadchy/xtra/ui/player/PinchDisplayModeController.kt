@@ -7,7 +7,8 @@ import kotlin.math.ln
  * Deterministic pinch state machine for Fit/Fill display-mode control.
  * Independent of Android views: callers feed cumulative scale and render the
  * emitted events. Arbitrary zoom values are never produced; only Fit and Fill
- * can be committed.
+ * can be committed. Where a surface supports it, [PinchZoomController] handles
+ * zoom between them instead.
  *
  * Reversal hysteresis keeps an armed target from flickering at the arm
  * threshold: after arming, the armed state persists until scale retreats by

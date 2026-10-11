@@ -67,12 +67,14 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import java.text.NumberFormat
 import java.util.Locale
+import javax.inject.Inject
 import kotlin.math.max
 import kotlin.math.roundToInt
 
 @AndroidEntryPoint
 class ChatFragment : BaseNetworkFragment(), MessageClickedDialog.OnButtonClickListener, ReplyClickedDialog.OnButtonClickListener {
 
+    @Inject lateinit var rewardSessions: ChannelPointRewardsSessionProvider
     private var _binding: FragmentChatBinding? = null
     private val binding get() = _binding!!
     private val viewModel: ChatViewModel by viewModels()
@@ -240,6 +242,21 @@ class ChatFragment : BaseNetworkFragment(), MessageClickedDialog.OnButtonClickLi
                             }
                             recyclerView.scrollToPosition(lastIndex)
                             it.visibility = View.GONE
+                        }
+                    }
+                    val rewardAccess = isLive && rewardSessions.current(channelId, channelLogin).canRedeem
+                    channelRewards.isVisible = isLive && (enableMessaging || rewardAccess) && !channelId.isNullOrBlank() && !channelLogin.isNullOrBlank()
+                    // A web-only account can redeem even when the existing TV/Helix chat composer cannot send.
+                    if (!enableMessaging && rewardAccess) {
+                        editText.isVisible = false
+                        emotes.isVisible = false
+                        messageView.isVisible = !isFloatingMode &&
+                                ((view.parent?.parent?.parent?.parent as? View)?.id != R.id.slidingLayout || requireContext().prefs().getBoolean(C.KEY_CHAT_BAR_VISIBLE, true))
+                    }
+                    channelRewards.setOnClickListener {
+                        if (!channelId.isNullOrBlank() && !channelLogin.isNullOrBlank() &&
+                            !childFragmentManager.isStateSaved && childFragmentManager.findFragmentByTag(ChannelPointsDialog.TAG) == null) {
+                            ChannelPointsDialog.newInstance(channelId, channelLogin).showNow(childFragmentManager, ChannelPointsDialog.TAG)
                         }
                     }
                     if (enableMessaging) {

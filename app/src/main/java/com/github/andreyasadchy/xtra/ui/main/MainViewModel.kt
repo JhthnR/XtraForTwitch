@@ -363,7 +363,7 @@ class MainViewModel @Inject constructor(
         }
     }
 
-    fun downloadStream(networkLibrary: String?, filesDir: String, id: String?, title: String?, createdAt: String?, channelId: String?, channelLogin: String?, channelName: String?, channelImage: String?, thumbnail: String?, gameId: String?, gameSlug: String?, gameName: String?, downloadPath: String, quality: String, downloadChat: Boolean, downloadChatEmotes: Boolean, wifiOnly: Boolean) {
+    fun downloadStream(networkLibrary: String?, filesDir: String, id: String?, title: String?, createdAt: String?, channelId: String?, channelLogin: String?, channelName: String?, channelImage: String?, thumbnail: String?, gameId: String?, gameSlug: String?, gameName: String?, downloadPath: String, quality: String, downloadChat: Boolean, downloadChatEmotes: Boolean, wifiOnly: Boolean, qualityCodecs: String? = null, qualityBitrate: Int? = null) {
         viewModelScope.launch {
             if (!channelLogin.isNullOrBlank()) {
                 val downloadedThumbnail = id.takeIf { !it.isNullOrBlank() }?.let { id ->
@@ -496,6 +496,8 @@ class MainViewModel @Inject constructor(
                         downloadPath = downloadPath,
                         status = OfflineVideo.STATUS_BLOCKED,
                         quality = if (!quality.contains("Audio", true)) quality else "audio",
+                        qualityCodecs = qualityCodecs,
+                        qualityBitrate = qualityBitrate,
                         downloadChat = downloadChat,
                         downloadChatEmotes = downloadChatEmotes,
                         live = true
