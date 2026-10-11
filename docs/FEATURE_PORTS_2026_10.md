@@ -1,8 +1,7 @@
 # October 2026 selective feature ports
 
-This is an unreleased development change based on ThystTV 1.3.1. It does not
-change versionCode/versionName, minSdk 23, Hilt, WorkManager, Media3 1.9.3,
-release signing or distribution.
+These ports, based on ThystTV 1.3.1, ship in 1.4.0. They do not change minSdk
+23, Hilt, WorkManager, Media3 1.9.3, release signing or distribution.
 
 New feature copy currently uses English fallback; existing translations are
 unchanged. The intentional fallback is scoped to the new strings, following the

@@ -13,13 +13,13 @@ ThystTV is viewer-first. Protect stable playback, fast VoD controls, floating ch
 Read:
 
 - `docs/ROADMAP.md`
-- `docs/release-notes/1.3.1.md`
+- `docs/release-notes/1.4.0.md`
 - `CHANGELOG.md`
 
-The published baseline is 1.3.0. Candidate 1.3.1 focuses on larger side-gesture
-feedback, selective upstream corrections and TV remote navigation. Keep player
-lifecycle and experimental Twitch sync work separate. Publication is pending the
-release gates in `RELEASE_PROCESS.md`.
+The published baseline is 1.3.1. Candidate 1.4.0 adds the October Xtra feature
+ports (notifications, rewards, quality, live rewind), free pinch zoom and
+spoiler-free VoDs. Keep player lifecycle and experimental Twitch sync work
+separate. Publication is pending the release gates in `RELEASE_PROCESS.md`.
 
 ## Contribution And Style Conventions
 
