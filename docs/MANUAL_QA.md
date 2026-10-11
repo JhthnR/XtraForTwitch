@@ -161,6 +161,9 @@ behavior remain unverified; emulator results are recorded separately in
   swipe-to-seek shows only the new position; double-tap seek still works.
 - [ ] On: Past Broadcasts, Saved and Downloads thumbnails hide the duration and
   watched bar. Live streams and clips play as before.
+- [ ] On: the VoD download dialog shows no duration or end-time hint, and an end
+  time past the VoD still shows the error; the player games list shows game
+  names without positions or durations, and tapping a game still seeks.
 - [ ] Known limit: the media notification and lock-screen controls can still show
   the length.
 

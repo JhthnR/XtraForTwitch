@@ -6,8 +6,9 @@ package com.github.andreyasadchy.xtra.ui.player
  * A viewer watching esports VODs does not want a video's length or watched
  * progress to reveal how many games were played. When enabled, the seek bar,
  * position and duration are hidden during VOD and downloaded-VOD playback, the
- * swipe-to-seek pill shows only the position, and duration plus
- * watched-progress overlays are hidden on VOD, Saved and Downloads thumbnails.
+ * swipe-to-seek pill shows only the position, duration plus watched-progress
+ * overlays are hidden on VOD, Saved and Downloads thumbnails, and the download
+ * and games dialogs leave out the length and chapter times.
  * Default is off, so nothing changes unless the viewer opts in. Live streams
  * and clips are unaffected.
  *
