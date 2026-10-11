@@ -23,7 +23,8 @@ plays the exact quality you pick and makes live notifications more reliable.
   a VoD's length does not reveal how many games were played. Seeking still works.
 - On a half-open foldable, the full-screen player keeps video off the hinge. Fold
   it like a laptop to watch above the hinge with chat below; floating chat docks
-  there and floats again when you unfold. Fold it like a book to see video and
+  there and floats again when you unfold, unless you changed the chat mode while
+  folded. Fold it like a book to see video and
   chat side by side while chat is showing. Settings → Player settings →
   Half-folded layout turns it off.
 - The gesture guide no longer opens inside picture-in-picture.
