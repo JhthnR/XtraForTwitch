@@ -4,6 +4,27 @@ All notable changes to ThystTV should be documented here.
 
 ## [Unreleased]
 
+## [1.4.0] - 2026-10-11
+
+### Added
+- Recording-backed live rewind from More or a full-screen ⏪ button, with replay chat, Go live and a 1x reset when faster playback catches up.
+- Free pinch zoom between Fit and Fill in landscape, kept across streams and shown in More → Display mode.
+- Channel Points custom reward redemption from chat with an explicit cost confirmation.
+- Optional spoiler-free VoDs setting that hides the seek bar, length and watched progress of VoDs and downloads.
+- Separate default quality for metered Wi-Fi.
+
+### Changed
+- Qualities keep their exact resolution, frame rate, codec and bitrate in the player, quality menu and downloads. Portrait variants are hidden, and clips can offer HEVC/AV1.
+- Live notifications use one live-follows request per poll, cache each channel's notification setting, keep durable deduplication and retry failed polls sooner.
+
+### Fixed
+- Settings drag lists keep the on-screen order after a fast drag.
+- The gesture guide no longer opens in picture-in-picture.
+- Closed live players are no longer kept in memory by the chat keyboard listener.
+
+### Release metadata
+- Version 1.4.0 uses version code 14 and migrates the database to version 36. Scope and limitations: `docs/release-notes/1.4.0.md`.
+
 ## [1.3.1] - 2026-09-30
 
 ### Added

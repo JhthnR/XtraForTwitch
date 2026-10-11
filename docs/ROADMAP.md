@@ -1,19 +1,25 @@
 # Roadmap
 
-## Current release target: 1.3.1
+## Current release target: 1.4.0
 
-- Improve visibility of brightness/volume gesture feedback on large video surfaces.
-- Adapt compatible upstream correctness and localization changes with explicit
-  regression coverage and a commit-by-commit ledger.
-- Keep experimental Twitch sync isolated on its existing branch.
-- Add D-pad navigation and visible focus for the existing Android TV interface
-  (issue #24), checked with automated view tests and a TV emulator.
-- Validate player, compact/wide/resized layouts and accepted API changes on devices.
+- Selective Xtra feature ports: live notification reliability, Channel Points
+  rewards, exact quality variants with a metered Wi-Fi preset, and
+  recording-backed live rewind (#30-#33).
+- Free pinch zoom between Fit and Fill (#37) and an opt-in spoiler-free mode for
+  VoDs (#38, issue #34).
+- Fixes for settings drag order (#35), the gesture guide in PiP (#36) and a
+  closed-player memory leak (#39).
 
-Version 1.3.1/code 13 is being prepared from this update. Publication remains
+Version 1.4.0/code 14 is being prepared from this update. Publication remains
 pending branch checks, signed-candidate verification, device QA and release review.
-Physical TV/OEM validation and a dedicated television layout remain outside this
-small navigation update. See `release-notes/1.3.1.md` for the candidate scope.
+See `release-notes/1.4.0.md` for the candidate scope.
+
+## Previous target: 1.3.1 (published September 30, 2026)
+
+- Larger brightness/volume gesture feedback on large video surfaces.
+- Compatible upstream correctness and localization changes with a ledger.
+- D-pad navigation and visible focus for the existing Android TV interface
+  (issue #24).
 
 ## Previous 1.2 priorities (historical)
 

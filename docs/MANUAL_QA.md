@@ -33,6 +33,18 @@ Agents should mark **Required** when a human should test an area. Mark **Complet
 These checks are separate from player/device QA. Website sample-data previews
 and pre-1.3 footage are labeled and do not certify current app behavior.
 
+### October 11 1.4.0 candidate
+
+On October 11 the maintainer installed the device-test debug build
+(`com.tzii.thysttv.debug`, `1.3.1-DEBUG`, code 13, local merge `368426903` of
+#30-#38) over the previous debug build on a Honor Magic V5 (Android 16). They
+went through the supplied checklist (pinch pill and Fill outline, full-screen
+rewind button and 1x catch-up, spoiler-free VoDs, free zoom across rotate, fold
+and PiP, settings drag, gesture guide in PiP, quality, notifications, rewards)
+and reported that everything seemed fine. No per-item breakdown was supplied.
+LeakCanary caught a closed-player leak during that session; its fix (#39) was not
+in that build. The exact signed 1.4.0 upgrade and release matrix remain pending.
+
 ### September 25 large-screen and upstream update
 
 On September 27 the maintainer reported that the delivered debug build seemed
