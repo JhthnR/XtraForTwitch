@@ -100,6 +100,17 @@ behavior remain unverified; emulator results are recorded separately in
   APK. The previous destroyed pager/RecyclerView retention groups must not recur.
   Keep heap dumps and private analysis out of public issues and commits.
 
+### Spoiler-free VODs
+
+- [ ] Off (default): VoD seek bar, length, Past Broadcasts/Saved/Downloads
+  durations and watched bars look as before.
+- [ ] On: a VoD and a downloaded VoD hide the seek bar, position and length;
+  swipe-to-seek shows only the new position; double-tap seek still works.
+- [ ] On: Past Broadcasts, Saved and Downloads thumbnails hide the duration and
+  watched bar. Live streams and clips play as before.
+- [ ] Known limit: the media notification and lock-screen controls can still show
+  the length.
+
 | Area | Required | Completed | Notes |
 | --- | --- | --- | --- |
 | App launches | [ ] | [ ] | |
