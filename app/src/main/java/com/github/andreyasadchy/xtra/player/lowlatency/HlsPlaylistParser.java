@@ -247,6 +247,8 @@ public final class HlsPlaylistParser implements ParsingLoadable.Parser<HlsPlayli
       Pattern.compile("NAME=" + ATTR_QUOTED_STRING_VALUE_PATTERN);
   private static final Pattern REGEX_IVS_NAME =
       Pattern.compile("IVS-NAME=" + ATTR_QUOTED_STRING_VALUE_PATTERN); // xtra: quality names
+  private static final Pattern REGEX_STABLE_VARIANT_ID =
+      Pattern.compile("STABLE-VARIANT-ID=" + ATTR_QUOTED_STRING_VALUE_PATTERN); // xtra: portrait variants
   private static final Pattern REGEX_GROUP_ID =
       Pattern.compile("GROUP-ID=" + ATTR_QUOTED_STRING_VALUE_PATTERN);
   private static final Pattern REGEX_CHARACTERISTICS =
@@ -534,6 +536,7 @@ public final class HlsPlaylistParser implements ParsingLoadable.Parser<HlsPlayli
         String closedCaptionsGroupId =
             parseOptionalStringAttr(line, REGEX_CLOSED_CAPTIONS, variableDefinitions);
         String label = parseOptionalStringAttr(line, REGEX_IVS_NAME, variableDefinitions); // xtra: quality names
+        String stableVariantId = parseOptionalStringAttr(line, REGEX_STABLE_VARIANT_ID, variableDefinitions); // xtra: portrait variants
         Uri uri;
         if (isIFrameOnlyVariant) {
           uri =
@@ -564,13 +567,14 @@ public final class HlsPlaylistParser implements ParsingLoadable.Parser<HlsPlayli
                   if (filterReasons != null) {
                     for (int filterIndex = 0; filterIndex < filterReasons.length(); filterIndex++) {
                       String filter = filterReasons.optString(filterIndex);
-                      if (filter.equals("FR_CODEC_NOT_REQUESTED")) {
+                      if (filter.equals("FR_CODEC_NOT_REQUESTED")
+                              || filter.equals("FR_DUALFORMAT_INCOMPATIBLE")) { // xtra: portrait variants
                         skip = true;
                         break;
                       }
                     }
                   }
-                  if (!skip) {
+                  if (!skip && !obj.optString("STABLE-VARIANT-ID").endsWith("-portrait")) { // xtra: portrait variants
                     String name = obj.optString("IVS_NAME");
                     int newPeakBitrate = obj.optInt("BANDWIDTH");
                     String newCodecsString = obj.optString("CODECS");
@@ -632,6 +636,10 @@ public final class HlsPlaylistParser implements ParsingLoadable.Parser<HlsPlayli
             }
           }
           unavailableMedia.clear();
+        }
+        // xtra: dual-format streams also offer portrait variants; the player shows landscape video.
+        if (stableVariantId != null && stableVariantId.endsWith("-portrait")) {
+          continue;
         }
 
         Format format =

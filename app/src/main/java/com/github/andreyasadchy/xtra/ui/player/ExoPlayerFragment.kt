@@ -60,7 +60,6 @@ import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.json.JSONObject
-import kotlin.math.floor
 
 @OptIn(UnstableApi::class)
 @AndroidEntryPoint
@@ -84,6 +83,7 @@ class ExoPlayerFragment : PlayerFragment() {
                     val listener = object : Player.Listener {
 
                         override fun onPlaybackStateChanged(playbackState: Int) {
+                            if (playbackState == Player.STATE_READY) markLiveRewindReady()
                             binding.bufferingIndicator.isVisible = playbackState == Player.STATE_BUFFERING
                             val showPlayButton = Util.shouldShowPlayButton(player)
                             if (showPlayButton) {
@@ -200,7 +200,7 @@ class ExoPlayerFragment : PlayerFragment() {
                                 val list = playlist?.variants?.mapIndexedNotNull { index, variant ->
                                     val videoName = playlist.videos.find { it.groupId == variant.videoGroupId }?.name
                                     val name = variant.format.toReadableQualityName(videoName, variant.url.toString(), index.toString())
-                                    VideoQuality(name, variant.format.codecs, variant.url.toString())
+                                    variant.format.toVideoQuality(name, variant.url.toString())
                                 }
                                 updateAvailableQualities(list)
                                 if (list != null || reason == Player.TIMELINE_CHANGE_REASON_SOURCE_UPDATE) {
@@ -289,6 +289,7 @@ class ExoPlayerFragment : PlayerFragment() {
                         }
 
                         override fun onPlayerError(error: PlaybackException) {
+                            if (handleLiveRewindFailure()) return
                             Log.e(tag, "Player error", error)
                             when (videoType) {
                                 STREAM -> {
@@ -390,6 +391,7 @@ class ExoPlayerFragment : PlayerFragment() {
                             viewModel.started = false
                         }
                         if (viewModel.started && player.currentMediaItem != null) {
+                            markLiveRewindReady()
                             chatFragment?.startReplayChatLoad()
                         }
                         if (!requireContext().prefs().getBoolean(C.PLAYER_KEEP_SCREEN_ON_WHEN_PAUSED, false) && canEnterPictureInPicture()) {
@@ -431,6 +433,10 @@ class ExoPlayerFragment : PlayerFragment() {
         }
         super.initialize()
     }
+
+    override fun isLiveRewindPlaybackReady(): Boolean =
+        player?.playbackState == Player.STATE_READY &&
+            playbackService?.videoId?.toString() == arguments?.getString(KEY_VIDEO_ID)
 
     override fun startStream(url: String?) {
         player?.let { player ->
@@ -659,6 +665,7 @@ class ExoPlayerFragment : PlayerFragment() {
     }
 
     override fun updateProgress() {
+        checkLiveRewindCatchUp()
         with(binding.playerControls) {
             if (root.isVisible && !progressBar.isPressed) {
                 val currentPosition = player?.currentPosition ?: 0
@@ -822,31 +829,8 @@ class ExoPlayerFragment : PlayerFragment() {
                                 player.trackSelectionParameters = player.trackSelectionParameters.buildUpon().apply {
                                     setTrackTypeDisabled(androidx.media3.common.C.TRACK_TYPE_VIDEO, false)
                                     binding.playerSurface.visibility = View.VISIBLE
-                                    if (!player.currentTracks.isEmpty) {
-                                        player.currentTracks.groups.find { it.type == androidx.media3.common.C.TRACK_TYPE_VIDEO }?.let {
-                                            val selectedQuality = quality.name?.split("p")
-                                            val targetResolution = selectedQuality?.getOrNull(0)?.takeWhile { it.isDigit() }?.toIntOrNull()
-                                            val targetFps = selectedQuality?.getOrNull(1)?.takeWhile { it.isDigit() }?.toIntOrNull() ?: 30
-                                            if (it.mediaTrackGroup.length > 0) {
-                                                if (targetResolution != null) {
-                                                    val formats = mutableListOf<Triple<Int, Int, Float>>()
-                                                    for (i in 0 until it.mediaTrackGroup.length) {
-                                                        val format = it.mediaTrackGroup.getFormat(i)
-                                                        formats.add(Triple(i, format.height, format.frameRate))
-                                                    }
-                                                    val list = formats.sortedWith(
-                                                        compareByDescending<Triple<Int, Int, Float>> { it.third }.thenByDescending { it.second }
-                                                    )
-                                                    list.find {
-                                                        (targetResolution == it.second && targetFps >= floor(it.third)) || targetResolution > it.second || it == list.last()
-                                                    }?.first?.let { index ->
-                                                        setOverrideForType(TrackSelectionOverride(it.mediaTrackGroup, index))
-                                                    }
-                                                } else {
-                                                    setOverrideForType(TrackSelectionOverride(it.mediaTrackGroup, 0))
-                                                }
-                                            }
-                                        }
+                                    selectQualityTrack(quality, player.currentTracks.groups)?.let { override ->
+                                        setOverrideForType(override)
                                     }
                                 }.build()
                             } else {
@@ -867,9 +851,9 @@ class ExoPlayerFragment : PlayerFragment() {
                     }
                     val connectivityManager = requireContext().getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
                     val networkCapabilities = connectivityManager.getNetworkCapabilities(connectivityManager.activeNetwork)
-                    val cellular = networkCapabilities?.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) == true
-                    if ((!cellular && requireContext().prefs().getString(C.PLAYER_DEFAULTQUALITY, "saved") == "saved") || (cellular && requireContext().prefs().getString(C.PLAYER_DEFAULT_CELLULAR_QUALITY, "saved") == "saved")) {
-                        requireContext().prefs().edit { putString(C.PLAYER_QUALITY, quality.name) }
+                    val profile = PlayerQualityNetworkProfile.from(networkCapabilities)
+                    if (shouldPersistQualitySelection(profile)) {
+                        PlayerQualityPreferences.save(requireContext().prefs(), quality)
                     }
                 }
             }
@@ -943,6 +927,7 @@ class ExoPlayerFragment : PlayerFragment() {
             qualityNames = qualities?.map { it.name.toString() }?.toTypedArray(),
             qualityCodecs = qualities?.map { it.codecs.toString() }?.toTypedArray(),
             qualityUrls = qualities?.map { it.url.toString() }?.toTypedArray(),
+            qualityBitrates = qualities?.map { it.bitrate ?: -1 }?.toIntArray(),
         ).show(childFragmentManager, null)
     }
 
