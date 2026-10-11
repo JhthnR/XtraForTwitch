@@ -35,6 +35,7 @@ object C {
     const val DOWNLOAD_NOTIFICATION_REQUESTED = "download_notification_requested"
     const val ASPECT_RATIO_LANDSCAPE = "aspectRatioLandscape"
     const val PLAYER_DISPLAY_MODE_LANDSCAPE = "playerDisplayModeLandscape"
+    const val PLAYER_DISPLAY_ZOOM_LANDSCAPE = "playerDisplayZoomLandscape"
     const val FIRST_LAUNCH = "first_launch"
     const val FIRST_LAUNCH1 = "first_launch1"
     const val FIRST_LAUNCH2 = "first_launch2"

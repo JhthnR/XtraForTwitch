@@ -122,6 +122,82 @@ class PlayerGestureFeedbackStateTest {
     }
 
     @Test
+    fun `free zoom bar shows the position between Fit and Fill`() {
+        val fit = PlayerGestureFeedbackState.pinchZoomPresentation(PlayerSurfaceClass.LARGE, 0f, "Fit")
+        val middle = PlayerGestureFeedbackState.pinchZoomPresentation(PlayerSurfaceClass.LARGE, 0.5f, "Zoom 128%")
+        val fill = PlayerGestureFeedbackState.pinchZoomPresentation(PlayerSurfaceClass.LARGE, 1f, "Fill")
+        assertTrue(fit.levelVisible)
+        assertEquals(0, fit.level)
+        assertEquals(50, middle.level)
+        assertEquals("Zoom 128%", middle.text)
+        assertEquals(100, fill.level)
+        assertEquals(100, PlayerGestureFeedbackState.pinchZoomPresentation(PlayerSurfaceClass.LARGE, 1.4f, "Fill").level)
+        assertEquals(0, PlayerGestureFeedbackState.pinchZoomPresentation(PlayerSurfaceClass.LARGE, -1f, "Fit").level)
+    }
+
+    @Test
+    fun `zoom percent rounds the Fit-relative zoom`() {
+        assertEquals(100, PlayerGestureFeedbackState.zoomPercent(1f))
+        assertEquals(134, PlayerGestureFeedbackState.zoomPercent(1.335f))
+        assertEquals(164, PlayerGestureFeedbackState.zoomPercent(1.635f))
+        assertEquals(200, PlayerGestureFeedbackState.zoomPercent(2f))
+    }
+
+    @Test
+    fun `pinch feedback skips redundant writes but keeps endpoints exact`() {
+        // First write always passes; identical small deltas do not, so
+        // per-touch updates stop churning layout and progress.
+        assertTrue(
+            PlayerGestureFeedbackState.shouldUpdatePinchFeedback(null, null, "Zoom 130%", 30, false),
+        )
+        assertFalse(
+            PlayerGestureFeedbackState.shouldUpdatePinchFeedback("Zoom 130%", 30, "Zoom 130%", 31, false),
+        )
+        // A visible bar step passes even within the same frame.
+        assertTrue(
+            PlayerGestureFeedbackState.shouldUpdatePinchFeedback("Zoom 130%", 30, "Zoom 130%", 32, false),
+        )
+        // Label changes and endpoint arrivals always pass.
+        assertTrue(
+            PlayerGestureFeedbackState.shouldUpdatePinchFeedback("Zoom 130%", 31, "Zoom 131%", 31, false),
+        )
+        assertTrue(
+            PlayerGestureFeedbackState.shouldUpdatePinchFeedback("Zoom 199%", 99, "Fill", 100, true),
+        )
+    }
+
+    @Test
+    fun `pinch feedback identical frames skip the view write`() {
+        // Skipped frames keep the shared hide timer alive in the fragment so
+        // the pill does not fade mid-pinch; the pure helper only decides view
+        // writes.
+        assertFalse(
+            PlayerGestureFeedbackState.shouldUpdatePinchFeedback("Zoom 130%", 30, "Zoom 130%", 30, false),
+        )
+    }
+
+    @Test
+    fun `fill edge flashes only when newly sticking to Fill`() {
+        assertTrue(
+            PlayerGestureFeedbackState.shouldFlashFillEdge(PinchZoomController.Target.FILL, true),
+        )
+        // Dwelling at Fill (no new endpoint entry) must not refire.
+        assertFalse(
+            PlayerGestureFeedbackState.shouldFlashFillEdge(PinchZoomController.Target.FILL, false),
+        )
+        // Fit stick and intermediate zoom never flash the Fill edge.
+        assertFalse(
+            PlayerGestureFeedbackState.shouldFlashFillEdge(PinchZoomController.Target.FIT, true),
+        )
+        assertFalse(
+            PlayerGestureFeedbackState.shouldFlashFillEdge(PinchZoomController.Target.ZOOM, false),
+        )
+        assertFalse(
+            PlayerGestureFeedbackState.shouldFlashFillEdge(PinchZoomController.Target.ZOOM, true),
+        )
+    }
+
+    @Test
     fun `neutral preview from Stretch parks at the bar center`() {
         assertEquals(50, PlayerGestureFeedbackState.pinchLevel(0f, PlayerDisplayMode.STRETCH))
         assertEquals(50, PlayerGestureFeedbackState.pinchLevel(1f, PlayerDisplayMode.STRETCH))

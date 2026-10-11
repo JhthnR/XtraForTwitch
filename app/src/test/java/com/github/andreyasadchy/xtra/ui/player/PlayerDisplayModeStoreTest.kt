@@ -11,6 +11,7 @@ class PlayerDisplayModeStoreTest {
     private class FakeStorage(
         private val legacyInt: Int? = null,
         private val canonicalString: String? = null,
+        val floats: MutableMap<String, Float> = mutableMapOf(),
     ) : DisplayModeStorage {
         val writtenStrings = mutableMapOf<String, String>()
         val legacyInts = mutableMapOf<String, Int>().apply { legacyInt?.let { put(C.ASPECT_RATIO_LANDSCAPE, it) } }
@@ -24,8 +25,18 @@ class PlayerDisplayModeStoreTest {
 
         override fun intValue(key: String): Int? = legacyInts[key]
 
+        override fun floatValue(key: String): Float? = floats[key]
+
         override fun putStringValue(key: String, value: String) {
             writtenStrings[key] = value
+        }
+
+        override fun putFloatValue(key: String, value: Float) {
+            floats[key] = value
+        }
+
+        override fun removeValue(key: String) {
+            floats.remove(key)
         }
     }
 
@@ -83,6 +94,30 @@ class PlayerDisplayModeStoreTest {
         assertEquals("stretch", storage.writtenStrings[C.PLAYER_DISPLAY_MODE_LANDSCAPE])
         assertTrue(storage.legacyInts.isEmpty() || storage.legacyInts[C.ASPECT_RATIO_LANDSCAPE] == 0)
         assertEquals(PlayerDisplayMode.STRETCH, FakeStorage(canonicalString = "stretch").let { PlayerDisplayModeStore(it).loadDisplayMode() })
+    }
+
+    @Test
+    fun `a pinch zoom is kept with fit and cleared by any other choice`() {
+        val storage = FakeStorage(canonicalString = "fit")
+        val store = PlayerDisplayModeStore(storage)
+        store.saveDisplayMode(PlayerDisplayMode.FIT, 1.3f)
+        assertEquals("fit", storage.writtenStrings[C.PLAYER_DISPLAY_MODE_LANDSCAPE])
+        assertEquals(1.3f, store.loadZoom(), 0f)
+        store.saveDisplayMode(PlayerDisplayMode.FILL, 1.3f)
+        assertFalse(storage.floats.containsKey(C.PLAYER_DISPLAY_ZOOM_LANDSCAPE))
+        store.saveDisplayMode(PlayerDisplayMode.FIT, 1.3f)
+        store.saveDisplayMode(PlayerDisplayMode.FIT)
+        assertFalse(storage.floats.containsKey(C.PLAYER_DISPLAY_ZOOM_LANDSCAPE))
+        assertEquals(1f, store.loadZoom(), 0f)
+    }
+
+    @Test
+    fun `missing or invalid zoom reads as plain fit`() {
+        for (stored in listOf(null, Float.NaN, Float.POSITIVE_INFINITY, 0.5f, 1f, -2f)) {
+            val storage = FakeStorage(canonicalString = "fit")
+            stored?.let { storage.floats[C.PLAYER_DISPLAY_ZOOM_LANDSCAPE] = it }
+            assertEquals(1f, PlayerDisplayModeStore(storage).loadZoom(), 0f)
+        }
     }
 
     @Test

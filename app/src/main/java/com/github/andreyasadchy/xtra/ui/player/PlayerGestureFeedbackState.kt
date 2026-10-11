@@ -1,5 +1,8 @@
 package com.github.andreyasadchy.xtra.ui.player
 
+import kotlin.math.abs
+import kotlin.math.roundToInt
+
 /**
  * Pure presentation rules for the shared gesture-feedback overlay.
  *
@@ -31,6 +34,13 @@ object PlayerGestureFeedbackState {
 
     /** Neutral center of the directional pinch bar. */
     const val PINCH_LEVEL_NEUTRAL = 50
+
+    /**
+     * Minimum pinch label/bar change worth a view write. Successive pinch
+     * updates arrive faster than a frame; smaller deltas only churn layout
+     * and the progress drawable.
+     */
+    const val PINCH_UPDATE_MIN_LEVEL_DELTA = 2
 
     fun clampLevel(level: Int): Int = level.coerceIn(0, 100)
 
@@ -103,5 +113,53 @@ object PlayerGestureFeedbackState {
             level = pinchLevel(progress, toward),
             text = targetLabel,
         )
+    }
+
+    /**
+     * Free-zoom pinch bar: a position rather than a direction, empty at Fit and
+     * full at Fill, with [fraction] the log-scale position between them.
+     */
+    fun pinchZoomPresentation(
+        surfaceClass: PlayerSurfaceClass,
+        fraction: Float,
+        label: String,
+    ): PlayerGestureFeedbackPresentation {
+        return presentation(
+            kind = PlayerGestureFeedbackKind.PINCH,
+            surfaceClass = surfaceClass,
+            level = (fraction.coerceIn(0f, 1f) * 100).roundToInt(),
+            text = label,
+        )
+    }
+
+    /** Rounded Fit-relative zoom percent shown in the `Zoom N%` label. */
+    fun zoomPercent(zoom: Float): Int = (zoom * 100).roundToInt()
+
+    /**
+     * Whether this pinch update is worth a view write. Free-zoom frames arrive
+     * per touch event; label-identical updates within a few bar points only
+     * churn layout and the progress drawable. Small time gaps alone do not
+     * force a write: a held finger would otherwise repaint the same label on
+     * every frame. Endpoint arrivals and label changes always pass.
+     */
+    fun shouldUpdatePinchFeedback(
+        lastLabel: String?,
+        lastLevel: Int?,
+        label: String,
+        level: Int,
+        reachedEnd: Boolean,
+    ): Boolean {
+        if (reachedEnd) return true
+        if (label != lastLabel) return true
+        if (lastLevel == null || abs(level - lastLevel) >= PINCH_UPDATE_MIN_LEVEL_DELTA) return true
+        return false
+    }
+
+    /**
+     * Whether this free-zoom frame should flash the Fill edge: only the step
+     * that newly sticks to Fill, not dwelling at or leaving it.
+     */
+    fun shouldFlashFillEdge(target: PinchZoomController.Target, reachedEnd: Boolean): Boolean {
+        return reachedEnd && target == PinchZoomController.Target.FILL
     }
 }
