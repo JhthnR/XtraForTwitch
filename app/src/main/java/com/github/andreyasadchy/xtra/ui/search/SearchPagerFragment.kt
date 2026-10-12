@@ -49,6 +49,8 @@ class SearchPagerFragment : BaseNetworkFragment(), FragmentHost {
     private val binding get() = _binding!!
     private val viewModel: SearchPagerViewModel by viewModels()
     private var firstLaunch = true
+    private var pageChangeCallback: ViewPager2.OnPageChangeCallback? = null
+    private var tabMediator: TabLayoutMediator? = null
 
     override val currentFragment: Fragment?
         get() = childFragmentManager.findFragmentByTag("f${binding.viewPager.currentItem}")
@@ -114,10 +116,11 @@ class SearchPagerFragment : BaseNetworkFragment(), FragmentHost {
             }
             val adapter = SearchPagerAdapter(this@SearchPagerFragment, tabs)
             viewPager.adapter = adapter
-            viewPager.registerOnPageChangeCallback(object : ViewPager2.OnPageChangeCallback() {
+            pageChangeCallback = object : ViewPager2.OnPageChangeCallback() {
                 override fun onPageSelected(position: Int) {
                     (currentFragment as? Searchable)?.search(binding.searchView.query.toString())
                     viewPager.doOnLayout {
+                        if (_binding !== this@with) return@doOnLayout
                         childFragmentManager.findFragmentByTag("f${position}")?.let { fragment ->
                             if (requireContext().prefs().getBoolean(C.UI_THEME_APPBAR_LIFT, true)) {
                                 fragment.view?.findViewById<RecyclerView>(R.id.recyclerView)?.let {
@@ -144,7 +147,7 @@ class SearchPagerFragment : BaseNetworkFragment(), FragmentHost {
                         }
                     }
                 }
-            })
+            }.also { viewPager.registerOnPageChangeCallback(it) }
             if (firstLaunch) {
                 val defaultItem = tabList.find { it.split(':')[1] != "0" }?.split(':')[0] ?: "2"
                 viewPager.setCurrentItem(
@@ -155,7 +158,7 @@ class SearchPagerFragment : BaseNetworkFragment(), FragmentHost {
             }
             viewPager.offscreenPageLimit = adapter.itemCount
             viewPager.reduceDragSensitivity()
-            TabLayoutMediator(tabLayout, viewPager) { tab, position ->
+            tabMediator = TabLayoutMediator(tabLayout, viewPager) { tab, position ->
                 tab.text = when (tabs.getOrNull(position)) {
                     "0" -> getString(R.string.videos)
                     "1" -> getString(R.string.streams)
@@ -163,7 +166,7 @@ class SearchPagerFragment : BaseNetworkFragment(), FragmentHost {
                     "3" -> getString(R.string.games)
                     else -> getString(R.string.channels)
                 }
-            }.attach()
+            }.also { it.attach() }
             val navController = findNavController()
             val appBarConfiguration = AppBarConfiguration(setOf(R.id.rootGamesFragment, R.id.rootTopFragment, R.id.followPagerFragment, R.id.followMediaFragment, R.id.savedPagerFragment, R.id.savedMediaFragment))
             toolbar.setupWithNavController(navController, appBarConfiguration)
@@ -287,6 +290,14 @@ class SearchPagerFragment : BaseNetworkFragment(), FragmentHost {
     }
 
     override fun onDestroyView() {
+        _binding?.let {
+            pageChangeCallback?.let(it.viewPager::unregisterOnPageChangeCallback)
+            tabMediator?.detach()
+            it.viewPager.adapter = null
+            it.searchView.setOnQueryTextListener(null)
+        }
+        pageChangeCallback = null
+        tabMediator = null
         super.onDestroyView()
         _binding = null
     }
