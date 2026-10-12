@@ -1,5 +1,7 @@
 package com.github.andreyasadchy.xtra.ui.settings
 
+import android.os.Bundle
+import android.view.View
 import androidx.core.os.bundleOf
 import androidx.fragment.app.DialogFragment
 import androidx.preference.EditTextPreference
@@ -11,6 +13,16 @@ import com.github.andreyasadchy.xtra.util.C
 import com.github.andreyasadchy.xtra.util.prefs
 
 abstract class MaterialPreferenceFragment : PreferenceFragmentCompat() {
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        applySettingsMotion()
+    }
+
+    override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
+        super.onViewCreated(view, savedInstanceState)
+        view.settingsMotionGroup()
+    }
 
     override fun onDisplayPreferenceDialog(preference: Preference) {
         if (requireContext().prefs().getBoolean(C.UI_THEME_MATERIAL3, true)) {

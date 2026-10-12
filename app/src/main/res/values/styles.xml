@@ -1254,6 +1254,12 @@
         <item name="android:background">?attr/colorSurface</item>
     </style>
 
+    <!-- Updater windows rise in with emphasized easing and leave quickly. -->
+    <style name="UpdateDialogMotion">
+        <item name="android:windowEnterAnimation">@anim/update_sheet_enter</item>
+        <item name="android:windowExitAnimation">@anim/update_sheet_exit</item>
+    </style>
+
     <style name="PreferenceTheme" parent="@style/PreferenceThemeOverlay">
         <!-- icons -->
         <item name="android:tint">?attr/colorControlNormal</item>

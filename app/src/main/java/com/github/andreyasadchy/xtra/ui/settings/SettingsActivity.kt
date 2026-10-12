@@ -13,6 +13,7 @@ import android.os.Build
 import android.os.Bundle
 import android.os.ext.SdkExtensions
 import android.text.method.LinkMovementMethod
+import android.text.util.Linkify
 import android.util.TypedValue
 import android.view.LayoutInflater
 import android.view.View
@@ -33,6 +34,7 @@ import androidx.core.content.res.use
 import androidx.core.net.toUri
 import androidx.core.os.LocaleListCompat
 import androidx.core.view.ViewCompat
+import androidx.core.view.isVisible
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.updateLayoutParams
@@ -82,6 +84,7 @@ import com.github.andreyasadchy.xtra.util.getAlertDialogBuilder
 import com.github.andreyasadchy.xtra.util.prefs
 import com.github.andreyasadchy.xtra.util.tokenPrefs
 import com.github.andreyasadchy.xtra.util.update.UpdateHost
+import com.google.android.material.color.MaterialColors
 import com.google.android.material.appbar.AppBarLayout
 import com.google.mlkit.common.model.DownloadConditions
 import com.google.mlkit.common.model.RemoteModelManager
@@ -98,8 +101,9 @@ import kotlinx.coroutines.launch
 import org.chromium.net.CronetProvider
 
 private fun renderMarkdown(textView: TextView, markdown: String) {
+    // Web links only: the default phone matcher underlines commit hashes and dates.
     Markwon.builder(textView.context)
-        .usePlugin(LinkifyPlugin.create())
+        .usePlugin(LinkifyPlugin.create(Linkify.WEB_URLS))
         .build()
         .setMarkdown(textView, markdown)
     textView.movementMethod = LinkMovementMethod.getInstance()
@@ -111,15 +115,15 @@ private fun readRawText(context: Context, resId: Int): String {
         .use { it.readText() }
 }
 
-private fun releaseDate(releaseInfo: ReleaseInfo): String? {
-    return releaseInfo.publishedAt?.substringBefore("T")?.takeIf { it.isNotBlank() }
+private fun releaseNotes(context: Context, releaseInfo: ReleaseInfo): String {
+    return UpdateAvailableDialog.releaseNotesMarkdown(
+        releaseInfo.releaseNotes, releaseInfo.tagName, releaseInfo.versionName, releaseInfo.title
+    ).ifBlank { context.getString(R.string.no_release_notes) }
 }
 
 private fun buildReleaseMarkdown(context: Context, releaseInfo: ReleaseInfo): String {
-    val date = releaseDate(releaseInfo) ?: context.getString(R.string.unknown)
-    val releaseNotes = releaseInfo.releaseNotes?.takeIf { it.isNotBlank() }
-        ?: context.getString(R.string.no_release_notes)
-    return "## ${releaseInfo.tagName}\n\n$date\n\n$releaseNotes"
+    val date = UpdateAvailableDialog.releaseDate(releaseInfo.publishedAt)?.let { "*$it*\n\n" }.orEmpty()
+    return "### ${releaseInfo.tagName}\n\n$date${releaseNotes(context, releaseInfo)}"
 }
 
 @AndroidEntryPoint
@@ -327,54 +331,6 @@ class SettingsActivity : AppCompatActivity() {
 
         override fun onCreatePreferences(savedInstanceState: Bundle?, rootKey: String?) {
             setPreferencesFromResource(R.xml.root_preferences, rootKey)
-            findPreference<ListPreference>(C.UI_LANGUAGE)?.apply {
-                val lang = AppCompatDelegate.getApplicationLocales()
-                if (lang.isEmpty) {
-                    setValueIndex(findIndexOfValue("auto"))
-                } else {
-                    try {
-                        setValueIndex(findIndexOfValue(lang.toLanguageTags()))
-                    } catch (e: Exception) {
-                        try {
-                            setValueIndex(findIndexOfValue(
-                                lang.toLanguageTags().substringBefore("-").let {
-                                    when (it) {
-                                        "id" -> "in"
-                                        "pt" -> "pt-BR"
-                                        "zh" -> "zh-TW"
-                                        else -> it
-                                    }
-                                }
-                            ))
-                        } catch (e: Exception) {
-                            setValueIndex(findIndexOfValue("en"))
-                        }
-                    }
-                }
-                setOnPreferenceChangeListener { _, value ->
-                    AppCompatDelegate.setApplicationLocales(
-                        LocaleListCompat.forLanguageTags(
-                            if (value.toString() == "auto") {
-                                null
-                            } else {
-                                value.toString()
-                            }
-                        )
-                    )
-                    true
-                }
-            }
-            findPreference<SwitchPreferenceCompat>(C.UI_DRAW_BEHIND_CUTOUTS)?.apply {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-                    setOnPreferenceChangeListener { _, _ ->
-                        (requireActivity() as? SettingsActivity)?.changed = true
-                        requireActivity().recreate()
-                        true
-                    }
-                } else {
-                    isVisible = false
-                }
-            }
             findPreference<SwitchPreferenceCompat>("live_notifications_enabled")?.setOnPreferenceChangeListener { _, newValue ->
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
                     ActivityCompat.checkSelfPermission(requireActivity(), Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
@@ -403,9 +359,6 @@ class SettingsActivity : AppCompatActivity() {
                 requireActivity().findViewById<AppBarLayout>(R.id.appBar)?.setExpanded(true)
                 findNavController().navigate(SettingsNavGraphDirections.actionGlobalChatSettingsFragment())
                 true
-            }
-            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O || !requireActivity().packageManager.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE)) {
-                findPreference<SwitchPreferenceCompat>(C.PLAYER_PICTURE_IN_PICTURE)?.isVisible = false
             }
             findPreference<Preference>("player_settings")?.setOnPreferenceClickListener {
                 requireActivity().findViewById<AppBarLayout>(R.id.appBar)?.setExpanded(true)
@@ -442,6 +395,7 @@ class SettingsActivity : AppCompatActivity() {
                 findNavController().navigate(SettingsNavGraphDirections.actionGlobalDownloadSettingsFragment())
                 true
             }
+            findPreference<Preference>("check_updates")?.summary = getString(R.string.current_version, BuildConfig.VERSION_NAME)
             findPreference<Preference>("check_updates")?.setOnPreferenceClickListener {
                 viewModel.checkUpdates(
                     requireContext().prefs().getString(C.NETWORK_LIBRARY, "OkHttp"),
@@ -677,6 +631,54 @@ class SettingsActivity : AppCompatActivity() {
 
         override fun onCreatePreferences(savedInstanceState: Bundle?, rootKey: String?) {
             setPreferencesFromResource(R.xml.ui_preferences, rootKey)
+            findPreference<ListPreference>(C.UI_LANGUAGE)?.apply {
+                val lang = AppCompatDelegate.getApplicationLocales()
+                if (lang.isEmpty) {
+                    setValueIndex(findIndexOfValue("auto"))
+                } else {
+                    try {
+                        setValueIndex(findIndexOfValue(lang.toLanguageTags()))
+                    } catch (e: Exception) {
+                        try {
+                            setValueIndex(findIndexOfValue(
+                                lang.toLanguageTags().substringBefore("-").let {
+                                    when (it) {
+                                        "id" -> "in"
+                                        "pt" -> "pt-BR"
+                                        "zh" -> "zh-TW"
+                                        else -> it
+                                    }
+                                }
+                            ))
+                        } catch (e: Exception) {
+                            setValueIndex(findIndexOfValue("en"))
+                        }
+                    }
+                }
+                setOnPreferenceChangeListener { _, value ->
+                    AppCompatDelegate.setApplicationLocales(
+                        LocaleListCompat.forLanguageTags(
+                            if (value.toString() == "auto") {
+                                null
+                            } else {
+                                value.toString()
+                            }
+                        )
+                    )
+                    true
+                }
+            }
+            findPreference<SwitchPreferenceCompat>(C.UI_DRAW_BEHIND_CUTOUTS)?.apply {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                    setOnPreferenceChangeListener { _, _ ->
+                        (requireActivity() as? SettingsActivity)?.changed = true
+                        requireActivity().recreate()
+                        true
+                    }
+                } else {
+                    isVisible = false
+                }
+            }
             val changeListener = Preference.OnPreferenceChangeListener { _, _ ->
                 (requireActivity() as? SettingsActivity)?.setResult()
                 true
@@ -993,9 +995,7 @@ class SettingsActivity : AppCompatActivity() {
                     entryValues = languages.toTypedArray()
                 }
             } else {
-                findPreference<SwitchPreferenceCompat>("chat_translate")?.isVisible = false
-                findPreference<Preference>("downloaded_languages")?.isVisible = false
-                findPreference<ListPreference>("chat_translate_target")?.isVisible = false
+                findPreference<PreferenceCategory>("chat_translation_category")?.isVisible = false
             }
         }
 
@@ -1035,6 +1035,7 @@ class SettingsActivity : AppCompatActivity() {
         override fun onCreatePreferences(savedInstanceState: Bundle?, rootKey: String?) {
             setPreferencesFromResource(R.xml.player_preferences, rootKey)
             if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O || !requireActivity().packageManager.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE)) {
+                findPreference<SwitchPreferenceCompat>(C.PLAYER_PICTURE_IN_PICTURE)?.isVisible = false
                 findPreference<SwitchPreferenceCompat>(C.PLAYER_BACKGROUND_AUDIO_PIP_CLOSED)?.isVisible = false
                 findPreference<SwitchPreferenceCompat>(C.PLAYER_BACKGROUND_AUDIO_PIP_LOCKED)?.isVisible = false
             }
@@ -1421,6 +1422,13 @@ class SettingsActivity : AppCompatActivity() {
         private var _binding: FragmentChangelogSettingsBinding? = null
         private val binding get() = _binding!!
         private var latestUpdateInfo: UpdateInfo? = null
+        private var latestReleaseTag: String? = null
+        private var changelogReleases: List<ReleaseInfo>? = null
+
+        override fun onCreate(savedInstanceState: Bundle?) {
+            super.onCreate(savedInstanceState)
+            applySettingsMotion()
+        }
 
         override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View {
             _binding = FragmentChangelogSettingsBinding.inflate(inflater, container, false)
@@ -1429,6 +1437,7 @@ class SettingsActivity : AppCompatActivity() {
 
         override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
             super.onViewCreated(view, savedInstanceState)
+            view.settingsMotionGroup()
             val baseBottomPadding = binding.root.paddingBottom
             ViewCompat.setOnApplyWindowInsetsListener(binding.root) { _, windowInsets ->
                 val insets = windowInsets.getInsets(WindowInsetsCompat.Type.systemBars())
@@ -1451,17 +1460,14 @@ class SettingsActivity : AppCompatActivity() {
             }
 
             binding.updaterStatus.text = getString(R.string.current_version, BuildConfig.VERSION_NAME)
-            binding.latestReleaseTitle.text = getString(R.string.checking_for_updates)
-            binding.latestReleaseDate.text = ""
-            binding.latestReleaseStatus.text = ""
-            binding.latestReleaseNotes.text = ""
-            binding.downloadUpdateButton.visibility = View.GONE
-            binding.viewOnGithubButton.visibility = View.GONE
-            renderMarkdown(binding.bundledChangelog, readRawText(requireContext(), R.raw.thysttv_changelog))
+            ViewCompat.setAccessibilityHeading(binding.updaterTitle, true)
+            ViewCompat.setAccessibilityHeading(binding.latestReleaseTitle, true)
+            ViewCompat.setAccessibilityHeading(binding.changelogTitle, true)
+            showCheckingRelease()
+            renderMarkdown(binding.bundledChangelog, bundledChangelog())
 
             binding.checkUpdatesButton.setOnClickListener {
-                binding.latestReleaseTitle.text = getString(R.string.checking_for_updates)
-                binding.latestReleaseStatus.text = ""
+                showCheckingRelease()
                 viewModel.checkUpdates(
                     requireContext().prefs().getString(C.NETWORK_LIBRARY, "OkHttp"),
                     UpdateUtils.resolveReleaseApiUrl(requireContext().prefs().getString(C.UPDATE_URL, null))
@@ -1517,43 +1523,67 @@ class SettingsActivity : AppCompatActivity() {
             viewModel.loadChangelogReleases(networkLibrary, UpdateUtils.resolveReleasesApiUrl(releaseUrl))
         }
 
+        private fun showCheckingRelease() {
+            binding.latestReleaseTitle.text = getString(R.string.checking_for_updates)
+            binding.latestReleaseDate.isVisible = false
+            binding.latestReleaseStatus.isVisible = false
+            binding.latestReleaseNotesPanel.isVisible = false
+            binding.downloadUpdateButton.isVisible = false
+            binding.viewOnGithubButton.isVisible = false
+        }
+
         private fun bindLatestRelease(releaseInfo: ReleaseInfo?) {
             if (releaseInfo == null) {
                 latestUpdateInfo = null
-                binding.latestReleaseTitle.text = getString(R.string.latest_release)
-                binding.latestReleaseDate.text = ""
-                binding.latestReleaseStatus.text = getString(R.string.latest_release_unavailable)
-                binding.latestReleaseNotes.text = ""
-                binding.downloadUpdateButton.visibility = View.GONE
-                binding.viewOnGithubButton.visibility = View.GONE
+                binding.latestReleaseTitle.text = getString(R.string.latest_release_unavailable)
+                binding.latestReleaseDate.isVisible = false
+                binding.latestReleaseStatus.isVisible = false
+                binding.latestReleaseNotesPanel.isVisible = false
+                binding.downloadUpdateButton.isVisible = false
+                binding.viewOnGithubButton.isVisible = false
                 return
             }
 
-            latestUpdateInfo = releaseInfo
-                .takeIf { UpdateUtils.isVersionNewer(it.tagName, BuildConfig.VERSION_NAME) }
-                ?.toUpdateInfo()
+            val newer = UpdateUtils.isVersionNewer(releaseInfo.tagName, BuildConfig.VERSION_NAME)
+            latestUpdateInfo = releaseInfo.takeIf { newer }?.toUpdateInfo()
             binding.latestReleaseTitle.text = releaseInfo.title?.takeIf { it.isNotBlank() } ?: releaseInfo.tagName
-            binding.latestReleaseDate.text = releaseDate(releaseInfo) ?: getString(R.string.unknown)
-            binding.latestReleaseStatus.text = if (UpdateUtils.isVersionNewer(releaseInfo.tagName, BuildConfig.VERSION_NAME)) {
-                getString(R.string.new_version_available)
-            } else {
-                getString(R.string.latest_release_installed)
+            val date = UpdateAvailableDialog.releaseDate(releaseInfo.publishedAt)
+            binding.latestReleaseDate.text = date
+            binding.latestReleaseDate.isVisible = date != null
+            binding.latestReleaseStatus.isVisible = true
+            binding.latestReleaseStatus.text = getString(if (newer) R.string.new_version_available else R.string.latest_release_installed)
+            binding.latestReleaseStatus.setBackgroundResource(if (newer) R.drawable.bg_update_version_pill_new else R.drawable.bg_update_version_pill)
+            binding.latestReleaseStatus.setTextColor(MaterialColors.getColor(
+                binding.latestReleaseStatus, if (newer) androidx.appcompat.R.attr.colorPrimary else com.google.android.material.R.attr.colorOnSurfaceVariant
+            ))
+            binding.latestReleaseNotesPanel.isVisible = true
+            renderMarkdown(binding.latestReleaseNotes, releaseNotes(requireContext(), releaseInfo))
+            binding.downloadUpdateButton.isVisible = latestUpdateInfo != null
+            binding.viewOnGithubButton.isVisible = !releaseInfo.releaseUrl.isNullOrBlank()
+            if (latestReleaseTag != releaseInfo.tagName) {
+                latestReleaseTag = releaseInfo.tagName
+                renderChangelog()
             }
-            renderMarkdown(
-                binding.latestReleaseNotes,
-                releaseInfo.releaseNotes?.takeIf { it.isNotBlank() } ?: getString(R.string.no_release_notes)
-            )
-            binding.downloadUpdateButton.visibility = if (latestUpdateInfo != null) View.VISIBLE else View.GONE
-            binding.viewOnGithubButton.visibility = if (releaseInfo.releaseUrl.isNullOrBlank()) View.GONE else View.VISIBLE
         }
 
         private fun bindChangelogReleases(releases: List<ReleaseInfo>?) {
-            val markdown = releases
+            changelogReleases = releases
+            renderChangelog()
+        }
+
+        /** Earlier releases only: the latest one already has its own card above. */
+        private fun renderChangelog() {
+            val markdown = changelogReleases
+                ?.filter { it.tagName != latestReleaseTag }
                 ?.takeIf { it.isNotEmpty() }
-                ?.joinToString("\n\n---\n\n") { buildReleaseMarkdown(requireContext(), it) }
-                ?: readRawText(requireContext(), R.raw.thysttv_changelog)
+                ?.joinToString("\n\n") { buildReleaseMarkdown(requireContext(), it) }
+                ?: bundledChangelog()
             renderMarkdown(binding.bundledChangelog, markdown)
         }
+
+        /** Version titles match the release list headings; their sections read as bold body text. */
+        private fun bundledChangelog() = readRawText(requireContext(), R.raw.thysttv_changelog)
+            .replace(Regex("(?m)^(#{1,3}) ")) { if (it.groupValues[1].length == 1) "### " else "#### " }
 
         private fun showUpdateDialog(updateInfo: UpdateInfo) {
             UpdateAvailableDialog.show(
@@ -1834,6 +1864,11 @@ class SettingsActivity : AppCompatActivity() {
         private var adapter: SettingsSearchAdapter? = null
         private var savedQuery: String? = null
 
+        override fun onCreate(savedInstanceState: Bundle?) {
+            super.onCreate(savedInstanceState)
+            applySettingsMotion()
+        }
+
         override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View? {
             return RecyclerView(requireContext()).apply {
                 clipToPadding = false
@@ -1844,6 +1879,7 @@ class SettingsActivity : AppCompatActivity() {
         @SuppressLint("RestrictedApi")
         override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
             super.onViewCreated(view, savedInstanceState)
+            view.settingsMotionGroup()
             ViewCompat.setOnApplyWindowInsetsListener(view) { _, windowInsets ->
                 val insets = windowInsets.getInsets(WindowInsetsCompat.Type.systemBars())
                 view.updatePadding(bottom = insets.bottom)
@@ -1908,7 +1944,7 @@ class SettingsActivity : AppCompatActivity() {
                     Triple(R.xml.ui_preferences, SettingsNavGraphDirections.actionGlobalUiSettingsFragment(), getString(R.string.ui_settings)),
                     Triple(R.xml.update_preferences, SettingsNavGraphDirections.actionGlobalUpdateSettingsFragment(), getString(R.string.update_settings)),
                 ).forEach { item ->
-                    preferenceManager.inflateFromResource(requireContext(), item.first, null).forEach {
+                    preferenceManager.inflateFromResource(requireContext(), item.first, null).leafPreferences().forEach {
                         when (it) {
                             is SwitchPreferenceCompat -> {
                                 list.add(SettingsSearchItem(

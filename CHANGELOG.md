@@ -4,7 +4,7 @@ All notable changes to ThystTV should be documented here.
 
 ## [Unreleased]
 
-## [1.4.0] - 2026-10-11
+## [1.4.0] - 2026-10-12
 
 ### Added
 - Recording-backed live rewind from More or a full-screen ⏪ button, with replay chat, Go live and a 1x reset when faster playback catches up.
@@ -17,11 +17,16 @@ All notable changes to ThystTV should be documented here.
 ### Changed
 - Qualities keep their exact resolution, frame rate, codec and bitrate in the player, quality menu and downloads. Portrait variants are hidden, and clips can offer HEVC/AV1.
 - Live notifications use one live-follows request per poll, cache each channel's notification setting, keep durable deduplication and retry failed polls sooner.
+- Group Settings into sections with icons and summaries, index nested settings in search, and follow predictive back gestures.
+- Refresh update dialogs and Changelog with Material 3 layouts, Markdown notes and reachable actions at large text sizes.
 
 ### Fixed
 - Settings drag lists keep the on-screen order after a fast drag.
 - The gesture guide no longer opens in picture-in-picture.
 - Closed live players are no longer kept in memory by the chat keyboard listener.
+- Release Search pager views and tab connections when their view is destroyed.
+- Stop closed Settings screens being retained by seekable transitions.
+- Apply all three rounded-corner setting choices correctly.
 
 ### Release metadata
 - Version 1.4.0 uses version code 14 and migrates the database to version 36. Scope and limitations: `docs/release-notes/1.4.0.md`.

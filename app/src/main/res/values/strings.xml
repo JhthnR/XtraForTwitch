@@ -527,7 +527,7 @@
     <string name="proxy_port">Port</string>
     <string name="proxy_user">Username</string>
     <string name="proxy_password">Password</string>
-    <string name="proxy_settings">HTTP proxy settings</string>
+    <string name="proxy_settings">Proxy settings</string>
     <string name="stop_download">Stop download</string>
     <string name="resume_download">Resume download</string>
     <string name="show_view_count_icon">Show view count and uptime icons</string>
@@ -591,6 +591,42 @@
     <string name="restore_settings">Restore settings and data</string>
     <string name="share">Share</string>
     <string name="system_about" translatable="false">System &amp; About</string>
+    <string name="settings_group_appearance" tools:ignore="MissingTranslation">Appearance</string>
+    <string name="settings_group_watching" tools:ignore="MissingTranslation">Watching</string>
+    <string name="settings_group_network" tools:ignore="MissingTranslation">Network &amp; account</string>
+    <string name="settings_group_general" tools:ignore="MissingTranslation">General</string>
+    <string name="settings_group_layout" tools:ignore="MissingTranslation">Layout</string>
+    <string name="settings_group_tabs" tools:ignore="MissingTranslation">Tabs</string>
+    <string name="settings_group_cards" tools:ignore="MissingTranslation">Cards &amp; details</string>
+    <string name="settings_group_following" tools:ignore="MissingTranslation">Following</string>
+    <string name="settings_group_search" tools:ignore="MissingTranslation">Search</string>
+    <string name="settings_group_background" tools:ignore="MissingTranslation">Picture-in-picture &amp; background</string>
+    <string name="settings_group_quality" tools:ignore="MissingTranslation">Quality</string>
+    <string name="settings_group_videos" tools:ignore="MissingTranslation">Videos</string>
+    <string name="settings_group_floating_chat" tools:ignore="MissingTranslation">Floating chat</string>
+    <string name="settings_group_messages" tools:ignore="MissingTranslation">Messages</string>
+    <string name="settings_group_emotes" tools:ignore="MissingTranslation">Emotes &amp; images</string>
+    <string name="settings_group_translation" tools:ignore="MissingTranslation">Translation</string>
+    <string name="settings_group_events" tools:ignore="MissingTranslation">Points &amp; events</string>
+    <string name="settings_group_connection" tools:ignore="MissingTranslation">Connection</string>
+    <string name="settings_group_stream_proxy" tools:ignore="MissingTranslation">Playlist proxy</string>
+    <string name="settings_group_connection_proxy" tools:ignore="MissingTranslation">HTTP proxy</string>
+    <string name="settings_theme_summary" tools:ignore="MissingTranslation">Dark mode, colors, corners and density</string>
+    <string name="settings_ui_summary" tools:ignore="MissingTranslation">Language, layout, tabs and cards</string>
+    <string name="settings_player_summary" tools:ignore="MissingTranslation">Picture-in-picture, gestures, quality and layout</string>
+    <string name="settings_player_buttons_summary" tools:ignore="MissingTranslation">Controls, speeds and the player menu</string>
+    <string name="settings_chat_summary" tools:ignore="MissingTranslation">Floating chat, emotes, translation and events</string>
+    <string name="settings_live_notifications_summary" tools:ignore="MissingTranslation">Alert me when followed channels go live</string>
+    <string name="settings_download_summary" tools:ignore="MissingTranslation">Storage, Wi-Fi only and stream recording</string>
+    <string name="settings_api_token_summary" tools:ignore="MissingTranslation">Login, client IDs and tokens</string>
+    <string name="settings_playback_summary" tools:ignore="MissingTranslation">Ads, codecs and stream requests</string>
+    <string name="settings_buffer_summary" tools:ignore="MissingTranslation">Buffer sizes and live latency</string>
+    <string name="settings_proxy_summary" tools:ignore="MissingTranslation">Playlist and HTTP proxies</string>
+    <string name="settings_updater_summary" tools:ignore="MissingTranslation">Automatic checks and update source</string>
+    <string name="settings_changelog_summary" tools:ignore="MissingTranslation">What changed in each version</string>
+    <string name="settings_backup_summary" tools:ignore="MissingTranslation">Save settings and app data to a folder</string>
+    <string name="settings_restore_summary" tools:ignore="MissingTranslation">Load settings from a backup</string>
+    <string name="settings_debug_summary" tools:ignore="MissingTranslation">Developer and API options</string>
     <string name="check_updates">Check for updates</string>
     <string name="updater" translatable="false">Updater</string>
     <string name="changelog" translatable="false">Changelog</string>
@@ -605,6 +641,7 @@
     <string name="no_updates_found">No updates found</string>
     <string name="update_available">Update available</string>
     <string name="update_whats_new" translatable="false">What’s new</string>
+    <string name="update_version_change" translatable="false">Update from version %1$s to %2$s</string>
     <string name="update_download_action" translatable="false">Download update</string>
     <string name="update_release_page" translatable="false">Release page</string>
     <string name="update_preparing" translatable="false">Preparing download…</string>

@@ -65,6 +65,30 @@ fun SharedPreferences.getSafeBoolean(key: String, defValue: Boolean): Boolean {
     }
 }
 
+/** [corners] is the rounded-corners list value: "0" rounded, "1" less rounded, "2" none. */
+internal fun materialTheme(theme: String, corners: String?): Int {
+    return when (corners) {
+        "1" -> when (theme) {
+            "6", "1" -> R.style.AmoledThemeSmallCorners
+            "5", "2" -> R.style.LightThemeSmallCorners
+            "3" -> R.style.BlueThemeSmallCorners
+            else -> R.style.DarkThemeSmallCorners
+        }
+        "2" -> when (theme) {
+            "6", "1" -> R.style.AmoledThemeNoCorners
+            "5", "2" -> R.style.LightThemeNoCorners
+            "3" -> R.style.BlueThemeNoCorners
+            else -> R.style.DarkThemeNoCorners
+        }
+        else -> when (theme) {
+            "6", "1" -> R.style.AmoledTheme
+            "5", "2" -> R.style.LightTheme
+            "3" -> R.style.BlueTheme
+            else -> R.style.DarkTheme
+        }
+    }
+}
+
 fun Activity.applyTheme() {
     // On Android 15, wrong language is used when multiple languages are set in device settings
     if (Build.VERSION.SDK_INT == Build.VERSION_CODES.VANILLA_ICE_CREAM) {
@@ -86,31 +110,12 @@ fun Activity.applyTheme() {
         prefs().getString(C.THEME, "0")!!
     }
     if (prefs().getSafeBoolean(C.UI_THEME_MATERIAL3, true)) {
-        if (prefs().getSafeBoolean(C.UI_THEME_ROUNDED_CORNERS, true)) {
-            setTheme(
-                when (theme) {
-                    "4" -> R.style.DarkTheme
-                    "6" -> R.style.AmoledTheme
-                    "5" -> R.style.LightTheme
-                    "1" -> R.style.AmoledTheme
-                    "2" -> R.style.LightTheme
-                    "3" -> R.style.BlueTheme
-                    else -> R.style.DarkTheme
-                }
-            )
-        } else {
-            setTheme(
-                when (theme) {
-                    "4" -> R.style.DarkThemeNoCorners
-                    "6" -> R.style.AmoledThemeNoCorners
-                    "5" -> R.style.LightThemeNoCorners
-                    "1" -> R.style.AmoledThemeNoCorners
-                    "2" -> R.style.LightThemeNoCorners
-                    "3" -> R.style.BlueThemeNoCorners
-                    else -> R.style.DarkThemeNoCorners
-                }
-            )
+        val corners = try {
+            prefs().getString(C.UI_THEME_ROUNDED_CORNERS, "0")
+        } catch (e: ClassCastException) {
+            null
         }
+        setTheme(materialTheme(theme, corners))
         if (listOf("4", "6", "5").contains(theme)) {
             DynamicColors.applyToActivityIfAvailable(
                 this,
