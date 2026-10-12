@@ -7,7 +7,7 @@
     android:clipToPadding="false"
     android:fillViewport="true"
     android:paddingHorizontal="16dp"
-    android:paddingTop="16dp"
+    android:paddingTop="8dp"
     android:paddingBottom="24dp">
 
     <LinearLayout
@@ -15,95 +15,105 @@
         android:layout_height="wrap_content"
         android:orientation="vertical">
 
+        <!-- Updater: what is installed and how updates are checked. -->
         <com.google.android.material.card.MaterialCardView
+            style="?attr/materialCardViewFilledStyle"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            app:cardBackgroundColor="?attr/colorSurfaceContainer"
-            app:cardCornerRadius="8dp"
-            app:strokeColor="?attr/colorOutlineVariant"
-            app:strokeWidth="1dp">
+            app:cardBackgroundColor="?attr/colorSurfaceContainer">
 
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="vertical"
-                android:padding="18dp">
-
-                <TextView
-                    android:id="@+id/updaterTitle"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:text="@string/updater"
-                    android:textAppearance="?attr/textAppearanceHeadlineSmall" />
-
-                <TextView
-                    android:id="@+id/updaterStatus"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="6dp"
-                    android:textAppearance="?attr/textAppearanceBodyMedium"
-                    android:textColor="?android:attr/textColorSecondary"
-                    tools:text="Current version 1.1.6" />
+                android:padding="20dp">
 
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="16dp"
-                    android:orientation="vertical">
+                    android:baselineAligned="false"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
 
-                    <com.google.android.material.button.MaterialButton
-                        android:id="@+id/checkUpdatesButton"
-                        style="@style/Widget.MaterialComponents.Button"
-                        android:layout_width="match_parent"
+                    <FrameLayout
+                        android:layout_width="48dp"
                         android:layout_height="48dp"
-                        android:text="@string/check_updates"
-                        android:textAllCaps="false"
-                        android:textColor="?attr/colorOnPrimaryContainer"
-                        app:backgroundTint="?attr/colorPrimaryContainer"
-                        app:cornerRadius="24dp"
-                        app:elevation="0dp"
-                        app:icon="@drawable/baseline_sync_24"
-                        app:iconGravity="textStart"
-                        app:iconPadding="8dp"
-                        app:iconTint="?attr/colorOnPrimaryContainer" />
+                        android:background="@drawable/bg_update_icon_container"
+                        android:importantForAccessibility="no">
 
-                    <com.google.android.material.button.MaterialButton
-                        android:id="@+id/updateSettingsButton"
-                        style="@style/Widget.MaterialComponents.Button.OutlinedButton"
-                        android:layout_width="match_parent"
-                        android:layout_height="48dp"
-                        android:layout_marginTop="10dp"
-                        android:text="@string/update_settings"
-                        android:textAllCaps="false"
-                        android:textColor="?attr/colorOnSurfaceVariant"
-                        app:backgroundTint="@android:color/transparent"
-                        app:cornerRadius="24dp"
-                        app:icon="@drawable/baseline_tune_24"
-                        app:iconGravity="textStart"
-                        app:iconPadding="8dp"
-                        app:iconTint="?attr/colorOnSurfaceVariant"
-                        app:strokeColor="?attr/colorOutlineVariant" />
+                        <androidx.appcompat.widget.AppCompatImageView
+                            android:layout_width="24dp"
+                            android:layout_height="24dp"
+                            android:layout_gravity="center"
+                            android:importantForAccessibility="no"
+                            android:src="@drawable/ic_ms_system_update_24"
+                            app:tint="?attr/colorPrimary" />
+                    </FrameLayout>
 
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="16dp"
+                        android:layout_weight="1"
+                        android:orientation="vertical">
+
+                        <TextView
+                            android:id="@+id/updaterTitle"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="@string/updater"
+                            android:textAppearance="?attr/textAppearanceTitleLarge"
+                            android:textColor="?attr/colorOnSurface" />
+
+                        <TextView
+                            android:id="@+id/updaterStatus"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="2dp"
+                            android:textAppearance="?attr/textAppearanceBodyMedium"
+                            android:textColor="?attr/colorOnSurfaceVariant"
+                            tools:text="Current version 1.4.0" />
+                    </LinearLayout>
                 </LinearLayout>
 
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/checkUpdatesButton"
+                    style="@style/Widget.Material3.Button.TonalButton.Icon"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="20dp"
+                    android:minHeight="48dp"
+                    android:text="@string/check_updates"
+                    app:icon="@drawable/baseline_sync_24"
+                    app:iconGravity="textStart" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/updateSettingsButton"
+                    style="@style/Widget.Material3.Button.OutlinedButton.Icon"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:minHeight="48dp"
+                    android:text="@string/update_settings"
+                    app:icon="@drawable/baseline_tune_24"
+                    app:iconGravity="textStart" />
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 
+        <!-- Latest published release, with its own actions. -->
         <com.google.android.material.card.MaterialCardView
             android:id="@+id/latestReleaseCard"
+            style="?attr/materialCardViewFilledStyle"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="12dp"
-            app:cardBackgroundColor="?attr/colorSurfaceContainer"
-            app:cardCornerRadius="8dp"
-            app:strokeColor="?attr/colorOutlineVariant"
-            app:strokeWidth="1dp">
+            app:cardBackgroundColor="?attr/colorSurfaceContainer">
 
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="vertical"
-                android:padding="18dp">
+                android:padding="20dp">
 
                 <TextView
                     android:id="@+id/latestReleaseLabel"
@@ -117,9 +127,10 @@
                     android:id="@+id/latestReleaseTitle"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="8dp"
-                    android:textAppearance="?attr/textAppearanceTitleLarge"
-                    tools:text="v1.2.0" />
+                    android:layout_marginTop="4dp"
+                    android:textAppearance="?attr/textAppearanceHeadlineSmall"
+                    android:textColor="?attr/colorOnSurface"
+                    tools:text="v1.4.0" />
 
                 <TextView
                     android:id="@+id/latestReleaseDate"
@@ -127,101 +138,104 @@
                     android:layout_height="wrap_content"
                     android:layout_marginTop="2dp"
                     android:textAppearance="?attr/textAppearanceBodyMedium"
-                    android:textColor="?android:attr/textColorSecondary"
-                    tools:text="2026-05-05" />
+                    android:textColor="?attr/colorOnSurfaceVariant"
+                    tools:text="Oct 12, 2026" />
 
                 <TextView
                     android:id="@+id/latestReleaseStatus"
-                    android:layout_width="match_parent"
+                    android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="10dp"
-                    android:textAppearance="?attr/textAppearanceBodyMedium"
+                    android:layout_marginTop="12dp"
+                    android:background="@drawable/bg_update_version_pill"
+                    android:paddingStart="12dp"
+                    android:paddingTop="6dp"
+                    android:paddingEnd="12dp"
+                    android:paddingBottom="6dp"
+                    android:textAppearance="?attr/textAppearanceLabelLarge"
+                    android:textColor="?attr/colorOnSurfaceVariant"
                     tools:text="New version available" />
 
-                <TextView
-                    android:id="@+id/latestReleaseNotes"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="14dp"
-                    android:textAppearance="?attr/textAppearanceBodyMedium"
-                    android:textColor="?android:attr/textColorPrimary"
-                    tools:text="# Major changes&#10;- Fixes and polish" />
-
                 <LinearLayout
+                    android:id="@+id/latestReleaseNotesPanel"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="16dp"
-                    android:orientation="vertical">
+                    android:background="@drawable/bg_update_notes"
+                    android:orientation="vertical"
+                    android:padding="16dp">
 
-                    <com.google.android.material.button.MaterialButton
-                        android:id="@+id/downloadUpdateButton"
-                        style="@style/Widget.MaterialComponents.Button"
+                    <TextView
+                        android:id="@+id/latestReleaseNotesTitle"
                         android:layout_width="match_parent"
-                        android:layout_height="48dp"
-                        android:text="@string/download"
-                        android:textAllCaps="false"
-                        android:textColor="?attr/colorOnPrimaryContainer"
-                        app:backgroundTint="?attr/colorPrimaryContainer"
-                        app:cornerRadius="24dp"
-                        app:elevation="0dp"
-                        app:icon="@drawable/baseline_file_download_24"
-                        app:iconGravity="textStart"
-                        app:iconPadding="8dp"
-                        app:iconTint="?attr/colorOnPrimaryContainer" />
+                        android:layout_height="wrap_content"
+                        android:layout_marginBottom="8dp"
+                        android:text="@string/update_whats_new"
+                        android:textAppearance="?attr/textAppearanceTitleSmall"
+                        android:textColor="?attr/colorPrimary" />
 
-                    <com.google.android.material.button.MaterialButton
-                        android:id="@+id/viewOnGithubButton"
-                        style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                    <TextView
+                        android:id="@+id/latestReleaseNotes"
                         android:layout_width="match_parent"
-                        android:layout_height="48dp"
-                        android:layout_marginTop="10dp"
-                        android:text="@string/view_on_github"
-                        android:textAllCaps="false"
+                        android:layout_height="wrap_content"
+                        android:breakStrategy="simple"
+                        android:lineSpacingExtra="2dp"
+                        android:textAppearance="?attr/textAppearanceBodyMedium"
                         android:textColor="?attr/colorOnSurfaceVariant"
-                        app:backgroundTint="@android:color/transparent"
-                        app:cornerRadius="24dp"
-                        app:icon="@drawable/baseline_open_in_new_24"
-                        app:iconGravity="textStart"
-                        app:iconPadding="8dp"
-                        app:iconTint="?attr/colorOnSurfaceVariant"
-                        app:strokeColor="?attr/colorOutlineVariant" />
-
+                        tools:text="- Fixes and polish" />
                 </LinearLayout>
 
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/downloadUpdateButton"
+                    style="@style/Widget.Material3.Button.Icon"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="16dp"
+                    android:minHeight="48dp"
+                    android:text="@string/download"
+                    app:icon="@drawable/baseline_file_download_24"
+                    app:iconGravity="textStart" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/viewOnGithubButton"
+                    style="@style/Widget.Material3.Button.OutlinedButton.Icon"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:minHeight="48dp"
+                    android:text="@string/view_on_github"
+                    app:icon="@drawable/baseline_open_in_new_24"
+                    app:iconGravity="textStart" />
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 
-        <com.google.android.material.card.MaterialCardView
+        <!-- Earlier releases, newest first. -->
+        <TextView
+            android:id="@+id/changelogTitle"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="12dp"
-            app:cardBackgroundColor="?attr/colorSurfaceContainer"
-            app:cardCornerRadius="8dp"
-            app:strokeColor="?attr/colorOutlineVariant"
-            app:strokeWidth="1dp">
+            android:layout_marginTop="24dp"
+            android:layout_marginBottom="8dp"
+            android:paddingHorizontal="4dp"
+            android:text="@string/changelog"
+            android:textAppearance="?attr/textAppearanceTitleSmall"
+            android:textColor="?attr/colorPrimary" />
 
-            <LinearLayout
+        <com.google.android.material.card.MaterialCardView
+            style="?attr/materialCardViewFilledStyle"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            app:cardBackgroundColor="?attr/colorSurfaceContainerLow">
+
+            <TextView
+                android:id="@+id/bundledChangelog"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:orientation="vertical"
-                android:padding="18dp">
-
-                <TextView
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:text="@string/changelog"
-                    android:textAppearance="?attr/textAppearanceTitleLarge" />
-
-                <TextView
-                    android:id="@+id/bundledChangelog"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="14dp"
-                    android:textAppearance="?attr/textAppearanceBodyMedium"
-                    android:textColor="?android:attr/textColorPrimary"
-                    tools:text="# ThystTV 1.2&#10;&#10;- Update notes" />
-
-            </LinearLayout>
+                android:breakStrategy="simple"
+                android:lineSpacingExtra="2dp"
+                android:padding="20dp"
+                android:textAppearance="?attr/textAppearanceBodyMedium"
+                android:textColor="?attr/colorOnSurfaceVariant"
+                tools:text="ThystTV 1.3.0&#10;&#10;- Update notes" />
         </com.google.android.material.card.MaterialCardView>
 
     </LinearLayout>

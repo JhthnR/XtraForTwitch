@@ -1,15 +1,26 @@
 <?xml version="1.0" encoding="utf-8"?>
 <androidx.core.widget.NestedScrollView xmlns:android="http://schemas.android.com/apk/res/android" xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent" android:layout_height="wrap_content" android:overScrollMode="ifContentScrolls">
-    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:padding="24dp">
-    <TextView android:id="@+id/downloadTitle" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/downloading_update"
-        android:textAppearance="?attr/textAppearanceTitleLarge" android:textStyle="bold" />
-    <TextView android:id="@+id/progressPercent" android:layout_width="match_parent" android:layout_height="wrap_content"
-        android:layout_marginTop="20dp" android:textSize="32sp" android:textStyle="bold" android:textColor="?attr/colorPrimary" />
-    <com.google.android.material.progressindicator.LinearProgressIndicator android:id="@+id/progressBar"
-        android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="12dp"
-        android:max="100" app:trackThickness="8dp" app:trackCornerRadius="4dp" />
-    <TextView android:id="@+id/textView" android:layout_width="match_parent" android:layout_height="wrap_content"
-        android:layout_marginTop="12dp" android:textAppearance="?attr/textAppearanceBodyMedium" android:textColor="?attr/colorOnSurfaceVariant" />
+    <LinearLayout android:id="@+id/downloadContent" android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:paddingStart="24dp" android:paddingTop="24dp" android:paddingEnd="24dp" android:paddingBottom="8dp">
+        <FrameLayout android:layout_width="48dp" android:layout_height="48dp"
+            android:background="@drawable/bg_update_icon_container" android:importantForAccessibility="no">
+            <androidx.appcompat.widget.AppCompatImageView android:layout_width="24dp" android:layout_height="24dp"
+                android:layout_gravity="center" android:importantForAccessibility="no"
+                android:src="@drawable/ic_ms_system_update_24" app:tint="?attr/colorPrimary" />
+        </FrameLayout>
+        <TextView android:id="@+id/downloadTitle" android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:layout_marginTop="16dp" android:text="@string/downloading_update"
+            android:textAppearance="?attr/textAppearanceHeadlineSmall" android:textColor="?attr/colorOnSurface" />
+        <TextView android:id="@+id/progressPercent" android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:layout_marginTop="20dp" android:textAppearance="?attr/textAppearanceDisplaySmall"
+            android:textColor="?attr/colorPrimary" />
+        <com.google.android.material.progressindicator.LinearProgressIndicator android:id="@+id/progressBar"
+            android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="12dp"
+            android:max="100" app:indicatorTrackGapSize="4dp" app:trackCornerRadius="4dp" app:trackStopIndicatorSize="4dp"
+            app:trackThickness="8dp" />
+        <TextView android:id="@+id/textView" android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:layout_marginTop="12dp" android:textAppearance="?attr/textAppearanceBodyMedium" android:textColor="?attr/colorOnSurfaceVariant" />
     </LinearLayout>
 </androidx.core.widget.NestedScrollView>

@@ -1,47 +1,86 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- M3 scrollable dialog: icon and title stay put, the release body scrolls between
+     dividers, and the actions stay pinned at the bottom. -->
 <com.google.android.material.card.MaterialCardView xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:id="@+id/updateSheet" android:layout_width="match_parent" android:layout_height="wrap_content"
-    app:cardBackgroundColor="?attr/colorSurfaceContainer" app:cardCornerRadius="28dp" app:cardElevation="0dp">
+    app:cardBackgroundColor="?attr/colorSurfaceContainerHigh" app:cardElevation="0dp"
+    app:shapeAppearance="?attr/shapeAppearanceCornerExtraLarge"
+    app:strokeWidth="0dp">
     <com.github.andreyasadchy.xtra.ui.common.UpdateSheetLayout
         android:id="@+id/updateSheetContent"
-        android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:padding="20dp">
+        android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical"
+        android:paddingTop="24dp" android:paddingBottom="16dp">
+        <FrameLayout android:id="@+id/updateIcon" android:layout_width="48dp" android:layout_height="48dp"
+            android:layout_gravity="center_horizontal" android:layout_marginBottom="16dp"
+            android:background="@drawable/bg_update_icon_container" android:importantForAccessibility="no">
+            <androidx.appcompat.widget.AppCompatImageView android:layout_width="24dp" android:layout_height="24dp"
+                android:layout_gravity="center" android:importantForAccessibility="no"
+                android:src="@drawable/ic_ms_system_update_24" app:tint="?attr/colorPrimary" />
+        </FrameLayout>
+        <TextView android:id="@+id/updateTitle" android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:layout_marginHorizontal="24dp" android:gravity="center_horizontal" android:text="@string/update_available"
+            android:textAppearance="?attr/textAppearanceHeadlineSmall" android:textColor="?attr/colorOnSurface" />
+        <com.google.android.material.divider.MaterialDivider android:id="@+id/notesDividerTop"
+            android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="16dp"
+            android:visibility="invisible" app:dividerColor="?attr/colorOutlineVariant" />
         <androidx.core.widget.NestedScrollView android:id="@+id/releaseNotesScroll"
             android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_weight="1"
-            android:clipToPadding="false" android:overScrollMode="ifContentScrolls" android:paddingBottom="16dp">
-            <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical">
-                <androidx.appcompat.widget.AppCompatImageView android:layout_width="40dp" android:layout_height="40dp"
-                    android:layout_marginBottom="12dp" android:importantForAccessibility="no"
-                    android:src="@drawable/baseline_file_download_24" app:tint="?attr/colorPrimary" />
-                <TextView android:id="@+id/updateTitle" android:layout_width="match_parent" android:layout_height="wrap_content"
-                    android:text="@string/update_available"
-                    android:textSize="26sp" android:textStyle="bold" android:textColor="?attr/colorOnSurface" />
-                <TextView android:id="@+id/updateVersionChip" android:layout_width="match_parent" android:layout_height="wrap_content"
-                    android:layout_marginTop="8dp" android:textSize="16sp" android:textStyle="bold" android:textColor="?attr/colorPrimary" />
-                <TextView android:id="@+id/updateCurrentVersion" android:layout_width="match_parent" android:layout_height="wrap_content"
-                    android:layout_marginTop="4dp" android:textSize="13sp" android:textColor="?attr/colorOnSurfaceVariant" />
+            android:overScrollMode="ifContentScrolls" android:scrollbarStyle="outsideOverlay" android:scrollbars="vertical">
+            <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:orientation="vertical" android:paddingHorizontal="24dp" android:paddingTop="8dp" android:paddingBottom="8dp">
+                <!-- A flow row: large text wraps whole pills instead of breaking a version number. -->
+                <com.google.android.material.chip.ChipGroup android:id="@+id/updateVersionRow"
+                    android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_gravity="center_horizontal"
+                    android:focusable="true" app:chipSpacingHorizontal="8dp" app:chipSpacingVertical="8dp">
+                    <TextView android:id="@+id/updateCurrentVersion" android:layout_width="wrap_content" android:layout_height="wrap_content"
+                        android:background="@drawable/bg_update_version_pill" android:importantForAccessibility="no" android:maxLines="1"
+                        android:paddingStart="12dp" android:paddingTop="6dp" android:paddingEnd="12dp" android:paddingBottom="6dp"
+                        android:textAppearance="?attr/textAppearanceLabelLarge" android:textColor="?attr/colorOnSurfaceVariant" />
+                    <!-- Same text metrics as the pills, so the arrow centres on them inside the flow row. -->
+                    <androidx.appcompat.widget.AppCompatTextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                        android:gravity="center_vertical" android:importantForAccessibility="no" android:maxLines="1"
+                        android:paddingTop="6dp" android:paddingBottom="6dp" android:textAppearance="?attr/textAppearanceLabelLarge"
+                        app:drawableStartCompat="@drawable/ic_ms_arrow_forward_24" app:drawableTint="?attr/colorOnSurfaceVariant" />
+                    <TextView android:id="@+id/updateVersionChip" android:layout_width="wrap_content" android:layout_height="wrap_content"
+                        android:background="@drawable/bg_update_version_pill_new" android:importantForAccessibility="no"
+                        android:paddingStart="12dp" android:paddingTop="6dp" android:paddingEnd="12dp" android:paddingBottom="6dp"
+                        android:textAppearance="?attr/textAppearanceLabelLarge" android:textColor="?attr/colorPrimary"
+                        android:maxLines="1" android:textStyle="bold" />
+                </com.google.android.material.chip.ChipGroup>
                 <TextView android:id="@+id/updateDate" android:layout_width="match_parent" android:layout_height="wrap_content"
-                    android:layout_marginTop="4dp" android:textSize="13sp" android:textColor="?attr/colorOnSurfaceVariant" />
-                <TextView android:id="@+id/updateNotesTitle" android:layout_width="match_parent" android:layout_height="wrap_content"
-                    android:layout_marginTop="24dp" android:layout_marginBottom="8dp"
-                    android:text="@string/update_whats_new" android:textSize="16sp" android:textStyle="bold" android:textColor="?attr/colorOnSurface" />
-                <TextView android:id="@+id/releaseNotesText" android:layout_width="match_parent" android:layout_height="wrap_content"
-                    android:textSize="14sp" android:lineSpacingExtra="3dp" android:textColor="?attr/colorOnSurfaceVariant" />
+                    android:layout_marginTop="8dp" android:gravity="center_horizontal" android:textAppearance="?attr/textAppearanceBodyMedium"
+                    android:textColor="?attr/colorOnSurfaceVariant" />
+                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:layout_marginTop="20dp" android:background="@drawable/bg_update_notes" android:orientation="vertical"
+                    android:padding="16dp">
+                    <TextView android:id="@+id/updateNotesTitle" android:layout_width="match_parent" android:layout_height="wrap_content"
+                        android:layout_marginBottom="8dp" android:text="@string/update_whats_new"
+                        android:textAppearance="?attr/textAppearanceTitleSmall" android:textColor="?attr/colorPrimary" />
+                    <TextView android:id="@+id/releaseNotesText" android:layout_width="match_parent" android:layout_height="wrap_content"
+                        android:breakStrategy="simple" android:lineSpacingExtra="2dp" android:textAppearance="?attr/textAppearanceBodyMedium"
+                        android:textColor="?attr/colorOnSurfaceVariant" />
+                </LinearLayout>
             </LinearLayout>
         </androidx.core.widget.NestedScrollView>
+        <com.google.android.material.divider.MaterialDivider android:id="@+id/notesDividerBottom"
+            android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:visibility="invisible" app:dividerColor="?attr/colorOutlineVariant" />
         <com.google.android.material.button.MaterialButton android:id="@+id/downloadButton"
-            android:layout_width="match_parent" android:layout_height="wrap_content" android:minHeight="56dp"
-            android:paddingTop="12dp" android:paddingBottom="12dp" android:text="@string/update_download_action"
-            android:textAllCaps="false" app:cornerRadius="28dp" app:icon="@drawable/baseline_file_download_24"
-            app:iconGravity="textStart" app:iconPadding="8dp" />
+            style="@style/Widget.Material3.Button"
+            android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginHorizontal="24dp"
+            android:layout_marginTop="16dp" android:minHeight="56dp"
+            android:text="@string/update_download_action" android:textAppearance="?attr/textAppearanceTitleSmall"
+            app:icon="@drawable/baseline_file_download_24" app:iconGravity="textStart" app:iconPadding="8dp" />
+        <!-- Side by side when both labels fit on one line, otherwise stacked full width. -->
         <LinearLayout android:id="@+id/secondaryActions" android:layout_width="match_parent" android:layout_height="wrap_content"
-            android:orientation="horizontal" android:layout_marginTop="4dp">
-            <com.google.android.material.button.MaterialButton android:id="@+id/laterButton" style="@style/Widget.MaterialComponents.Button.TextButton"
+            android:layout_marginHorizontal="24dp" android:layout_marginTop="8dp" android:orientation="horizontal">
+            <com.google.android.material.button.MaterialButton android:id="@+id/laterButton" style="@style/Widget.Material3.Button.TextButton"
                 android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1"
-                android:minHeight="48dp" android:minWidth="0dp" android:text="@string/later" android:textAllCaps="false" />
-            <com.google.android.material.button.MaterialButton android:id="@+id/githubButton" style="@style/Widget.MaterialComponents.Button.TextButton"
+                android:minHeight="48dp" android:minWidth="0dp" android:text="@string/later" />
+            <com.google.android.material.button.MaterialButton android:id="@+id/githubButton" style="@style/Widget.Material3.Button.TextButton.Icon"
                 android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1"
-                android:minHeight="48dp" android:minWidth="0dp" android:text="@string/update_release_page" android:textAllCaps="false"
+                android:minHeight="48dp" android:minWidth="0dp" android:text="@string/update_release_page"
                 app:icon="@drawable/baseline_open_in_new_24" app:iconGravity="textStart" />
         </LinearLayout>
     </com.github.andreyasadchy.xtra.ui.common.UpdateSheetLayout>
