@@ -112,6 +112,7 @@ dependencies {
     implementation(libs.room.paging)
     implementation(libs.security.crypto)
     implementation(libs.swiperefreshlayout)
+    implementation(libs.transition)
     implementation(libs.viewpager2)
     implementation(libs.webkit)
     implementation(libs.window)
