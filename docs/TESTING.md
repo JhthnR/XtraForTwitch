@@ -117,7 +117,10 @@ connections must be detached with the fragment's view, then recreated with its
 next view. `PagedListFragmentLifecycleTest` checks initial/later insertions and
 actual retained-fragment view recreation before and after the first insertion.
 `FollowPagerFragmentLifecycleTest` checks real ViewPager2/TabLayoutMediator and
-FragmentStateAdapter lifecycle observers over two view creations. These tests
+FragmentStateAdapter lifecycle observers over two view creations.
+`SearchPagerLifecycleTest` checks that a destroyed Search view drops its pager
+adapter, tab mediator and page callback while the fragment stays retained, and
+that a recreated Search pager still switches tabs. These tests
 verify the identified retaining paths; a fresh device heap is needed to verify
 the reported leak groups no longer occur in the rebuilt app.
 
