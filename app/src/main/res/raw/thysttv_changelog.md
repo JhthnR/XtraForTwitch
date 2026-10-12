@@ -42,6 +42,18 @@ plays the exact quality you pick and makes live notifications more reliable.
 
 - Settings drag lists keep the order shown on screen after a fast drag.
 - Closed live players no longer stay in memory while signed in.
+- Search releases its pager and tab connections when its view closes.
+- Settings screens no longer remain in memory after predictive back transitions.
+- Rounded corners, less rounded corners and square corners now follow the
+  selected theme setting correctly.
+
+## Settings and updates
+
+- Settings are grouped into Appearance, Watching, Network & account and System &
+  About, with icons and summaries. Search also finds settings inside categories.
+- Settings transitions follow the predictive back gesture.
+- Update dialogs and the Changelog use Material 3 layouts, readable Markdown
+  release notes and actions that stay reachable at large text sizes.
 
 ## Upgrading and limitations
 

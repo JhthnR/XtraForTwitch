@@ -35,6 +35,21 @@ and pre-1.3 footage are labeled and do not certify current app behavior.
 
 ### October 11 1.4.0 candidate
 
+October 12 finalization: the maintainer tested the combined debug build containing
+#45–#48 and reported that everything works. Supplied screenshots show the update
+prompt, install-permission and preparation dialogs, and Changelog with rounded
+surfaces. This is general debug/device smoke evidence, not verification of the
+official signed upgrade. The updater screenshots use a temporary external test
+feed; restore the ThystTV source for the exact signed candidate's final checks.
+
+Required on the exact signed final candidate: official 1.3.1 upgrade and preserved
+accounts/settings/Stats/bookmarks/downloads; logged-in cold-start offline Saved,
+Bookmarks and Downloads plus network-restoration retry; live/VoD playback, stream
+switching, minimize/restore, close/reopen, PiP/background, speed/quality, gestures
+and floating chat; Settings forward/back/search and all corner choices; updater
+discovery, download, install permission and installer handover. Record a fresh
+leak regression check separately; release APKs do not include LeakCanary.
+
 On October 11 the maintainer installed the device-test debug build
 (`com.tzii.thysttv.debug`, `1.3.1-DEBUG`, code 13, local merge `368426903` of
 #30-#38) over the previous debug build on a Honor Magic V5 (Android 16). They
