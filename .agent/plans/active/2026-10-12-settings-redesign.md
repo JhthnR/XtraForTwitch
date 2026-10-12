@@ -30,7 +30,7 @@ category was unsearchable.
 
 ## Risks
 
-Risk level: medium. The transition bump (1.5.0 → 1.6.0) also affects any
+Risk level: medium. The transition bump (1.5.0 → 1.7.2) also affects any
 other androidx transition in the app. Moving preferences moves their handlers: language and
 cutouts to UI, the PiP availability check to Player. Hidden preferences inside a
 category must not leave an empty header (Chat translation hides its category).
@@ -86,6 +86,13 @@ Continuum-style settings menu.
   at 0. The old `MaterialSharedAxis` hit the same race (root stuck STARTED) but
   stayed visible. transition 1.6.0 defers animate-to-end/start until ready;
   pinned it explicitly. 0 of 5 repro runs stuck after (before: 1 in 3-6).
+- 2026-10-12: LeakCanary heap from the user's phone (old MaterialSharedAxis
+  build) showed Settings fragments retained through androidx.transition's
+  main-thread running-animators map. Seek-driven transitions never removed
+  their animators there before transition 1.7.0 (`removeSeekingAnimators`).
+  Bumped to 1.7.2; after the same emulator exercise (URL race, cancelled and
+  committed gestures, key back) the map held 0 entries, down from 31, and
+  shark found 0 retained fragments.
 - 2026-10-12: New strings carry tools:ignore="MissingTranslation" like other
   ThystTV-only strings; emulator smoke passed.
 
@@ -95,7 +102,7 @@ Continuum-style settings menu.
   because the screen now holds both proxies.
 - Own keyframed transition instead of `MaterialSharedAxis`: same spec (30dp,
   fade through at 35%, standard easing), but seekable in practice.
-- Pin `androidx.transition` 1.6.0 (smallest release with the seek-ready fix)
-  rather than 1.7.x, to keep the dependency change narrow.
+- Pin `androidx.transition` 1.7.2: 1.6.0 fixes the not-ready freeze, 1.7.0
+  stops seekable transitions leaking views; 1.7.2 is the latest stable.
 - One axis for every settings navigation, including search, so both sides of a
   transition always move together.
