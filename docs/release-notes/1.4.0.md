@@ -1,8 +1,8 @@
 # ThystTV 1.4.0
 
-ThystTV 1.4.0 adds live rewind, free pinch zoom, Channel Points rewards and an
-optional spoiler-free mode for VoDs. It plays the exact quality you pick and makes
-live notifications more reliable.
+ThystTV 1.4.0 adds live rewind, free pinch zoom, Channel Points rewards, a
+half-folded layout for foldables and an optional spoiler-free mode for VoDs. It
+plays the exact quality you pick and makes live notifications more reliable.
 
 ## Player
 
@@ -19,8 +19,14 @@ live notifications more reliable.
 - A separate default quality for metered Wi-Fi such as hotspots and data caps. It
   follows the mobile-data default until you change it.
 - Spoiler-free VoDs (Settings → Player settings, off by default) hides the seek
-  bar, length and watched progress of VoDs and downloads, so a VoD's length does
-  not reveal how many games were played. Seeking still works.
+  bar, length, game chapter times and watched progress of VoDs and downloads, so
+  a VoD's length does not reveal how many games were played. Seeking still works.
+- On a half-open foldable, the full-screen player keeps video off the hinge. Fold
+  it like a laptop to watch above the hinge with chat below; floating chat docks
+  there and floats again when you unfold, unless you changed the chat mode while
+  folded. Fold it like a book to see video and
+  chat side by side while chat is showing. Settings → Player settings →
+  Half-folded layout turns it off.
 - The gesture guide no longer opens inside picture-in-picture.
 
 ## Chat and notifications
@@ -48,8 +54,10 @@ upgrade path.
 Live rewind plays Twitch's own recording of the broadcast. It needs a channel that
 saves past broadcasts, and availability and delay depend on Twitch. With
 spoiler-free VoDs on, the media notification and lock screen can still show a
-VoD's length. Notifications still check every 15 minutes, subject to Android
-battery limits. New settings and messages are in English for now.
+VoD's length. The half-folded layout needs a device that reports its hinge to
+apps, and split-screen windows keep the normal layout. Notifications still check
+every 15 minutes, subject to Android battery limits. New settings and messages
+are in English for now.
 
 Updater downloads still require a fresh attempt after Android kills the app process.
 

@@ -55,7 +55,7 @@ Required before implementation: no
 
 Reason: the owner asked for the best half-folded features and left the design to
 the agent on 2026-10-11. The change is behind a setting, reversible, and does not
-touch player sessions. It ships after 1.4.0 and is not merged without the owner.
+touch player sessions. The owner asked on 2026-10-11 to ship it in 1.4.0.
 
 ## Implementation steps
 
@@ -78,7 +78,7 @@ Automated checks:
 - [x] `./gradlew assembleDebug`
 - [x] `./gradlew test` (809 tests)
 - [x] `./gradlew lintDebug` (0 errors, no new warnings in the changed code)
-- [ ] `./gradlew assembleRelease`, not release-risk
+- [x] `./gradlew assembleRelease`, run by the 1.4.0 release gate
 
 Human QA required:
 

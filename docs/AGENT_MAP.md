@@ -17,8 +17,8 @@ Read:
 - `CHANGELOG.md`
 
 The published baseline is 1.3.1. Candidate 1.4.0 adds the October Xtra feature
-ports (notifications, rewards, quality, live rewind), free pinch zoom and
-spoiler-free VoDs. Keep player lifecycle and experimental Twitch sync work
+ports (notifications, rewards, quality, live rewind), free pinch zoom,
+spoiler-free VoDs and a half-folded layout for foldables. Keep player lifecycle and experimental Twitch sync work
 separate. Publication is pending the release gates in `RELEASE_PROCESS.md`.
 
 ## Contribution And Style Conventions

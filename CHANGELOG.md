@@ -4,9 +4,6 @@ All notable changes to ThystTV should be documented here.
 
 ## [Unreleased]
 
-### Added
-- Half-folded layout for foldables: video above the hinge with chat below in tabletop posture, or video and chat side by side in book posture (Settings → Player settings, on by default).
-
 ## [1.4.0] - 2026-10-11
 
 ### Added
@@ -15,6 +12,7 @@ All notable changes to ThystTV should be documented here.
 - Channel Points custom reward redemption from chat with an explicit cost confirmation.
 - Optional spoiler-free VoDs setting that hides the seek bar, length and watched progress of VoDs and downloads.
 - Separate default quality for metered Wi-Fi.
+- Half-folded layout for foldables: video above the hinge with chat below in tabletop posture, or video and chat side by side in book posture (Settings → Player settings, on by default).
 
 ### Changed
 - Qualities keep their exact resolution, frame rate, codec and bitrate in the player, quality menu and downloads. Portrait variants are hidden, and clips can offer HEVC/AV1.
