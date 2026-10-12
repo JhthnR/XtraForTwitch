@@ -192,6 +192,8 @@ behavior remain unverified; emulator results are recorded separately in
 | Stats screen | [ ] | [ ] | |
 | Stats filters/charts | [ ] | [ ] | |
 | Updater/changelog Markdown and actions | [ ] | [ ] | |
+| Settings sections, moved toggles and search results | [ ] | [ ] | |
+| Settings predictive back: hold, cancel and finish a back swipe on a sub-screen | [ ] | [ ] | |
 | README/site screenshots render | [ ] | [ ] | |
 | Icon/banner assets look correct | [ ] | [ ] | |
 | No private account data exposed | [ ] | [ ] | |

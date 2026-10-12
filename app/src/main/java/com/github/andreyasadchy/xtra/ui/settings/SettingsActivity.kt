@@ -331,54 +331,6 @@ class SettingsActivity : AppCompatActivity() {
 
         override fun onCreatePreferences(savedInstanceState: Bundle?, rootKey: String?) {
             setPreferencesFromResource(R.xml.root_preferences, rootKey)
-            findPreference<ListPreference>(C.UI_LANGUAGE)?.apply {
-                val lang = AppCompatDelegate.getApplicationLocales()
-                if (lang.isEmpty) {
-                    setValueIndex(findIndexOfValue("auto"))
-                } else {
-                    try {
-                        setValueIndex(findIndexOfValue(lang.toLanguageTags()))
-                    } catch (e: Exception) {
-                        try {
-                            setValueIndex(findIndexOfValue(
-                                lang.toLanguageTags().substringBefore("-").let {
-                                    when (it) {
-                                        "id" -> "in"
-                                        "pt" -> "pt-BR"
-                                        "zh" -> "zh-TW"
-                                        else -> it
-                                    }
-                                }
-                            ))
-                        } catch (e: Exception) {
-                            setValueIndex(findIndexOfValue("en"))
-                        }
-                    }
-                }
-                setOnPreferenceChangeListener { _, value ->
-                    AppCompatDelegate.setApplicationLocales(
-                        LocaleListCompat.forLanguageTags(
-                            if (value.toString() == "auto") {
-                                null
-                            } else {
-                                value.toString()
-                            }
-                        )
-                    )
-                    true
-                }
-            }
-            findPreference<SwitchPreferenceCompat>(C.UI_DRAW_BEHIND_CUTOUTS)?.apply {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-                    setOnPreferenceChangeListener { _, _ ->
-                        (requireActivity() as? SettingsActivity)?.changed = true
-                        requireActivity().recreate()
-                        true
-                    }
-                } else {
-                    isVisible = false
-                }
-            }
             findPreference<SwitchPreferenceCompat>("live_notifications_enabled")?.setOnPreferenceChangeListener { _, newValue ->
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
                     ActivityCompat.checkSelfPermission(requireActivity(), Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
@@ -407,9 +359,6 @@ class SettingsActivity : AppCompatActivity() {
                 requireActivity().findViewById<AppBarLayout>(R.id.appBar)?.setExpanded(true)
                 findNavController().navigate(SettingsNavGraphDirections.actionGlobalChatSettingsFragment())
                 true
-            }
-            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O || !requireActivity().packageManager.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE)) {
-                findPreference<SwitchPreferenceCompat>(C.PLAYER_PICTURE_IN_PICTURE)?.isVisible = false
             }
             findPreference<Preference>("player_settings")?.setOnPreferenceClickListener {
                 requireActivity().findViewById<AppBarLayout>(R.id.appBar)?.setExpanded(true)
@@ -446,6 +395,7 @@ class SettingsActivity : AppCompatActivity() {
                 findNavController().navigate(SettingsNavGraphDirections.actionGlobalDownloadSettingsFragment())
                 true
             }
+            findPreference<Preference>("check_updates")?.summary = getString(R.string.current_version, BuildConfig.VERSION_NAME)
             findPreference<Preference>("check_updates")?.setOnPreferenceClickListener {
                 viewModel.checkUpdates(
                     requireContext().prefs().getString(C.NETWORK_LIBRARY, "OkHttp"),
@@ -681,6 +631,54 @@ class SettingsActivity : AppCompatActivity() {
 
         override fun onCreatePreferences(savedInstanceState: Bundle?, rootKey: String?) {
             setPreferencesFromResource(R.xml.ui_preferences, rootKey)
+            findPreference<ListPreference>(C.UI_LANGUAGE)?.apply {
+                val lang = AppCompatDelegate.getApplicationLocales()
+                if (lang.isEmpty) {
+                    setValueIndex(findIndexOfValue("auto"))
+                } else {
+                    try {
+                        setValueIndex(findIndexOfValue(lang.toLanguageTags()))
+                    } catch (e: Exception) {
+                        try {
+                            setValueIndex(findIndexOfValue(
+                                lang.toLanguageTags().substringBefore("-").let {
+                                    when (it) {
+                                        "id" -> "in"
+                                        "pt" -> "pt-BR"
+                                        "zh" -> "zh-TW"
+                                        else -> it
+                                    }
+                                }
+                            ))
+                        } catch (e: Exception) {
+                            setValueIndex(findIndexOfValue("en"))
+                        }
+                    }
+                }
+                setOnPreferenceChangeListener { _, value ->
+                    AppCompatDelegate.setApplicationLocales(
+                        LocaleListCompat.forLanguageTags(
+                            if (value.toString() == "auto") {
+                                null
+                            } else {
+                                value.toString()
+                            }
+                        )
+                    )
+                    true
+                }
+            }
+            findPreference<SwitchPreferenceCompat>(C.UI_DRAW_BEHIND_CUTOUTS)?.apply {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                    setOnPreferenceChangeListener { _, _ ->
+                        (requireActivity() as? SettingsActivity)?.changed = true
+                        requireActivity().recreate()
+                        true
+                    }
+                } else {
+                    isVisible = false
+                }
+            }
             val changeListener = Preference.OnPreferenceChangeListener { _, _ ->
                 (requireActivity() as? SettingsActivity)?.setResult()
                 true
@@ -997,9 +995,7 @@ class SettingsActivity : AppCompatActivity() {
                     entryValues = languages.toTypedArray()
                 }
             } else {
-                findPreference<SwitchPreferenceCompat>("chat_translate")?.isVisible = false
-                findPreference<Preference>("downloaded_languages")?.isVisible = false
-                findPreference<ListPreference>("chat_translate_target")?.isVisible = false
+                findPreference<PreferenceCategory>("chat_translation_category")?.isVisible = false
             }
         }
 
@@ -1039,6 +1035,7 @@ class SettingsActivity : AppCompatActivity() {
         override fun onCreatePreferences(savedInstanceState: Bundle?, rootKey: String?) {
             setPreferencesFromResource(R.xml.player_preferences, rootKey)
             if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O || !requireActivity().packageManager.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE)) {
+                findPreference<SwitchPreferenceCompat>(C.PLAYER_PICTURE_IN_PICTURE)?.isVisible = false
                 findPreference<SwitchPreferenceCompat>(C.PLAYER_BACKGROUND_AUDIO_PIP_CLOSED)?.isVisible = false
                 findPreference<SwitchPreferenceCompat>(C.PLAYER_BACKGROUND_AUDIO_PIP_LOCKED)?.isVisible = false
             }
@@ -1428,6 +1425,11 @@ class SettingsActivity : AppCompatActivity() {
         private var latestReleaseTag: String? = null
         private var changelogReleases: List<ReleaseInfo>? = null
 
+        override fun onCreate(savedInstanceState: Bundle?) {
+            super.onCreate(savedInstanceState)
+            applySettingsMotion()
+        }
+
         override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View {
             _binding = FragmentChangelogSettingsBinding.inflate(inflater, container, false)
             return binding.root
@@ -1435,6 +1437,7 @@ class SettingsActivity : AppCompatActivity() {
 
         override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
             super.onViewCreated(view, savedInstanceState)
+            view.settingsMotionGroup()
             val baseBottomPadding = binding.root.paddingBottom
             ViewCompat.setOnApplyWindowInsetsListener(binding.root) { _, windowInsets ->
                 val insets = windowInsets.getInsets(WindowInsetsCompat.Type.systemBars())
@@ -1861,6 +1864,11 @@ class SettingsActivity : AppCompatActivity() {
         private var adapter: SettingsSearchAdapter? = null
         private var savedQuery: String? = null
 
+        override fun onCreate(savedInstanceState: Bundle?) {
+            super.onCreate(savedInstanceState)
+            applySettingsMotion()
+        }
+
         override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View? {
             return RecyclerView(requireContext()).apply {
                 clipToPadding = false
@@ -1871,6 +1879,7 @@ class SettingsActivity : AppCompatActivity() {
         @SuppressLint("RestrictedApi")
         override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
             super.onViewCreated(view, savedInstanceState)
+            view.settingsMotionGroup()
             ViewCompat.setOnApplyWindowInsetsListener(view) { _, windowInsets ->
                 val insets = windowInsets.getInsets(WindowInsetsCompat.Type.systemBars())
                 view.updatePadding(bottom = insets.bottom)
@@ -1935,7 +1944,7 @@ class SettingsActivity : AppCompatActivity() {
                     Triple(R.xml.ui_preferences, SettingsNavGraphDirections.actionGlobalUiSettingsFragment(), getString(R.string.ui_settings)),
                     Triple(R.xml.update_preferences, SettingsNavGraphDirections.actionGlobalUpdateSettingsFragment(), getString(R.string.update_settings)),
                 ).forEach { item ->
-                    preferenceManager.inflateFromResource(requireContext(), item.first, null).forEach {
+                    preferenceManager.inflateFromResource(requireContext(), item.first, null).leafPreferences().forEach {
                         when (it) {
                             is SwitchPreferenceCompat -> {
                                 list.add(SettingsSearchItem(
