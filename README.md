@@ -5,7 +5,7 @@
 <h1 align="center">ThystTV</h1>
 
 <p align="center">
-  A better Twitch client for Android, focused on player polish, floating chat, local viewing stats, and large-screen comfort.
+  An open-source Twitch client for Android, with polished playback, floating chat, local viewing stats, and large-screen layouts.
 </p>
 
 <p align="center">
@@ -31,7 +31,7 @@
 
 **ThystTV** is a third-party Twitch client for Android. It is based on [Xtra](https://github.com/crackededed/Xtra), with ThystTV-specific work aimed at making the viewing experience cleaner, faster, and more comfortable on phones, tablets, and large displays.
 
-The `1.4` release adds live rewind, free pinch zoom, Channel Points rewards, a half-folded layout for foldables and an optional spoiler-free mode for VoDs, and plays the exact quality you pick. See the [1.4.0 release notes](docs/release-notes/1.4.0.md) for the changes and upgrade guidance.
+The upcoming **1.4.0** release adds live rewind, free pinch zoom, Channel Points rewards, a half-folded layout for foldables, exact quality selection, and an optional spoiler-free mode for VoDs. It also refreshes Settings and the updater. See the [1.4.0 release notes](docs/release-notes/1.4.0.md) for changes and upgrade guidance. The signed candidate is undergoing final validation; 1.3.1 remains the published release.
 
 > ThystTV is a fork of Xtra. A lot of credit goes to the Xtra project for the foundation this app builds on.
 
@@ -42,7 +42,7 @@ The `1.4` release adds live rewind, free pinch zoom, Channel Points rewards, a h
 | Repository | [`tzii/ThystTV`](https://github.com/tzii/ThystTV) |
 | Active branch | [`master`](https://github.com/tzii/ThystTV/tree/master) |
 | Published release | [Latest available APK](https://github.com/tzii/ThystTV/releases/latest) |
-| Version in this branch | [`1.4.0`](docs/release-notes/1.4.0.md) |
+| Version in this branch | [`1.4.0` candidate](docs/release-notes/1.4.0.md), pending publication |
 | License | [GNU AGPL-3.0](LICENSE) |
 | Primary language | Kotlin, with Java components |
 
@@ -82,8 +82,8 @@ See [preview sources](docs/images/review-1.3/README.md) for their provenance.
 
 Floating chat is one of ThystTV's headline viewing upgrades. It keeps chat available during full-screen playback without forcing the player into a cramped split layout.
 
-The device demo below was recorded before 1.3. The gallery above shows the current
-player controls and updater layouts.
+The device demo below was recorded before 1.3. The gallery above shows native
+1.3 layout previews; the 1.4 updater and Settings changes are described in the release notes.
 
 <p align="center">
   <img src="docs/images/readme/floating-chat.png" alt="Full-screen playback with floating chat overlay" width="760">
@@ -176,7 +176,8 @@ ThystTV is distributed independently. It is not affiliated with, endorsed by, or
 - [Player notes](docs/PLAYER.md)
 - [Gesture system](docs/GESTURE_SYSTEM.md)
 - [Release process](docs/RELEASE_PROCESS.md)
-- [1.3 release notes](docs/release-notes/1.3.0.md)
+- [1.4.0 candidate release notes](docs/release-notes/1.4.0.md)
+- [1.3.1 release notes](docs/release-notes/1.3.1.md)
 - [Distribution policy](docs/DISTRIBUTION.md)
 - [APK verification guide](docs/APK_VERIFICATION.md)
 - [Security policy](SECURITY.md)

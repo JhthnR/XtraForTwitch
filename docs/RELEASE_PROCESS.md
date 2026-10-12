@@ -57,20 +57,23 @@ including the logged-in cold-start offline Saved/Bookmarks/Downloads scenario, t
 network-restoration retry, and updater/install behavior. Manual approval applies to these
 exact bytes, not to a local rebuild.
 
-## Mandatory GPT-5.6-sol/high adversarial review
+## Mandatory GPT-6.1-sol/high adversarial review
 
 Provide the exact base/head SHAs, full diff, workflow, release notes, upstream SHAs,
 automated results, signed-RC run ID, manifest, checksum, certificate result, and manual
 evidence. Require correctness, security, signing, lifecycle, compatibility, and regression
-attacks. Preserve the raw attributed transcript outside the source tree. If GPT-5.6-sol/high
+attacks. Run GPT-6.1-sol with reasoning explicitly set to high. Preserve the raw
+attributed transcript outside the source tree. If GPT-6.1-sol/high
 is unavailable, stop for user direction.
 
-## Best-effort verified GLM 5.2 review
+## Independent OpenCode GLM 5.3/max review
 
-Use a local subagent or external crew harness only after confirming the actual model identity
-is GLM 5.2. Give it an isolated snapshot and the same evidence without the first review's
-conclusions. Preserve raw output outside the source tree. If unavailable, record the failed
-check and use one clearly named independent external fallback reviewer.
+Run OpenCode with `zai-coding-plan/glm-5.3` and reasoning explicitly set to `max`,
+through a connected delegated task or the local `crew` GLM lane. Confirm the actual
+provider/model and reasoning setting. Give it an isolated snapshot and the same
+evidence without the first review's conclusions. Preserve raw output outside the
+source tree. If unavailable, record the failed check and ask the maintainer before
+substituting another reviewer. Do not silently use older models or lower reasoning.
 
 ## Finding disposition and RC invalidation
 
