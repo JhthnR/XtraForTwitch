@@ -138,6 +138,19 @@ class UpdateUiTest {
         assertEquals(binding.root.context.getString(R.string.update_preparing), binding.textView.text.toString())
     }
 
+    @Test fun `version pills show bare versions and announce the change as one item`() {
+        val ctx = context(1f)
+        val binding = DialogUpdateAvailableBinding.inflate(LayoutInflater.from(ctx))
+        UpdateAvailableDialog.bindRelease(ctx, binding, release)
+        assertEquals("1.3.0", binding.updateVersionChip.text.toString())
+        assertEquals(UpdateAvailableDialog.displayVersion(com.github.andreyasadchy.xtra.BuildConfig.VERSION_NAME),
+            binding.updateCurrentVersion.text.toString())
+        assertEquals(ctx.getString(R.string.update_version_change, binding.updateCurrentVersion.text, "1.3.0"),
+            binding.updateVersionRow.contentDescription.toString())
+        assertEquals(View.IMPORTANT_FOR_ACCESSIBILITY_NO, binding.updateVersionChip.importantForAccessibility)
+        assertEquals("2.0.1", UpdateAvailableDialog.displayVersion(" V2.0.1 "))
+    }
+
     @Test fun `release metadata removes only duplicate leading headings`() {
         assertFalse(UpdateAvailableDialog.releaseNotesMarkdown(release).startsWith("# ThystTV"))
         assertEquals("## Fixes\nKeep this", UpdateAvailableDialog.releaseNotesMarkdown(release.copy(releaseNotes = "## Fixes\nKeep this")))

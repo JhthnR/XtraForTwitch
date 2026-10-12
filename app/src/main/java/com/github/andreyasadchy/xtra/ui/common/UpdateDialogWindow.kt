@@ -8,6 +8,7 @@ import android.view.ViewTreeObserver
 import androidx.appcompat.app.AlertDialog
 import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
+import com.github.andreyasadchy.xtra.R
 import com.github.andreyasadchy.xtra.util.getActivity
 import com.github.andreyasadchy.xtra.util.update.UpdateWindowBounds
 import com.github.andreyasadchy.xtra.util.update.updateWindowBounds
@@ -69,6 +70,11 @@ internal class UpdateDialogWindow private constructor(
     }
 
     companion object {
+        /** Window animations apply when the window is added, so call this before show(). */
+        fun applyMotion(dialog: AlertDialog) {
+            dialog.window?.setWindowAnimations(R.style.UpdateDialogMotion)
+        }
+
         fun attach(dialog: AlertDialog, onMaxHeight: ((Int) -> Unit)? = null): UpdateDialogWindow {
             val activity = dialog.context.getActivity()
             return UpdateDialogWindow(dialog, activity?.window?.decorView ?: checkNotNull(dialog.window).decorView,

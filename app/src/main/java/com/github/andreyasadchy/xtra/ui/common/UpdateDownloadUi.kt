@@ -2,6 +2,7 @@ package com.github.andreyasadchy.xtra.ui.common
 
 import android.content.Context
 import android.text.format.Formatter
+import android.view.animation.AnimationUtils
 import androidx.appcompat.app.AlertDialog
 import androidx.core.view.ViewCompat
 import com.github.andreyasadchy.xtra.R
@@ -31,6 +32,16 @@ object UpdateDownloadUi {
         }
     }
 
+    fun revealPhase(binding: DialogUpdateDownloadBinding) {
+        val content = binding.downloadContent
+        content.animate().cancel()
+        content.alpha = 0f
+        content.translationY = content.resources.displayMetrics.density * 8
+        content.animate().alpha(1f).translationY(0f).setDuration(300)
+            .setInterpolator(AnimationUtils.loadInterpolator(content.context, R.interpolator.thyst_emphasized_decelerate))
+            .start()
+    }
+
     fun showFailure(
         context: Context,
         onRetry: () -> Unit,
@@ -44,6 +55,7 @@ object UpdateDownloadUi {
             .setNeutralButton(R.string.update_browser, null)
             .setNegativeButton(android.R.string.cancel) { _, _ -> onCancel() }
             .setOnCancelListener { onCancel() }.create()
+        UpdateDialogWindow.applyMotion(dialog)
         dialog.show()
         // The buttons exist after show(). Bind synchronously so even an immediate
         // click uses our recovery behavior before Dialog's queued on-show message.

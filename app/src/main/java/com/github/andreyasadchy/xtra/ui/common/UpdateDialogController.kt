@@ -34,6 +34,7 @@ internal class UpdateDialogController(
     private var windowBinding: UpdateDialogWindow? = null
     private var dialogKey: String? = null
     private var downloadBinding: DialogUpdateDownloadBinding? = null
+    private var downloadPhase: UpdatePhase? = null
     private var launchedInstallerThisResume = false
 
     init {
@@ -63,10 +64,16 @@ internal class UpdateDialogController(
                         .setNegativeButton(android.R.string.cancel) { _, _ -> updater.cancel(id) }
                         .setOnCancelListener { updater.cancel(id) }.create()
                     progress.setCanceledOnTouchOutside(false)
+                    UpdateDialogWindow.applyMotion(progress)
                     progress.show()
                     track(progress, key)
                 }
                 downloadBinding?.let { binding ->
+                    if (downloadPhase != null && downloadPhase != state.phase) {
+                        // Ease the new copy in instead of snapping when downloading hands over to install.
+                        UpdateDownloadUi.revealPhase(binding)
+                    }
+                    downloadPhase = state.phase
                     UpdateDownloadUi.bind(binding, state.bytesRead, state.totalBytes)
                     if (state.phase != UpdatePhase.DOWNLOADING) {
                         binding.downloadTitle.setText(if (state.phase == UpdatePhase.PREPARING)
@@ -103,6 +110,7 @@ internal class UpdateDialogController(
                             }
                         }
                     }
+                    UpdateDialogWindow.applyMotion(permission)
                     permission.show()
                     track(permission, "$id/permission")
                 }
@@ -129,6 +137,7 @@ internal class UpdateDialogController(
                                 ?: updater.confirmationLaunchFailed(id)
                         }
                     }
+                    UpdateDialogWindow.applyMotion(waiting)
                     waiting.show()
                     track(waiting, "$id/installing")
                 }
@@ -192,6 +201,7 @@ internal class UpdateDialogController(
                 dialogKey = null
                 windowBinding = null
                 downloadBinding = null
+                downloadPhase = null
             }
         }
     }
@@ -201,6 +211,7 @@ internal class UpdateDialogController(
         dialog = null
         dialogKey = null
         downloadBinding = null
+        downloadPhase = null
         windowBinding?.dispose()
         windowBinding = null
         old?.setOnDismissListener(null)

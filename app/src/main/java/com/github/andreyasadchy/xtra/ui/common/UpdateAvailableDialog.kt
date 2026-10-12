@@ -26,6 +26,7 @@ object UpdateAvailableDialog {
         val binding = DialogUpdateAvailableBinding.inflate(inflater)
         bindRelease(context, binding, updateInfo)
         val dialog = context.getAlertDialogBuilder().setView(binding.root).create()
+        UpdateDialogWindow.applyMotion(dialog)
         binding.downloadButton.setOnClickListener { dialog.dismiss(); onDownload() }
         binding.laterButton.setOnClickListener { dialog.dismiss(); onLater() }
         binding.githubButton.setOnClickListener { updateInfo.releaseUrl?.let { dialog.dismiss(); onGithub(it) } }
@@ -43,8 +44,11 @@ object UpdateAvailableDialog {
     internal fun bindRelease(context: Context, binding: DialogUpdateAvailableBinding, info: UpdateInfo) {
         ViewCompat.setAccessibilityHeading(binding.updateTitle, true)
         ViewCompat.setAccessibilityHeading(binding.updateNotesTitle, true)
-        binding.updateVersionChip.text = info.tagName
-        binding.updateCurrentVersion.text = context.getString(R.string.current_version, BuildConfig.VERSION_NAME)
+        val current = displayVersion(BuildConfig.VERSION_NAME)
+        val next = displayVersion(info.tagName)
+        binding.updateCurrentVersion.text = current
+        binding.updateVersionChip.text = next
+        binding.updateVersionRow.contentDescription = context.getString(R.string.update_version_change, current, next)
         binding.updateDate.text = releaseDate(info.publishedAt)
         binding.updateDate.isVisible = binding.updateDate.text.isNotBlank()
         binding.githubButton.isVisible = !info.releaseUrl.isNullOrBlank()
@@ -52,6 +56,9 @@ object UpdateAvailableDialog {
             .setMarkdown(binding.releaseNotesText, releaseNotesMarkdown(info).ifBlank { context.getString(R.string.no_release_notes) })
         binding.releaseNotesText.movementMethod = LinkMovementMethod.getInstance()
     }
+
+    /** Release tags carry a leading "v"; the pills read better as bare versions. */
+    internal fun displayVersion(value: String): String = value.trim().removePrefix("v").removePrefix("V")
 
     internal fun releaseDate(value: String?): String? = try {
         val date = value?.substringBefore('T')?.takeIf { it.matches(Regex("\\d{4}-\\d{2}-\\d{2}")) }

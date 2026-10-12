@@ -605,6 +605,7 @@
     <string name="no_updates_found">No updates found</string>
     <string name="update_available">Update available</string>
     <string name="update_whats_new" translatable="false">What’s new</string>
+    <string name="update_version_change" translatable="false">Update from version %1$s to %2$s</string>
     <string name="update_download_action" translatable="false">Download update</string>
     <string name="update_release_page" translatable="false">Release page</string>
     <string name="update_preparing" translatable="false">Preparing download…</string>
