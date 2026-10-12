@@ -1431,6 +1431,7 @@ class SettingsActivity : AppCompatActivity() {
 
         override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
             super.onViewCreated(view, savedInstanceState)
+            view.settingsMotionGroup()
             val baseBottomPadding = binding.root.paddingBottom
             ViewCompat.setOnApplyWindowInsetsListener(binding.root) { _, windowInsets ->
                 val insets = windowInsets.getInsets(WindowInsetsCompat.Type.systemBars())
@@ -1851,6 +1852,7 @@ class SettingsActivity : AppCompatActivity() {
         @SuppressLint("RestrictedApi")
         override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
             super.onViewCreated(view, savedInstanceState)
+            view.settingsMotionGroup()
             ViewCompat.setOnApplyWindowInsetsListener(view) { _, windowInsets ->
                 val insets = windowInsets.getInsets(WindowInsetsCompat.Type.systemBars())
                 view.updatePadding(bottom = insets.bottom)

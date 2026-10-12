@@ -49,7 +49,8 @@ Continuum-style settings menu.
    Picture-in-picture & background; stream proxy + URL → Proxy › Playlist proxy.
 3. Group UI, Player, Chat and Proxy screens into titled categories.
 4. Search indexes preferences inside categories.
-5. Shared X-axis transitions on every settings screen, including search.
+5. Shared X-axis transitions on every settings screen, including search,
+   seekable so the predictive back gesture scrubs them.
 
 ## Verification
 
@@ -60,6 +61,10 @@ Continuum-style settings menu.
 - [x] API 36 emulator: root sections, UI › Language shows the current locale,
   shared-axis transition in and back, search "gesture" finds a categorised
   setting and opens Player scrolled to it.
+- [x] `SettingsMotionTest`: seekable, fade-through alphas, slide direction.
+  API 36 emulator, held back swipe in Player: screen fades and slides with the
+  finger, cancel restores Player, commit lands on the root; forward still
+  animates (823 tests, lint 0 errors).
 - [ ] Device: every root row opens its screen; back/forward motion; language
   change; cutouts toggle recreates; PiP row hidden where unsupported; stream
   proxy toggle; search for "language", "picture", "translate" and open results;
@@ -68,6 +73,11 @@ Continuum-style settings menu.
 ## Progress log
 
 - 2026-10-12: Implemented structure, motion, search recursion and tests.
+- 2026-10-12: User saw no animation and two overlapping screens during the
+  predictive back gesture. `MaterialSharedAxis` claims seeking support but its
+  animators never followed the gesture, so both fragments stayed fully opaque
+  until commit. Replaced with `SettingsAxisTransition` (keyframed slide + fade
+  through) and made each settings root a transition group.
 - 2026-10-12: New strings carry tools:ignore="MissingTranslation" like other
   ThystTV-only strings; emulator smoke passed.
 
@@ -75,5 +85,7 @@ Continuum-style settings menu.
 
 - Keep existing (translated) row titles; only the English proxy title changes,
   because the screen now holds both proxies.
+- Own keyframed transition instead of `MaterialSharedAxis`: same spec (30dp,
+  fade through at 35%, standard easing), but seekable in practice.
 - One axis for every settings navigation, including search, so both sides of a
   transition always move together.
