@@ -1,179 +1,156 @@
 <androidx.preference.PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto">
 
-    <ListPreference
-        android:defaultValue="auto"
-        android:entries="@array/languageEntries"
-        android:entryValues="@array/language"
-        android:key="ui_language"
-        android:summary="%s"
-        android:title="@string/language"
-        app:iconSpaceReserved="false"
-        app:singleLineTitle="false" />
-
-    <SwitchPreferenceCompat
-        android:defaultValue="false"
-        android:key="ui_draw_behind_cutouts"
-        android:title="@string/draw_behind_cutouts"
-        app:iconSpaceReserved="false"
-        app:singleLineTitle="false" />
-
-    <SwitchPreferenceCompat
-        android:defaultValue="false"
-        android:key="live_notifications_enabled"
-        android:title="@string/live_notifications"
-        app:iconSpaceReserved="false"
-        app:singleLineTitle="false" />
-
     <Preference
-        android:key="theme_settings"
-        android:title="@string/theme"
-        app:iconSpaceReserved="false"
-        app:singleLineTitle="false" />
-
-    <Preference
-        android:key="ui_settings"
-        android:title="@string/ui_settings"
-        app:iconSpaceReserved="false"
-        app:singleLineTitle="false" />
-
-    <Preference
-        android:key="chat_settings"
-        android:title="@string/chat_settings"
-        app:iconSpaceReserved="false"
-        app:singleLineTitle="false" />
-
-    <SwitchPreferenceCompat
-        android:defaultValue="true"
-        android:key="player_picture_in_picture"
-        android:title="@string/picture_in_picture"
-        app:iconSpaceReserved="false"
-        app:singleLineTitle="false" />
-
-    <SwitchPreferenceCompat
-        android:defaultValue="true"
-        android:key="player_background_audio"
-        android:title="@string/use_background_audio"
-        app:iconSpaceReserved="false"
-        app:singleLineTitle="false" />
-
-    <SwitchPreferenceCompat
-        android:defaultValue="true"
-        android:key="player_background_audio_locked"
-        android:title="@string/use_background_audio_locked"
-        app:iconSpaceReserved="false"
-        app:singleLineTitle="false" />
-
-    <Preference
-        android:key="player_settings"
-        android:title="@string/player_settings"
-        app:iconSpaceReserved="false"
-        app:singleLineTitle="false" />
-
-    <Preference
-        android:key="player_button_settings"
-        android:title="@string/player_buttons"
-        app:iconSpaceReserved="false"
-        app:singleLineTitle="false" />
-
-    <Preference
-        android:key="buffer_settings"
-        android:title="@string/buffer_settings"
-        app:iconSpaceReserved="false"
-        app:singleLineTitle="false" />
-
-    <SwitchPreferenceCompat
-        android:defaultValue="false"
-        android:key="player_stream_proxy"
-        android:summary="@string/use_custom_proxy_desc"
-        android:title="@string/use_custom_proxy"
-        app:iconSpaceReserved="false"
-        app:singleLineTitle="false" />
-
-    <EditTextPreference
-        android:defaultValue="https://api.ttv.lol/playlist/$channel.m3u8?allow_source=true&amp;allow_audio_only=true&amp;fast_bread=true"
-        android:key="player_proxy_url"
-        android:summary="@string/stream_proxy_url_desc"
-        android:title="@string/stream_proxy_url"
-        app:iconSpaceReserved="false"
-        app:singleLineTitle="false" />
-
-    <Preference
-        android:key="proxy_settings"
-        android:title="@string/proxy_settings"
-        app:iconSpaceReserved="false"
-        app:singleLineTitle="false" />
-
-    <Preference
-        android:key="playback_settings"
-        android:title="@string/playback_settings"
-        app:iconSpaceReserved="false"
-        app:singleLineTitle="false" />
-
-    <Preference
-        android:key="api_token_settings"
-        android:title="@string/api_token_settings"
-        app:iconSpaceReserved="false"
-        app:singleLineTitle="false" />
-
-    <Preference
-        android:key="download_settings"
-        android:title="@string/download_settings"
-        app:iconSpaceReserved="false"
+        android:icon="@drawable/ic_ms_system_update_24"
+        android:key="new_version_available"
+        android:title="@string/new_version_available"
+        app:isPreferenceVisible="false"
         app:singleLineTitle="false" />
 
     <PreferenceCategory
-        android:title="@string/system_about"
-        app:iconSpaceReserved="false">
+        android:title="@string/settings_group_appearance">
 
         <Preference
-            android:key="update_settings"
-            android:title="@string/updater"
-            app:iconSpaceReserved="false"
+            android:icon="@drawable/ic_ms_palette_24"
+            android:key="theme_settings"
+            android:summary="@string/settings_theme_summary"
+            android:title="@string/theme"
             app:singleLineTitle="false" />
 
         <Preference
-            android:key="changelog_settings"
-            android:title="@string/changelog"
-            app:iconSpaceReserved="false"
-            app:singleLineTitle="false" />
-
-        <Preference
-            android:key="check_updates"
-            android:title="@string/check_updates"
-            app:iconSpaceReserved="false"
-            app:singleLineTitle="false" />
-
-        <Preference
-            android:key="about_settings"
-            android:title="@string/about"
-            app:iconSpaceReserved="false"
-            app:singleLineTitle="false" />
-
-        <Preference
-            android:key="new_version_available"
-            android:title="@string/new_version_available"
-            app:iconSpaceReserved="false"
+            android:icon="@drawable/ic_ms_dashboard_24"
+            android:key="ui_settings"
+            android:summary="@string/settings_ui_summary"
+            android:title="@string/ui_settings"
             app:singleLineTitle="false" />
 
     </PreferenceCategory>
 
-    <Preference
-        android:key="backup_settings"
-        android:title="@string/backup_settings"
-        app:iconSpaceReserved="false"
-        app:singleLineTitle="false" />
+    <PreferenceCategory
+        android:title="@string/settings_group_watching">
 
-    <Preference
-        android:key="restore_settings"
-        android:title="@string/restore_settings"
-        app:iconSpaceReserved="false"
-        app:singleLineTitle="false" />
+        <Preference
+            android:icon="@drawable/ic_ms_smart_display_24"
+            android:key="player_settings"
+            android:summary="@string/settings_player_summary"
+            android:title="@string/player_settings"
+            app:singleLineTitle="false" />
 
-    <Preference
-        android:key="debug_settings"
-        android:title="@string/debug_settings"
-        app:iconSpaceReserved="false"
-        app:singleLineTitle="false" />
+        <Preference
+            android:icon="@drawable/ic_ms_tune_24"
+            android:key="player_button_settings"
+            android:summary="@string/settings_player_buttons_summary"
+            android:title="@string/player_buttons"
+            app:singleLineTitle="false" />
+
+        <Preference
+            android:icon="@drawable/ic_ms_chat_24"
+            android:key="chat_settings"
+            android:summary="@string/settings_chat_summary"
+            android:title="@string/chat_settings"
+            app:singleLineTitle="false" />
+
+        <SwitchPreferenceCompat
+            android:defaultValue="false"
+            android:icon="@drawable/ic_ms_notifications_24"
+            android:key="live_notifications_enabled"
+            android:summary="@string/settings_live_notifications_summary"
+            android:title="@string/live_notifications"
+            app:singleLineTitle="false" />
+
+        <Preference
+            android:icon="@drawable/ic_ms_download_24"
+            android:key="download_settings"
+            android:summary="@string/settings_download_summary"
+            android:title="@string/download_settings"
+            app:singleLineTitle="false" />
+
+    </PreferenceCategory>
+
+    <PreferenceCategory
+        android:title="@string/settings_group_network">
+
+        <Preference
+            android:icon="@drawable/ic_ms_key_24"
+            android:key="api_token_settings"
+            android:summary="@string/settings_api_token_summary"
+            android:title="@string/api_token_settings"
+            app:singleLineTitle="false" />
+
+        <Preference
+            android:icon="@drawable/ic_ms_video_settings_24"
+            android:key="playback_settings"
+            android:summary="@string/settings_playback_summary"
+            android:title="@string/playback_settings"
+            app:singleLineTitle="false" />
+
+        <Preference
+            android:icon="@drawable/ic_ms_hourglass_empty_24"
+            android:key="buffer_settings"
+            android:summary="@string/settings_buffer_summary"
+            android:title="@string/buffer_settings"
+            app:singleLineTitle="false" />
+
+        <Preference
+            android:icon="@drawable/ic_ms_vpn_lock_24"
+            android:key="proxy_settings"
+            android:summary="@string/settings_proxy_summary"
+            android:title="@string/proxy_settings"
+            app:singleLineTitle="false" />
+
+    </PreferenceCategory>
+
+    <PreferenceCategory
+        android:title="@string/system_about">
+
+        <Preference
+            android:icon="@drawable/ic_ms_update_24"
+            android:key="check_updates"
+            android:title="@string/check_updates"
+            app:singleLineTitle="false" />
+
+        <Preference
+            android:icon="@drawable/ic_ms_autorenew_24"
+            android:key="update_settings"
+            android:summary="@string/settings_updater_summary"
+            android:title="@string/updater"
+            app:singleLineTitle="false" />
+
+        <Preference
+            android:icon="@drawable/ic_ms_new_releases_24"
+            android:key="changelog_settings"
+            android:summary="@string/settings_changelog_summary"
+            android:title="@string/changelog"
+            app:singleLineTitle="false" />
+
+        <Preference
+            android:icon="@drawable/ic_ms_backup_24"
+            android:key="backup_settings"
+            android:summary="@string/settings_backup_summary"
+            android:title="@string/backup_settings"
+            app:singleLineTitle="false" />
+
+        <Preference
+            android:icon="@drawable/ic_ms_settings_backup_restore_24"
+            android:key="restore_settings"
+            android:summary="@string/settings_restore_summary"
+            android:title="@string/restore_settings"
+            app:singleLineTitle="false" />
+
+        <Preference
+            android:icon="@drawable/ic_ms_bug_report_24"
+            android:key="debug_settings"
+            android:summary="@string/settings_debug_summary"
+            android:title="@string/debug_settings"
+            app:singleLineTitle="false" />
+
+        <Preference
+            android:icon="@drawable/ic_ms_info_24"
+            android:key="about_settings"
+            android:title="@string/about"
+            app:singleLineTitle="false" />
+
+    </PreferenceCategory>
 
 </androidx.preference.PreferenceScreen>

@@ -192,6 +192,7 @@ behavior remain unverified; emulator results are recorded separately in
 | Stats screen | [ ] | [ ] | |
 | Stats filters/charts | [ ] | [ ] | |
 | Updater/changelog Markdown and actions | [ ] | [ ] | |
+| Settings sections, moved toggles and search results | [ ] | [ ] | |
 | README/site screenshots render | [ ] | [ ] | |
 | Icon/banner assets look correct | [ ] | [ ] | |
 | No private account data exposed | [ ] | [ ] | |

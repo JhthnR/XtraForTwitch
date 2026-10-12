@@ -1,51 +1,79 @@
 <androidx.preference.PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto">
 
-    <SwitchPreferenceCompat
-        android:defaultValue="false"
-        android:key="proxy_playback_access_token"
-        android:title="@string/proxy_playback_access_token"
-        app:iconSpaceReserved="false"
-        app:singleLineTitle="false" />
+    <PreferenceCategory
+        android:title="@string/settings_group_stream_proxy"
+        app:iconSpaceReserved="false">
 
-    <SwitchPreferenceCompat
-        android:defaultValue="false"
-        android:key="proxy_multivariant_playlist"
-        android:title="@string/proxy_multivariant_playlist"
-        app:iconSpaceReserved="false"
-        app:singleLineTitle="false" />
+        <SwitchPreferenceCompat
+            android:defaultValue="false"
+            android:key="player_stream_proxy"
+            android:summary="@string/use_custom_proxy_desc"
+            android:title="@string/use_custom_proxy"
+            app:iconSpaceReserved="false"
+            app:singleLineTitle="false" />
 
-    <SwitchPreferenceCompat
-        android:defaultValue="true"
-        android:key="proxy_media_playlist"
-        android:title="@string/proxy_media_playlist"
-        app:iconSpaceReserved="false"
-        app:singleLineTitle="false" />
+        <EditTextPreference
+            android:defaultValue="https://api.ttv.lol/playlist/$channel.m3u8?allow_source=true&amp;allow_audio_only=true&amp;fast_bread=true"
+            android:key="player_proxy_url"
+            android:summary="@string/stream_proxy_url_desc"
+            android:title="@string/stream_proxy_url"
+            app:iconSpaceReserved="false"
+            app:singleLineTitle="false" />
 
-    <EditTextPreference
-        android:key="proxy_host"
-        android:title="@string/proxy_host"
-        app:iconSpaceReserved="false"
-        app:singleLineTitle="false"
-        app:useSimpleSummaryProvider="true" />
+    </PreferenceCategory>
 
-    <EditTextPreference
-        android:key="proxy_port"
-        android:title="@string/proxy_port"
-        app:iconSpaceReserved="false"
-        app:singleLineTitle="false"
-        app:useSimpleSummaryProvider="true" />
+    <PreferenceCategory
+        android:title="@string/settings_group_connection_proxy"
+        app:iconSpaceReserved="false">
 
-    <EditTextPreference
-        android:key="proxy_user"
-        android:title="@string/proxy_user"
-        app:iconSpaceReserved="false"
-        app:singleLineTitle="false" />
+        <SwitchPreferenceCompat
+            android:defaultValue="false"
+            android:key="proxy_playback_access_token"
+            android:title="@string/proxy_playback_access_token"
+            app:iconSpaceReserved="false"
+            app:singleLineTitle="false" />
 
-    <EditTextPreference
-        android:key="proxy_password"
-        android:title="@string/proxy_password"
-        app:iconSpaceReserved="false"
-        app:singleLineTitle="false" />
+        <SwitchPreferenceCompat
+            android:defaultValue="false"
+            android:key="proxy_multivariant_playlist"
+            android:title="@string/proxy_multivariant_playlist"
+            app:iconSpaceReserved="false"
+            app:singleLineTitle="false" />
+
+        <SwitchPreferenceCompat
+            android:defaultValue="true"
+            android:key="proxy_media_playlist"
+            android:title="@string/proxy_media_playlist"
+            app:iconSpaceReserved="false"
+            app:singleLineTitle="false" />
+
+        <EditTextPreference
+            android:key="proxy_host"
+            android:title="@string/proxy_host"
+            app:iconSpaceReserved="false"
+            app:singleLineTitle="false"
+            app:useSimpleSummaryProvider="true" />
+
+        <EditTextPreference
+            android:key="proxy_port"
+            android:title="@string/proxy_port"
+            app:iconSpaceReserved="false"
+            app:singleLineTitle="false"
+            app:useSimpleSummaryProvider="true" />
+
+        <EditTextPreference
+            android:key="proxy_user"
+            android:title="@string/proxy_user"
+            app:iconSpaceReserved="false"
+            app:singleLineTitle="false" />
+
+        <EditTextPreference
+            android:key="proxy_password"
+            android:title="@string/proxy_password"
+            app:iconSpaceReserved="false"
+            app:singleLineTitle="false" />
+
+    </PreferenceCategory>
 
 </androidx.preference.PreferenceScreen>
