@@ -4,6 +4,7 @@ import android.content.Context
 import android.graphics.Color
 import android.graphics.drawable.ColorDrawable
 import android.text.method.LinkMovementMethod
+import android.text.util.Linkify
 import android.view.LayoutInflater
 import androidx.appcompat.app.AlertDialog
 import androidx.core.view.isVisible
@@ -52,7 +53,8 @@ object UpdateAvailableDialog {
         binding.updateDate.text = releaseDate(info.publishedAt)
         binding.updateDate.isVisible = binding.updateDate.text.isNotBlank()
         binding.githubButton.isVisible = !info.releaseUrl.isNullOrBlank()
-        Markwon.builder(context).usePlugin(LinkifyPlugin.create()).build()
+        // Web links only: the default phone matcher underlines commit hashes and dates.
+        Markwon.builder(context).usePlugin(LinkifyPlugin.create(Linkify.WEB_URLS)).build()
             .setMarkdown(binding.releaseNotesText, releaseNotesMarkdown(info).ifBlank { context.getString(R.string.no_release_notes) })
         binding.releaseNotesText.movementMethod = LinkMovementMethod.getInstance()
     }
@@ -70,11 +72,26 @@ object UpdateAvailableDialog {
         }
     } catch (_: java.text.ParseException) { null }
 
-    internal fun releaseNotesMarkdown(info: UpdateInfo): String {
-        val lines = info.releaseNotes.orEmpty().trim().lines()
+    internal fun releaseNotesMarkdown(info: UpdateInfo): String =
+        releaseNotesMarkdown(info.releaseNotes, info.tagName, info.versionName, info.title)
+
+    /** Drops a leading heading that repeats the release name, which the UI already shows. */
+    internal fun releaseNotesMarkdown(notes: String?, vararg names: String?): String {
+        val lines = notes.orEmpty().trim().lines()
         val first = lines.firstOrNull()?.trim().orEmpty()
-        val duplicate = first.startsWith("#") && listOfNotNull(info.tagName, info.versionName, info.title)
+        val duplicate = first.startsWith("#") && names.filterNotNull()
             .filter { it.isNotBlank() }.any { first.contains(it, ignoreCase = true) }
-        return (if (duplicate) lines.drop(1) else lines).joinToString("\n").trim()
+        return demoteHeadings((if (duplicate) lines.drop(1) else lines).joinToString("\n").trim())
     }
+
+    /** Release notes use #, ## and ### for structure; inside a card those read as page titles, so they become bold body-size headings. */
+    internal fun demoteHeadings(markdown: String): String {
+        var fenced = false
+        return markdown.lines().joinToString("\n") { line ->
+            if (line.trimStart().startsWith("```")) fenced = !fenced
+            if (fenced) line else HEADING.replace(line, "####$1")
+        }
+    }
+
+    private val HEADING = Regex("^#{1,3}(\\s)")
 }

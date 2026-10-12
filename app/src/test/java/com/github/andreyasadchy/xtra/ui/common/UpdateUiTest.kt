@@ -69,6 +69,39 @@ class UpdateUiTest {
         }
     }
 
+    @Test fun `secondary actions stack only when a label would wrap`() {
+        for ((scale, width) in listOf(1f to 328, 2f to 288)) {
+            val ctx = context(scale)
+            val binding = DialogUpdateAvailableBinding.inflate(LayoutInflater.from(ctx))
+            UpdateAvailableDialog.bindRelease(ctx, binding, release)
+            measure(binding.root, width, 720)
+            val actions = binding.root.findViewById<android.widget.LinearLayout>(R.id.secondaryActions)
+            val stacked = actions.orientation == android.widget.LinearLayout.VERTICAL
+            assertEquals("stacked at $scale", scale > 1f, stacked)
+            for (button in listOf(binding.laterButton, binding.githubButton)) assertEquals(1, button.lineCount)
+        }
+    }
+
+    @Test fun `short windows drop the icon and dividers follow the scroll position`() {
+        val ctx = context(1f)
+        val tall = DialogUpdateAvailableBinding.inflate(LayoutInflater.from(ctx))
+        UpdateAvailableDialog.bindRelease(ctx, tall, release)
+        measure(tall.root, 328, 720)
+        assertEquals(View.VISIBLE, tall.updateIcon.visibility)
+        assertEquals(View.INVISIBLE, tall.notesDividerTop.visibility)
+        assertEquals(View.INVISIBLE, tall.notesDividerBottom.visibility)
+
+        val short = DialogUpdateAvailableBinding.inflate(LayoutInflater.from(ctx))
+        UpdateAvailableDialog.bindRelease(ctx, short, release)
+        measure(short.root, 528, 280)
+        assertEquals(View.GONE, short.updateIcon.visibility)
+        assertEquals(View.INVISIBLE, short.notesDividerTop.visibility)
+        assertEquals(View.VISIBLE, short.notesDividerBottom.visibility)
+        short.releaseNotesScroll.scrollTo(0, short.releaseNotesScroll.getChildAt(0).height)
+        assertEquals(View.VISIBLE, short.notesDividerTop.visibility)
+        assertEquals(View.INVISIBLE, short.notesDividerBottom.visibility)
+    }
+
     @Test fun `native prompt and download previews`() {
         for (light in listOf(false, true)) for (scale in listOf(1f, 2f)) {
             val ctx = context(scale, light)
@@ -153,7 +186,9 @@ class UpdateUiTest {
 
     @Test fun `release metadata removes only duplicate leading headings`() {
         assertFalse(UpdateAvailableDialog.releaseNotesMarkdown(release).startsWith("# ThystTV"))
-        assertEquals("## Fixes\nKeep this", UpdateAvailableDialog.releaseNotesMarkdown(release.copy(releaseNotes = "## Fixes\nKeep this")))
+        assertEquals("#### Fixes\nKeep this", UpdateAvailableDialog.releaseNotesMarkdown(release.copy(releaseNotes = "## Fixes\nKeep this")))
+        assertEquals("#### A\n#### B\n```\n# kept\n```\n#hashtag\n##### small",
+            UpdateAvailableDialog.demoteHeadings("# A\n### B\n```\n# kept\n```\n#hashtag\n##### small"))
         assertNull(UpdateAvailableDialog.releaseDate("2026-02-30T00:00:00Z"))
         assertNull(UpdateAvailableDialog.releaseDate("nonsense"))
         assertNotNull(UpdateAvailableDialog.releaseDate(release.publishedAt))

@@ -64,9 +64,23 @@ with smoother motion.
 ## Progress log
 
 - 2026-10-12: Implemented layouts, motion and test; renders checked.
+- 2026-10-12: Device feedback (HONOR, API 36): square Download button, notes
+  bleeding past their panel, wrapped "Release page", header scrolling away,
+  M2 buttons and underlined hashes/dates on the Changelog screen, and the
+  latest release repeated in the changelog list. Reworked the prompt as an M3
+  scrollable dialog (fixed icon/title, body between scroll-aware dividers,
+  pinned actions; icon drops below 420dp of height; secondary actions stack
+  only when a label would wrap). Rebuilt the Changelog screen with filled M3
+  cards and M3 buttons, localized dates, a status pill and no duplicate latest
+  release. Markdown links are web URLs only; note headings become bold
+  body-size headings.
 
 ## Decisions
 
 - One rise animation serves both bottom and centred placement, avoiding a
   placement-dependent style chosen before the window is measured.
 - Tonal colours derive from `colorPrimary` rather than container roles.
+- Shapes come from the theme (no hard-coded pill or 28dp corners), so the
+  corner-style setting applies. The square button on device came from
+  `applyTheme` reading the three-way corner list as a boolean, which always
+  picks NoCorners once the setting is stored; fixed in a separate PR.

@@ -13,6 +13,7 @@ import android.os.Build
 import android.os.Bundle
 import android.os.ext.SdkExtensions
 import android.text.method.LinkMovementMethod
+import android.text.util.Linkify
 import android.util.TypedValue
 import android.view.LayoutInflater
 import android.view.View
@@ -33,6 +34,7 @@ import androidx.core.content.res.use
 import androidx.core.net.toUri
 import androidx.core.os.LocaleListCompat
 import androidx.core.view.ViewCompat
+import androidx.core.view.isVisible
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.updateLayoutParams
@@ -82,6 +84,7 @@ import com.github.andreyasadchy.xtra.util.getAlertDialogBuilder
 import com.github.andreyasadchy.xtra.util.prefs
 import com.github.andreyasadchy.xtra.util.tokenPrefs
 import com.github.andreyasadchy.xtra.util.update.UpdateHost
+import com.google.android.material.color.MaterialColors
 import com.google.android.material.appbar.AppBarLayout
 import com.google.mlkit.common.model.DownloadConditions
 import com.google.mlkit.common.model.RemoteModelManager
@@ -98,8 +101,9 @@ import kotlinx.coroutines.launch
 import org.chromium.net.CronetProvider
 
 private fun renderMarkdown(textView: TextView, markdown: String) {
+    // Web links only: the default phone matcher underlines commit hashes and dates.
     Markwon.builder(textView.context)
-        .usePlugin(LinkifyPlugin.create())
+        .usePlugin(LinkifyPlugin.create(Linkify.WEB_URLS))
         .build()
         .setMarkdown(textView, markdown)
     textView.movementMethod = LinkMovementMethod.getInstance()
@@ -111,15 +115,15 @@ private fun readRawText(context: Context, resId: Int): String {
         .use { it.readText() }
 }
 
-private fun releaseDate(releaseInfo: ReleaseInfo): String? {
-    return releaseInfo.publishedAt?.substringBefore("T")?.takeIf { it.isNotBlank() }
+private fun releaseNotes(context: Context, releaseInfo: ReleaseInfo): String {
+    return UpdateAvailableDialog.releaseNotesMarkdown(
+        releaseInfo.releaseNotes, releaseInfo.tagName, releaseInfo.versionName, releaseInfo.title
+    ).ifBlank { context.getString(R.string.no_release_notes) }
 }
 
 private fun buildReleaseMarkdown(context: Context, releaseInfo: ReleaseInfo): String {
-    val date = releaseDate(releaseInfo) ?: context.getString(R.string.unknown)
-    val releaseNotes = releaseInfo.releaseNotes?.takeIf { it.isNotBlank() }
-        ?: context.getString(R.string.no_release_notes)
-    return "## ${releaseInfo.tagName}\n\n$date\n\n$releaseNotes"
+    val date = UpdateAvailableDialog.releaseDate(releaseInfo.publishedAt)?.let { "*$it*\n\n" }.orEmpty()
+    return "### ${releaseInfo.tagName}\n\n$date${releaseNotes(context, releaseInfo)}"
 }
 
 @AndroidEntryPoint
@@ -1421,6 +1425,8 @@ class SettingsActivity : AppCompatActivity() {
         private var _binding: FragmentChangelogSettingsBinding? = null
         private val binding get() = _binding!!
         private var latestUpdateInfo: UpdateInfo? = null
+        private var latestReleaseTag: String? = null
+        private var changelogReleases: List<ReleaseInfo>? = null
 
         override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View {
             _binding = FragmentChangelogSettingsBinding.inflate(inflater, container, false)
@@ -1451,17 +1457,14 @@ class SettingsActivity : AppCompatActivity() {
             }
 
             binding.updaterStatus.text = getString(R.string.current_version, BuildConfig.VERSION_NAME)
-            binding.latestReleaseTitle.text = getString(R.string.checking_for_updates)
-            binding.latestReleaseDate.text = ""
-            binding.latestReleaseStatus.text = ""
-            binding.latestReleaseNotes.text = ""
-            binding.downloadUpdateButton.visibility = View.GONE
-            binding.viewOnGithubButton.visibility = View.GONE
-            renderMarkdown(binding.bundledChangelog, readRawText(requireContext(), R.raw.thysttv_changelog))
+            ViewCompat.setAccessibilityHeading(binding.updaterTitle, true)
+            ViewCompat.setAccessibilityHeading(binding.latestReleaseTitle, true)
+            ViewCompat.setAccessibilityHeading(binding.changelogTitle, true)
+            showCheckingRelease()
+            renderMarkdown(binding.bundledChangelog, bundledChangelog())
 
             binding.checkUpdatesButton.setOnClickListener {
-                binding.latestReleaseTitle.text = getString(R.string.checking_for_updates)
-                binding.latestReleaseStatus.text = ""
+                showCheckingRelease()
                 viewModel.checkUpdates(
                     requireContext().prefs().getString(C.NETWORK_LIBRARY, "OkHttp"),
                     UpdateUtils.resolveReleaseApiUrl(requireContext().prefs().getString(C.UPDATE_URL, null))
@@ -1517,43 +1520,67 @@ class SettingsActivity : AppCompatActivity() {
             viewModel.loadChangelogReleases(networkLibrary, UpdateUtils.resolveReleasesApiUrl(releaseUrl))
         }
 
+        private fun showCheckingRelease() {
+            binding.latestReleaseTitle.text = getString(R.string.checking_for_updates)
+            binding.latestReleaseDate.isVisible = false
+            binding.latestReleaseStatus.isVisible = false
+            binding.latestReleaseNotesPanel.isVisible = false
+            binding.downloadUpdateButton.isVisible = false
+            binding.viewOnGithubButton.isVisible = false
+        }
+
         private fun bindLatestRelease(releaseInfo: ReleaseInfo?) {
             if (releaseInfo == null) {
                 latestUpdateInfo = null
-                binding.latestReleaseTitle.text = getString(R.string.latest_release)
-                binding.latestReleaseDate.text = ""
-                binding.latestReleaseStatus.text = getString(R.string.latest_release_unavailable)
-                binding.latestReleaseNotes.text = ""
-                binding.downloadUpdateButton.visibility = View.GONE
-                binding.viewOnGithubButton.visibility = View.GONE
+                binding.latestReleaseTitle.text = getString(R.string.latest_release_unavailable)
+                binding.latestReleaseDate.isVisible = false
+                binding.latestReleaseStatus.isVisible = false
+                binding.latestReleaseNotesPanel.isVisible = false
+                binding.downloadUpdateButton.isVisible = false
+                binding.viewOnGithubButton.isVisible = false
                 return
             }
 
-            latestUpdateInfo = releaseInfo
-                .takeIf { UpdateUtils.isVersionNewer(it.tagName, BuildConfig.VERSION_NAME) }
-                ?.toUpdateInfo()
+            val newer = UpdateUtils.isVersionNewer(releaseInfo.tagName, BuildConfig.VERSION_NAME)
+            latestUpdateInfo = releaseInfo.takeIf { newer }?.toUpdateInfo()
             binding.latestReleaseTitle.text = releaseInfo.title?.takeIf { it.isNotBlank() } ?: releaseInfo.tagName
-            binding.latestReleaseDate.text = releaseDate(releaseInfo) ?: getString(R.string.unknown)
-            binding.latestReleaseStatus.text = if (UpdateUtils.isVersionNewer(releaseInfo.tagName, BuildConfig.VERSION_NAME)) {
-                getString(R.string.new_version_available)
-            } else {
-                getString(R.string.latest_release_installed)
+            val date = UpdateAvailableDialog.releaseDate(releaseInfo.publishedAt)
+            binding.latestReleaseDate.text = date
+            binding.latestReleaseDate.isVisible = date != null
+            binding.latestReleaseStatus.isVisible = true
+            binding.latestReleaseStatus.text = getString(if (newer) R.string.new_version_available else R.string.latest_release_installed)
+            binding.latestReleaseStatus.setBackgroundResource(if (newer) R.drawable.bg_update_version_pill_new else R.drawable.bg_update_version_pill)
+            binding.latestReleaseStatus.setTextColor(MaterialColors.getColor(
+                binding.latestReleaseStatus, if (newer) androidx.appcompat.R.attr.colorPrimary else com.google.android.material.R.attr.colorOnSurfaceVariant
+            ))
+            binding.latestReleaseNotesPanel.isVisible = true
+            renderMarkdown(binding.latestReleaseNotes, releaseNotes(requireContext(), releaseInfo))
+            binding.downloadUpdateButton.isVisible = latestUpdateInfo != null
+            binding.viewOnGithubButton.isVisible = !releaseInfo.releaseUrl.isNullOrBlank()
+            if (latestReleaseTag != releaseInfo.tagName) {
+                latestReleaseTag = releaseInfo.tagName
+                renderChangelog()
             }
-            renderMarkdown(
-                binding.latestReleaseNotes,
-                releaseInfo.releaseNotes?.takeIf { it.isNotBlank() } ?: getString(R.string.no_release_notes)
-            )
-            binding.downloadUpdateButton.visibility = if (latestUpdateInfo != null) View.VISIBLE else View.GONE
-            binding.viewOnGithubButton.visibility = if (releaseInfo.releaseUrl.isNullOrBlank()) View.GONE else View.VISIBLE
         }
 
         private fun bindChangelogReleases(releases: List<ReleaseInfo>?) {
-            val markdown = releases
+            changelogReleases = releases
+            renderChangelog()
+        }
+
+        /** Earlier releases only: the latest one already has its own card above. */
+        private fun renderChangelog() {
+            val markdown = changelogReleases
+                ?.filter { it.tagName != latestReleaseTag }
                 ?.takeIf { it.isNotEmpty() }
-                ?.joinToString("\n\n---\n\n") { buildReleaseMarkdown(requireContext(), it) }
-                ?: readRawText(requireContext(), R.raw.thysttv_changelog)
+                ?.joinToString("\n\n") { buildReleaseMarkdown(requireContext(), it) }
+                ?: bundledChangelog()
             renderMarkdown(binding.bundledChangelog, markdown)
         }
+
+        /** Version titles match the release list headings; their sections read as bold body text. */
+        private fun bundledChangelog() = readRawText(requireContext(), R.raw.thysttv_changelog)
+            .replace(Regex("(?m)^(#{1,3}) ")) { if (it.groupValues[1].length == 1) "### " else "#### " }
 
         private fun showUpdateDialog(updateInfo: UpdateInfo) {
             UpdateAvailableDialog.show(
