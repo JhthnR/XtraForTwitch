@@ -4,10 +4,14 @@ What ThystTV adds on top of the base client:
 
 * Floating chat overlay for full-screen viewing — keep chat visible without a cramped split layout
 * Gesture-based playback controls for seeking, playback speed, brightness, and volume
-* Custom playback quality and speed dialogs, with duration-aware VoD scrubbing
+* Reachable quality and speed controls, exact quality selection, free pinch zoom and duration-aware VoD scrubbing
+* Live rewind through the stream's recording, with replay chat and a Go live action
+* Optional spoiler-free VoDs that hide lengths and watched progress
+* A half-folded layout for supported foldables, including chat keyboard adjustments
+* Custom Channel Points rewards from chat, with explicit redemption confirmation
 * Local watch-history and screen-time stats: category breakdowns, viewing patterns, favorite channels — all stored only on your device
 * Layouts tuned for phones, tablets, and wide screens
-* Optional in-app update checks against GitHub releases, with rendered changelogs (off by default)
+* Organized Settings and optional in-app update checks against GitHub releases, with rendered changelogs (automatic checks are off by default)
 
 Base features inherited from Xtra:
 
@@ -17,4 +21,6 @@ Base features inherited from Xtra:
 * Picture-in-Picture mode and background audio
 * Sleep timer
 
-No ads, no analytics, no tracking. Stats stay local on the device.
+ThystTV does not add advertising or analytics. Viewing stats stay on your device. Playback and enabled chat/emote services connect to their providers.
+
+ThystTV is not affiliated with Twitch Interactive or Amazon.

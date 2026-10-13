@@ -6,6 +6,13 @@ ThystTV is a third-party Android Twitch client forked from Xtra. The product pri
 
 Protect ThystTV-specific UX over blindly following upstream Xtra behavior.
 
+## Review Defaults
+
+When independent reviews are requested, use GPT-6.1-sol with high reasoning and
+OpenCode `zai-coding-plan/glm-5.3` with max reasoning. Verify both settings and
+preserve attributed review evidence. Do not silently substitute older models,
+lower reasoning, or another lane. Superpowers remains disabled.
+
 ## Start Here
 
 Before non-trivial work, read:
