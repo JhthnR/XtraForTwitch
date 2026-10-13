@@ -71,6 +71,12 @@ gestures, floating chat, folding, logged-in upgrade/offline and updater flows.
   destroyed-Settings analysis also found 0 leaks. Transition animation records,
   SettingsAxisTransition instances and closed Settings fragments all counted 0.
   Raw heaps remain outside the repository; this does not certify all device flows.
+- 2026-10-13: Both original review attempts were interrupted by quota; a resumed
+  app-owned OpenCode attempt failed to open its provider session. Use the existing
+  crew GLM 5.3/max lane, preserving the failed attempt as unavailable. GPT review
+  identified a low-severity notice wording discrepancy: ordinary canceled rewind
+  discovery has no return notice. Corrected the feature guide to match the actual
+  completed-result-drop behavior, without changing player code.
 
 ## Decisions
 
