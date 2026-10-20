@@ -21,7 +21,6 @@ class EmotesAdapter(
     private val fragment: Fragment,
     private val clickListener: (Emote) -> Unit,
     private val emoteQuality: String,
-    private val imageLibrary: String?,
 ) : ListAdapter<Emote, RecyclerView.ViewHolder>(
     object : DiffUtil.ItemCallback<Emote>() {
         override fun areItemsTheSame(oldItem: Emote, newItem: Emote): Boolean {

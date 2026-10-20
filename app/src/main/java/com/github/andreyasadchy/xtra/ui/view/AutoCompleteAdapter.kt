@@ -35,7 +35,6 @@ class AutoCompleteAdapter<T>(
     private var mObjects = objects
     private var mOriginalValues: MutableList<T?>? = null
     private var mNotifyOnChange = true
-    private val imageLibrary = context.prefs().getString(C.CHAT_IMAGE_LIBRARY, "0")
     private val emoteQuality = context.prefs().getString(C.CHAT_IMAGE_QUALITY, "4") ?: "4"
 
     override fun getView(position: Int, convertView: View?, parent: ViewGroup): View {

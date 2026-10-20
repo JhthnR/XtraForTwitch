@@ -4,6 +4,9 @@ All notable changes to ThystTV should be documented here.
 
 ## [Unreleased]
 
+### Removed
+- The unused Glide image library and its Chat → Image library setting. Emotes and badges already loaded with Coil, so the APK just drops Glide and its native WebP decoder.
+
 ### Fixed
 - Hiding or showing the system bars no longer crashes a player that is closing.
 - Channel Points use Twitch's current balance query.

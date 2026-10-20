@@ -395,10 +395,6 @@
     <string name="remove_bookmark">Hapus bookmark</string>
     <string name="saved">Simpan</string>
     <string name="refresh">Segarkan</string>
-    <string name="image_library">Pustaka gambar</string>
-    <string name="imageLibraryEntries1">Coil</string>
-    <string name="imageLibraryEntries2">Coil + Glide WebP</string>
-    <string name="imageLibraryEntries3">Glide</string>
     <string name="disabled">Nonaktif</string>
     <string name="live_target_offset">Live target offset</string>
     <string name="buffer_for_playback">Buffer untuk pemutar</string>
