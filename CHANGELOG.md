@@ -4,6 +4,10 @@ All notable changes to ThystTV should be documented here.
 
 ## [Unreleased]
 
+### Fixed
+- Hiding or showing the system bars no longer crashes a player that is closing.
+- Channel Points use Twitch's current balance query.
+
 ## [1.4.0] - 2026-10-13
 
 ### Added

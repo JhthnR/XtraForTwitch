@@ -8,10 +8,11 @@ new audits go here.
 
 ## Latest audit
 
-- **Date checked:** 2026-10-04; crackededed rechecked 2026-10-10
+- **Date checked:** 2026-10-04; crackededed rechecked 2026-10-10 and 2026-10-20
 - **Branches:** stacked `xtra-ports/1-notifications` → `2-rewards` → `3-quality` → `4-rewind`, based on `e8cbd77cb9f875ed2e4b777684065278bc766060`
 - **crackededed/Xtra:** `9f8043e8bdf45e8a2b2bf4cecfa74dc1de8ae0a3`; rechecked at
   `a3cbb0325f3330573a6738f7d36a2c5b785f4d1c` ([October 10 recheck](#october-10-2026-crackededed-recheck))
+  and `96772030c7712581ad150c9b8b619c77a3527e50` ([October 20 recheck](#october-20-2026-crackededed-recheck))
 - **thiscallnet/Xtra:** `fbffe567381dfca9970860e2976ab0021c2602eb`
 - **Disposition:** bounded manual feature ports, unreleased; the configured local
   Android build/test/lint gates passed. Hosted CI and device QA are separate gates. See [October intake](#october-4-2026-feature-intake-unreleased)
@@ -297,3 +298,19 @@ All ten crackededed commits after the September audit endpoint `cadfb8b7c`, thro
 | `38e4c9b5d` Play Services Cronet provider | Deferred: dependency and network-provider change. |
 | `e3b8244e7` HTTP proxy fixes | Deferred with proxy compatibility work. |
 | `40b701ede` player fixes | Deferred: ad proxy/video-swap timing in upstream's playback service. Delaying the un-hide until ad segments end may be revisited with live ad QA. |
+
+## October 20, 2026 crackededed recheck
+
+All three crackededed commits after `a3cbb0325`, through
+`96772030c7712581ad150c9b8b619c77a3527e50`, were checked against master `ae3b1c6c7`.
+
+| Commit | Disposition |
+| --- | --- |
+| `b24b45c7b85b01d85d284eb51dbb964a8d3eea5d` fix crash on player showStatusBar | Ported: `showStatusBar()`/`hideStatusBar()` skip the window call once the player fragment is detached. |
+| `96772030c7712581ad150c9b8b619c77a3527e50` update channel point query | Ported: `ChannelPointsContext` uses the new persisted-query hash and sends `includeGoalTypes`. On 2026-10-20 Twitch still answered both hashes with the same balance shape, so this is preventive. The build-version hunk is N/A. |
+| `0497f3d2ca9085abd72102b609d3c6ef838bfee6` fix unlisted video qualities | N/A: ThystTV already skips only `FR_CODEC_NOT_REQUESTED`/`FR_DUALFORMAT_INCOMPATIBLE` (`isSkippedUnavailableReason`) and keeps blank variant attributes null. |
+
+Upstream moved Media3 to 1.11.x (`e08e2b3c2`, `61b165e99`, `8814b5bb2`). Its maintainer
+reported in crackededed/Xtra#1009 that the update broke the old custom playback service,
+which upstream then removed. ThystTV still ships that path behind
+`DEBUG_USE_CUSTOM_PLAYBACK_SERVICE`; a Media3 upgrade must retire or retest it.
