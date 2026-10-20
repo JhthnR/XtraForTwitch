@@ -734,54 +734,8 @@ class ChatFragment : BaseNetworkFragment(), MessageClickedDialog.OnButtonClickLi
                             }
                         }
                     }
-                    viewLifecycleOwner.lifecycleScope.launch {
-                        repeatOnLifecycle(Lifecycle.State.STARTED) {
-                            viewModel.newMessage.collect { result ->
-                                val message = result.first
-                                val lastIndex = result.second
-                                val removeCount = result.third
-                                adapter?.let { adapter ->
-                                    adapter.notifyItemInserted(lastIndex)
-                                    if (removeCount > 0) {
-                                        synchronized(viewModel.chatMessages) {
-                                            repeat(removeCount) {
-                                                viewModel.chatMessages.removeAt(0)
-                                            }
-                                        }
-                                        adapter.notifyItemRangeRemoved(0, removeCount)
-                                    }
-                                    if (!isChatTouched && binding.btnDown.isGone) {
-                                        binding.recyclerView.scrollToPosition(lastIndex - removeCount)
-                                    }
-                                }
-                                messageDialog?.newMessage(message)
-                                replyDialog?.newMessage(message)
-                            }
-                        }
-                    }
-                    viewLifecycleOwner.lifecycleScope.launch {
-                        repeatOnLifecycle(Lifecycle.State.STARTED) {
-                            viewModel.addMessages.collect { result ->
-                                val messages = result.first
-                                val lastIndex = result.second
-                                adapter?.let { adapter ->
-                                    adapter.notifyItemRangeInserted(0, messages.size)
-                                    if (!isChatTouched && binding.btnDown.isGone) {
-                                        binding.recyclerView.scrollToPosition(lastIndex)
-                                    }
-                                }
-                                messageDialog?.addMessages(messages)
-                                replyDialog?.addMessages(messages)
-                            }
-                        }
-                    }
-                    viewLifecycleOwner.lifecycleScope.launch {
-                        repeatOnLifecycle(Lifecycle.State.STARTED) {
-                            viewModel.removeMessages.collect { size ->
-                                adapter?.notifyItemRangeRemoved(0, size)
-                            }
-                        }
-                    }
+                    // Set until onDestroyView, so the adapter also hears about changes made while stopped.
+                    viewModel.messageListener = ::onChatMessagesChanged
                     viewLifecycleOwner.lifecycleScope.launch {
                         repeatOnLifecycle(Lifecycle.State.STARTED) {
                             viewModel.updateUserMessages.collectLatest { userId ->
@@ -862,6 +816,38 @@ class ChatFragment : BaseNetworkFragment(), MessageClickedDialog.OnButtonClickLi
                     )
                 }
             }
+        }
+    }
+
+    private fun onChatMessagesChanged(changes: List<ChatMessageStore.Change>) {
+        val adapter = adapter ?: return
+        val messageDialog = messageDialog
+        val replyDialog = replyDialog
+        var added = false
+        changes.forEach { change ->
+            when (change) {
+                is ChatMessageStore.Change.Appended -> {
+                    if (change.removedFromHead > 0) {
+                        adapter.notifyItemRangeRemoved(0, change.removedFromHead)
+                    }
+                    adapter.notifyItemRangeInserted(change.insertedAt, change.messages.size)
+                    change.messages.forEach { message ->
+                        messageDialog?.newMessage(message)
+                        replyDialog?.newMessage(message)
+                    }
+                    added = true
+                }
+                is ChatMessageStore.Change.Prepended -> {
+                    adapter.notifyItemRangeInserted(0, change.messages.size)
+                    messageDialog?.addMessages(change.messages)
+                    replyDialog?.addMessages(change.messages)
+                    added = true
+                }
+                is ChatMessageStore.Change.Cleared -> adapter.notifyItemRangeRemoved(0, change.count)
+            }
+        }
+        if (added && !isChatTouched && binding.btnDown.isGone && adapter.itemCount > 0) {
+            binding.recyclerView.scrollToPosition(adapter.itemCount - 1)
         }
     }
 
@@ -1270,6 +1256,7 @@ class ChatFragment : BaseNetworkFragment(), MessageClickedDialog.OnButtonClickLi
 
     override fun onDestroyView() {
         super.onDestroyView()
+        viewModel.messageListener = null
         _binding = null
     }
 

@@ -2,6 +2,7 @@ package com.github.andreyasadchy.xtra.ui.chat
 
 import android.content.ContentResolver
 import android.content.Context
+import android.os.SystemClock
 import android.util.Base64
 import android.util.JsonReader
 import android.util.JsonToken
@@ -146,21 +147,21 @@ class ChatViewModel @Inject constructor(
     val hidePoll = MutableStateFlow(false)
     val hidePrediction = MutableStateFlow(false)
 
-    val newMessage = MutableSharedFlow<Triple<ChatMessage, Int, Int>>()
-    val addMessages = MutableSharedFlow<Pair<List<ChatMessage>, Int>>()
-    val removeMessages = MutableSharedFlow<Int>()
+    /** Set by [ChatFragment] while its view exists. Called on the main thread right after [chatMessages] changes. */
+    var messageListener: ((List<ChatMessageStore.Change>) -> Unit)? = null
     val updateUserMessages = MutableSharedFlow<String>()
     val userEmotesUpdated = MutableSharedFlow<Unit>()
     val thirdPartyEmotesUpdated = MutableSharedFlow<Unit>()
 
-    private var messageLimit = 600
-    val chatMessages = mutableListOf<ChatMessage>()
+    private val messageStore = ChatMessageStore()
+    private var lastMessageDrain = 0L
+    val chatMessages: List<ChatMessage> = messageStore.messages
     val autoCompleteList = mutableListOf<Any?>()
     private val chatters = ConcurrentHashMap<String, Chatter>()
 
     fun startLive(networkLibrary: String?, channelId: String?, channelLogin: String?, channelName: String?, streamId: String?) {
         if (chatReadIRC == null && chatReadWebSocket == null && eventSub == null && channelLogin != null) {
-            messageLimit = applicationContext.prefs().getInt(C.CHAT_LIMIT, 600)
+            messageStore.limit = applicationContext.prefs().getInt(C.CHAT_LIMIT, 600)
             this.streamId = streamId
             startLiveChat(channelId, channelLogin)
             addChatter(channelName)
@@ -179,7 +180,7 @@ class ChatViewModel @Inject constructor(
 
     fun startReplay(channelId: String?, channelLogin: String?, chatUrl: String? = null, videoId: String? = null, startTime: Int = 0, getCurrentPosition: () -> Long?, getCurrentSpeed: () -> Float?) {
         if (chatReplayManager == null && chatReplayManagerLocal == null) {
-            messageLimit = applicationContext.prefs().getInt(C.CHAT_LIMIT, 600)
+            messageStore.limit = applicationContext.prefs().getInt(C.CHAT_LIMIT, 600)
             startReplayChat(videoId, startTime, chatUrl, getCurrentPosition, getCurrentSpeed, channelId, channelLogin)
             if (videoId != null) {
                 loadEmotes(channelId, channelLogin)
@@ -619,19 +620,8 @@ class ChatViewModel @Inject constructor(
                         list.add(it)
                     }
                 }
-                if (list.isNotEmpty()) {
-                    synchronized(chatMessages) {
-                        val left = messageLimit - chatMessages.size
-                        if (left > 0) {
-                            val items = list.takeLast(left)
-                            chatMessages.addAll(0, items)
-                            Pair(items, chatMessages.lastIndex)
-                        } else null
-                    }.let {
-                        if (it != null) {
-                            addMessages.emit(it)
-                        }
-                    }
+                if (list.isNotEmpty() && messageStore.prepend(list)) {
+                    scheduleMessageDrain()
                 }
             } catch (e: Exception) {
 
@@ -675,24 +665,30 @@ class ChatViewModel @Inject constructor(
         )
     }
 
-    suspend fun onMessage(message: ChatMessage) {
-        synchronized(chatMessages) {
-            chatMessages.add(message)
-            val removeCount = if (chatMessages.size > messageLimit) {
-                chatMessages.size - messageLimit
-            } else 0
-            if (newMessage.subscriptionCount.value > 0) {
-                Triple(message, chatMessages.lastIndex, removeCount)
-            } else {
-                if (removeCount > 0) {
-                    repeat(removeCount) {
-                        chatMessages.removeAt(0)
-                    }
-                }
-                null
+    fun onMessage(message: ChatMessage) {
+        if (messageStore.append(message)) {
+            scheduleMessageDrain()
+        }
+    }
+
+    private fun clearChatMessages() {
+        if (messageStore.clear()) {
+            scheduleMessageDrain()
+        }
+    }
+
+    /** Applies queued message changes on the main thread, at most once per [MESSAGE_BATCH_MS] while chat is busy. */
+    private fun scheduleMessageDrain() {
+        viewModelScope.launch(Dispatchers.Main) {
+            val wait = lastMessageDrain + MESSAGE_BATCH_MS - SystemClock.uptimeMillis()
+            if (wait > 0) {
+                delay(wait)
             }
-        }?.let {
-            newMessage.emit(it)
+            lastMessageDrain = SystemClock.uptimeMillis()
+            val changes = messageStore.drain()
+            if (changes.isNotEmpty()) {
+                messageListener?.invoke(changes)
+            }
         }
     }
 
@@ -869,16 +865,8 @@ class ChatViewModel @Inject constructor(
         predictionClosed = true
         predictionSecondsLeft.value = null
         predictionTimer?.cancel()
-        viewModelScope.launch {
-            synchronized(chatMessages) {
-                val size = chatMessages.size
-                chatMessages.clear()
-                size
-            }.let {
-                removeMessages.emit(it)
-            }
-            onMessage(ChatMessage(systemMsg = ContextCompat.getString(applicationContext, R.string.disconnected)))
-        }
+        clearChatMessages()
+        onMessage(ChatMessage(systemMsg = ContextCompat.getString(applicationContext, R.string.disconnected)))
         if (!hideRaid.value) {
             hideRaid.value = true
         }
@@ -935,9 +923,7 @@ class ChatViewModel @Inject constructor(
                 val chatMessage = result.first
                 val targetId = result.second
                 val deletedMessage = targetId?.let { targetId ->
-                    synchronized(chatMessages) {
-                        chatMessages.find { it.id == targetId }
-                    }
+                    messageStore.find { it.id == targetId }
                 }
                 val clearMessage = getClearMessage(chatMessage, deletedMessage, nameDisplay)
                 onMessage(clearMessage)
@@ -2361,13 +2347,7 @@ class ChatViewModel @Inject constructor(
         }
 
         override suspend fun clearMessages() {
-            synchronized(chatMessages) {
-                val size = chatMessages.size
-                chatMessages.clear()
-                size
-            }.let {
-                removeMessages.emit(it)
-            }
+            clearChatMessages()
         }
 
         override suspend fun getIntegrityToken() {
@@ -2843,6 +2823,8 @@ class ChatViewModel @Inject constructor(
     }
 
     companion object {
+        private const val MESSAGE_BATCH_MS = 100L
+
         private var savedEmoteSets: List<String>? = null
         private var savedUserEmotes: List<TwitchEmote>? = null
         private var savedGlobalBadges: List<TwitchBadge>? = null
