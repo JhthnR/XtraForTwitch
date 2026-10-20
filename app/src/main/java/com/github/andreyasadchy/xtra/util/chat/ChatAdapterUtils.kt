@@ -16,7 +16,6 @@ import android.text.style.URLSpan
 import android.util.Patterns
 import android.view.View
 import androidx.core.graphics.ColorUtils
-import androidx.fragment.app.Fragment
 import coil3.asDrawable
 import coil3.imageLoader
 import coil3.network.NetworkHeaders
@@ -682,17 +681,17 @@ object ChatAdapterUtils {
         }
     }
 
-    fun loadImages(fragment: Fragment, itemView: View, bind: (SpannableStringBuilder) -> Unit, images: List<Image>, imagePaint: NamePaint?, userName: String?, userNameStartIndex: Int?, backgroundColor: Int, builder: SpannableStringBuilder, translated: Boolean, emoteSize: Int, badgeSize: Int, emoteQuality: String, animateGifs: Boolean, enableOverlayEmotes: Boolean, chatMessage: ChatMessage, savedColors: HashMap<String, Int>, useReadableColors: Boolean, isLightTheme: Boolean, showLanguageDownloadDialog: (ChatMessage, String) -> Unit, hideErrors: Boolean) {
+    fun loadImages(itemView: View, bind: (SpannableStringBuilder) -> Unit, images: List<Image>, imagePaint: NamePaint?, userName: String?, userNameStartIndex: Int?, backgroundColor: Int, builder: SpannableStringBuilder, translated: Boolean, emoteSize: Int, badgeSize: Int, emoteQuality: String, animateGifs: Boolean, enableOverlayEmotes: Boolean, chatMessage: ChatMessage, savedColors: HashMap<String, Int>, useReadableColors: Boolean, isLightTheme: Boolean, showLanguageDownloadDialog: (ChatMessage, String) -> Unit, hideErrors: Boolean) {
         if (imagePaint != null) {
-            fragment.requireContext().imageLoader.enqueue(
-                ImageRequest.Builder(fragment.requireContext()).apply {
+            itemView.context.imageLoader.enqueue(
+                ImageRequest.Builder(itemView.context).apply {
                     data(imagePaint.imageUrl)
                     httpHeaders(NetworkHeaders.Builder().apply {
                         add("User-Agent", "ThystTV/" + BuildConfig.VERSION_NAME)
                     }.build())
                     target(
                         onSuccess = {
-                            (it.asDrawable(fragment.resources)).let { result ->
+                            (it.asDrawable(itemView.resources)).let { result ->
                                 if (result is Animatable && animateGifs) {
                                     result.callback = object : Drawable.Callback {
                                         override fun unscheduleDrawable(who: Drawable, what: Runnable) {
@@ -735,7 +734,7 @@ object ChatAdapterUtils {
             )
         }
         images.forEach { image ->
-            loadImage(fragment, image, emoteQuality) { result ->
+            loadImage(itemView, image, emoteQuality) { result ->
                 val imageSize = if (image.isEmote) {
                     emoteSize
                 } else {
@@ -766,7 +765,7 @@ object ChatAdapterUtils {
                 }
                 if (image.overlayEmote != null) {
                     val drawables = arrayOf(result)
-                    nextOverlayEmote(fragment, drawables, image.overlayEmote!!, image, itemView, bind, builder, translated, emoteSize, emoteQuality, animateGifs, enableOverlayEmotes, chatMessage, savedColors, useReadableColors, isLightTheme, showLanguageDownloadDialog, hideErrors)
+                    nextOverlayEmote(drawables, image.overlayEmote!!, image, itemView, bind, builder, translated, emoteSize, emoteQuality, animateGifs, enableOverlayEmotes, chatMessage, savedColors, useReadableColors, isLightTheme, showLanguageDownloadDialog, hideErrors)
                 } else {
                     builder.setSpan(CenteredImageSpan(result), image.start, image.end, SPAN_EXCLUSIVE_EXCLUSIVE)
                     if (!translated && chatMessage.translatedMessage != null) {
@@ -778,8 +777,8 @@ object ChatAdapterUtils {
         }
     }
 
-    private fun nextOverlayEmote(fragment: Fragment, drawables: Array<Drawable>, image: Image, bottomImage: Image, itemView: View, bind: (SpannableStringBuilder) -> Unit, builder: SpannableStringBuilder, translated: Boolean, emoteSize: Int, emoteQuality: String, animateGifs: Boolean, enableOverlayEmotes: Boolean, chatMessage: ChatMessage, savedColors: HashMap<String, Int>, useReadableColors: Boolean, isLightTheme: Boolean, showLanguageDownloadDialog: (ChatMessage, String) -> Unit, hideErrors: Boolean) {
-        loadImage(fragment, image, emoteQuality) { result ->
+    private fun nextOverlayEmote(drawables: Array<Drawable>, image: Image, bottomImage: Image, itemView: View, bind: (SpannableStringBuilder) -> Unit, builder: SpannableStringBuilder, translated: Boolean, emoteSize: Int, emoteQuality: String, animateGifs: Boolean, enableOverlayEmotes: Boolean, chatMessage: ChatMessage, savedColors: HashMap<String, Int>, useReadableColors: Boolean, isLightTheme: Boolean, showLanguageDownloadDialog: (ChatMessage, String) -> Unit, hideErrors: Boolean) {
+        loadImage(itemView, image, emoteQuality) { result ->
             val widthRatio = result.intrinsicWidth.toFloat() / result.intrinsicHeight.toFloat()
             val size = if (widthRatio == 1f) {
                 emoteSize to emoteSize
@@ -805,7 +804,7 @@ object ChatAdapterUtils {
             }
             val array = drawables.plus(result)
             if (image.overlayEmote != null) {
-                nextOverlayEmote(fragment, array, image.overlayEmote!!, bottomImage, itemView, bind, builder, translated, emoteSize, emoteQuality, animateGifs, enableOverlayEmotes, chatMessage, savedColors, useReadableColors, isLightTheme, showLanguageDownloadDialog, hideErrors)
+                nextOverlayEmote(array, image.overlayEmote!!, bottomImage, itemView, bind, builder, translated, emoteSize, emoteQuality, animateGifs, enableOverlayEmotes, chatMessage, savedColors, useReadableColors, isLightTheme, showLanguageDownloadDialog, hideErrors)
             } else {
                 val layer = LayerDrawable(array)
                 val width = array.maxOf { it.bounds.right }
@@ -820,9 +819,9 @@ object ChatAdapterUtils {
         }
     }
 
-    private fun loadImage(fragment: Fragment, image: Image, emoteQuality: String, onLoaded: (Drawable) -> Unit) {
-        fragment.requireContext().imageLoader.enqueue(
-            ImageRequest.Builder(fragment.requireContext()).apply {
+    private fun loadImage(view: View, image: Image, emoteQuality: String, onLoaded: (Drawable) -> Unit) {
+        view.context.imageLoader.enqueue(
+            ImageRequest.Builder(view.context).apply {
                 data(image.localData ?: when (emoteQuality) {
                     "4" -> image.url4x ?: image.url3x ?: image.url2x ?: image.url1x
                     "3" -> image.url3x ?: image.url2x ?: image.url1x
@@ -836,7 +835,7 @@ object ChatAdapterUtils {
                 }
                 target(
                     onSuccess = {
-                        onLoaded((it.asDrawable(fragment.resources)))
+                        onLoaded((it.asDrawable(view.resources)))
                     },
                 )
             }.build()

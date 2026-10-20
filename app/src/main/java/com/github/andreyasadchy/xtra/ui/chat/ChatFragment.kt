@@ -171,7 +171,6 @@ class ChatFragment : BaseNetworkFragment(), MessageClickedDialog.OnButtonClickLi
                         showSystemMessageEmotes = requireContext().prefs().getBoolean(C.CHAT_SYSTEM_MESSAGE_EMOTES, true),
                         chatUrl = chatUrl,
                         getEmoteBytes = viewModel::getEmoteBytes,
-                        fragment = this@ChatFragment,
                         backgroundColor = MaterialColors.getColor(requireView(), com.google.android.material.R.attr.colorSurface),
                         dialogBackgroundColor = MaterialColors.getColor(
                             requireView(),

@@ -4,12 +4,17 @@ All notable changes to ThystTV should be documented here.
 
 ## [Unreleased]
 
+### Changed
+- Busy chats add new messages in short batches and look up emotes and 7TV users directly instead of scanning every emote, so chat scrolls more smoothly.
+
 ### Removed
 - The unused Glide image library and its Chat → Image library setting. Emotes and badges already loaded with Coil, so the APK just drops Glide and its native WebP decoder.
 
 ### Fixed
 - Hiding or showing the system bars no longer crashes a player that is closing.
 - Channel Points use Twitch's current balance query.
+- A late-loading emote can no longer show an older message in a reused chat row.
+- Chat cleared while the app was in the background no longer leaves the list out of sync when you return.
 
 ## [1.4.0] - 2026-10-13
 

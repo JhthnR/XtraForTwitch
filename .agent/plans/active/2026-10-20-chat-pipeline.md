@@ -108,6 +108,7 @@ Human QA completed:
 ## Progress log
 
 - 2026-10-20: Created plan as step 3 of the performance stack (`perf/3-chat-pipeline`).
+- 2026-10-20: Implemented in three commits: `ChatMessageStore` batching, `EmoteNameIndex` plus the 7TV user map, and `ChatRowImageBinder`. The chat adapters no longer hold the fragment; images load with the row view's context.
 
 ## Decisions
 
