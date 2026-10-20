@@ -142,7 +142,7 @@ class ChatFragment : BaseNetworkFragment(), MessageClickedDialog.OnButtonClickLi
                     adapter = ChatAdapter(
                         messages = viewModel.chatMessages,
                         localTwitchEmotes = viewModel.localTwitchEmotes,
-                        thirdPartyEmotes = viewModel.thirdPartyEmotes,
+                        thirdPartyEmotes = viewModel.thirdPartyEmoteIndex,
                         globalBadges = viewModel.globalBadges,
                         channelBadges = viewModel.channelBadges,
                         cheerEmotes = viewModel.cheerEmotes,

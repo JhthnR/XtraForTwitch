@@ -112,6 +112,7 @@ class ChatViewModel @Inject constructor(
     private var loadedUserEmotes = false
     val localTwitchEmotes = mutableListOf<TwitchEmote>()
     val thirdPartyEmotes = mutableListOf<Emote>()
+    val thirdPartyEmoteIndex = EmoteNameIndex()
     val globalBadges = mutableListOf<TwitchBadge>()
     val channelBadges = mutableListOf<TwitchBadge>()
     val cheerEmotes = mutableListOf<CheerEmote>()
@@ -137,7 +138,7 @@ class ChatViewModel @Inject constructor(
     val namePaints = mutableListOf<NamePaint>()
     val stvBadges = mutableListOf<StvBadge>()
     val personalEmoteSets = mutableMapOf<String, List<Emote>>()
-    val stvUsers = mutableListOf<StvUser>()
+    val stvUsers = HashMap<String, StvUser>()
     var channelStvEmoteSetId: String? = null
     var userStvEmoteSetId: String? = null
     val translateAllMessages = MutableStateFlow<Boolean?>(null)
@@ -220,6 +221,7 @@ class ChatViewModel @Inject constructor(
         val enableIntegrity = applicationContext.prefs().getBoolean(C.ENABLE_INTEGRITY, false)
         synchronized(thirdPartyEmotes) {
             thirdPartyEmotes.clear()
+            thirdPartyEmoteIndex.rebuild(thirdPartyEmotes)
         }
         val saved = savedGlobalBadges
         if (!saved.isNullOrEmpty()) {
@@ -257,6 +259,7 @@ class ChatViewModel @Inject constructor(
                 synchronized(thirdPartyEmotes) {
                     thirdPartyEmotes.addAll(saved)
                     thirdPartyEmotes.sortBy { it.source }
+                    thirdPartyEmoteIndex.rebuild(thirdPartyEmotes)
                 }
                 if (!reloadMessages.value) {
                     reloadMessages.value = true
@@ -279,6 +282,7 @@ class ChatViewModel @Inject constructor(
                             synchronized(thirdPartyEmotes) {
                                 thirdPartyEmotes.addAll(emotes)
                                 thirdPartyEmotes.sortBy { it.source }
+                                thirdPartyEmoteIndex.rebuild(thirdPartyEmotes)
                             }
                             if (!reloadMessages.value) {
                                 reloadMessages.value = true
@@ -307,6 +311,7 @@ class ChatViewModel @Inject constructor(
                             synchronized(thirdPartyEmotes) {
                                 thirdPartyEmotes.addAll(emotes)
                                 thirdPartyEmotes.sortBy { it.source }
+                                thirdPartyEmoteIndex.rebuild(thirdPartyEmotes)
                             }
                             if (!reloadMessages.value) {
                                 reloadMessages.value = true
@@ -331,6 +336,7 @@ class ChatViewModel @Inject constructor(
                 synchronized(thirdPartyEmotes) {
                     thirdPartyEmotes.addAll(saved)
                     thirdPartyEmotes.sortBy { it.source }
+                    thirdPartyEmoteIndex.rebuild(thirdPartyEmotes)
                 }
                 if (!reloadMessages.value) {
                     reloadMessages.value = true
@@ -353,6 +359,7 @@ class ChatViewModel @Inject constructor(
                             synchronized(thirdPartyEmotes) {
                                 thirdPartyEmotes.addAll(emotes)
                                 thirdPartyEmotes.sortBy { it.source }
+                                thirdPartyEmoteIndex.rebuild(thirdPartyEmotes)
                             }
                             if (!reloadMessages.value) {
                                 reloadMessages.value = true
@@ -378,6 +385,7 @@ class ChatViewModel @Inject constructor(
                             synchronized(thirdPartyEmotes) {
                                 thirdPartyEmotes.addAll(emotes)
                                 thirdPartyEmotes.sortBy { it.source }
+                                thirdPartyEmoteIndex.rebuild(thirdPartyEmotes)
                             }
                             if (!reloadMessages.value) {
                                 reloadMessages.value = true
@@ -402,6 +410,7 @@ class ChatViewModel @Inject constructor(
                 synchronized(thirdPartyEmotes) {
                     thirdPartyEmotes.addAll(saved)
                     thirdPartyEmotes.sortBy { it.source }
+                    thirdPartyEmoteIndex.rebuild(thirdPartyEmotes)
                 }
                 if (!reloadMessages.value) {
                     reloadMessages.value = true
@@ -424,6 +433,7 @@ class ChatViewModel @Inject constructor(
                             synchronized(thirdPartyEmotes) {
                                 thirdPartyEmotes.addAll(emotes)
                                 thirdPartyEmotes.sortBy { it.source }
+                                thirdPartyEmoteIndex.rebuild(thirdPartyEmotes)
                             }
                             if (!reloadMessages.value) {
                                 reloadMessages.value = true
@@ -449,6 +459,7 @@ class ChatViewModel @Inject constructor(
                             synchronized(thirdPartyEmotes) {
                                 thirdPartyEmotes.addAll(emotes)
                                 thirdPartyEmotes.sortBy { it.source }
+                                thirdPartyEmoteIndex.rebuild(thirdPartyEmotes)
                             }
                             if (!reloadMessages.value) {
                                 reloadMessages.value = true
@@ -1308,6 +1319,7 @@ class ChatViewModel @Inject constructor(
                         synchronized(thirdPartyEmotes) {
                             thirdPartyEmotes.removeAll { it.name in removedEmotes }
                             thirdPartyEmotes.addAll(newEmotes)
+                            thirdPartyEmoteIndex.rebuild(thirdPartyEmotes)
                         }
                         if (!reloadMessages.value) {
                             reloadMessages.value = true
@@ -1370,14 +1382,14 @@ class ChatViewModel @Inject constructor(
                     is StvEventApiUtils.Entitlement.Paint -> {
                         if (showNamePaints) {
                             synchronized(stvUsers) {
-                                val user = stvUsers.find { it.userId == result.userId }
+                                val user = stvUsers[result.userId]
                                 if (user != null) {
                                     if (user.paintId != result.paintId) {
                                         user.paintId = result.paintId
                                         true
                                     } else false
                                 } else {
-                                    stvUsers.add(StvUser(
+                                    stvUsers.put(result.userId, StvUser(
                                         userId = result.userId,
                                         paintId = result.paintId
                                     ))
@@ -1393,14 +1405,14 @@ class ChatViewModel @Inject constructor(
                     is StvEventApiUtils.Entitlement.Badge -> {
                         if (showStvBadges) {
                             synchronized(stvUsers) {
-                                val user = stvUsers.find { it.userId == result.userId }
+                                val user = stvUsers[result.userId]
                                 if (user != null) {
                                     if (user.badgeId != result.badgeId) {
                                         user.badgeId = result.badgeId
                                         true
                                     } else false
                                 } else {
-                                    stvUsers.add(StvUser(
+                                    stvUsers.put(result.userId, StvUser(
                                         userId = result.userId,
                                         badgeId = result.badgeId
                                     ))
@@ -1416,14 +1428,14 @@ class ChatViewModel @Inject constructor(
                     is StvEventApiUtils.Entitlement.EmoteSet -> {
                         if (showPersonalEmotes) {
                             synchronized(stvUsers) {
-                                val user = stvUsers.find { it.userId == result.userId }
+                                val user = stvUsers[result.userId]
                                 if (user != null) {
                                     if (user.emoteSetId != result.setId) {
                                         user.emoteSetId = result.setId
                                         true
                                     } else false
                                 } else {
-                                    stvUsers.add(StvUser(
+                                    stvUsers.put(result.userId, StvUser(
                                         userId = result.userId,
                                         emoteSetId = result.setId
                                     ))
@@ -2762,6 +2774,7 @@ class ChatViewModel @Inject constructor(
                 synchronized(thirdPartyEmotes) {
                     thirdPartyEmotes.clear()
                     thirdPartyEmotes.addAll(emotes)
+                    thirdPartyEmoteIndex.rebuild(thirdPartyEmotes)
                 }
                 if (emotes.isEmpty()) {
                     viewModelScope.launch {
