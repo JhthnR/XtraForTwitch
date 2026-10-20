@@ -443,15 +443,8 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
     }
 
     private fun updateFullscreenLiveRewind() {
-        val show = LiveRewind.shouldShowFullscreenLiveRewind(videoType, liveRewindOrigin() != null, isMaximized, isPortrait)
-        with(binding.playerControls) {
-            liveRewind.isVisible = show
-            if (show) {
-                liveRewind.setOnClickListener { showLiveRewindOptions() }
-            } else {
-                liveRewind.setOnClickListener(null)
-            }
-        }
+        val show = LiveRewind.shouldShowFullscreenLiveRewind(videoType, liveRewindOrigin() != null, isMaximized)
+        binding.playerControls.bindLiveRewindButton(show, isPortrait) { showLiveRewindOptions() }
     }
 
     protected open fun isLiveRewindPlaybackReady(): Boolean = false

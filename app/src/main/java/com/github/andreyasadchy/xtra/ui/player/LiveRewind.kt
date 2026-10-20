@@ -99,10 +99,8 @@ internal object LiveRewind {
         videoType: String?,
         hasLiveRewindOrigin: Boolean,
         isMaximized: Boolean,
-        isPortrait: Boolean,
     ): Boolean =
         videoType == PlayerFragment.STREAM &&
             !hasLiveRewindOrigin &&
-            isMaximized &&
-            !isPortrait
+            isMaximized
 }

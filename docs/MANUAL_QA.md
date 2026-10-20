@@ -213,6 +213,13 @@ behavior remain unverified; emulator results are recorded separately in
 | Icon/banner assets look correct | [ ] | [ ] | |
 | No private account data exposed | [ ] | [ ] | |
 
+### Portrait live rewind (performance stack)
+
+- [ ] Portrait live player: the bottom-left rewind action opens the existing
+  recording options. Check 360dp width, 200% text, RTL, uptime/viewer count and
+  optional restart, seek-live, volume, compressor, audio-only and keyboard buttons.
+  Rotate, minimize/restore and return from recording replay; controls stay readable.
+
 ### VoD seek previews (performance stack)
 
 - [ ] Finished online VoD: drag slowly, quickly and across sprite-sheet boundaries;

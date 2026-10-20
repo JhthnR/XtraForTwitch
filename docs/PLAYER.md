@@ -235,6 +235,15 @@ progress/accessibility updates, very short players and compact restoration, and
 renders phone/tablet feedback previews. Device gesture timing, playback and actual
 window insets still require the human player matrix below.
 
+## Live rewind controls
+
+The live-rewind button is available for maximized live streams in portrait and
+landscape. Portrait uses a separate stats row below the actions so uptime/viewer
+count do not overlap optional volume/audio controls. The center play/pause shifts
+up only as needed to clear that row. Rotation restores the original landscape
+rules; minimized players and recording replays do not get a live-rewind button.
+`PlayerLiveRewindControlsTest` renders compact/RTL/200% text and landscape controls.
+
 ## VoD seek previews
 
 `SeekPreview` draws a frame from a Twitch storyboard sprite sheet while the seek

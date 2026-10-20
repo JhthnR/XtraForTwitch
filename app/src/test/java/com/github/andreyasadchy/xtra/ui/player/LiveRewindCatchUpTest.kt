@@ -63,29 +63,20 @@ class LiveRewindCatchUpTest {
         )
     }
 
-    @Test fun `fullscreen button shows only for maximized landscape live`() {
+    @Test fun `fullscreen button shows only for maximized live in either orientation`() {
         assertTrue(
             LiveRewind.shouldShowFullscreenLiveRewind(
                 videoType = PlayerFragment.STREAM,
                 hasLiveRewindOrigin = false,
                 isMaximized = true,
-                isPortrait = false,
             )
         )
-        assertFalse(
-            LiveRewind.shouldShowFullscreenLiveRewind(
-                videoType = PlayerFragment.STREAM,
-                hasLiveRewindOrigin = false,
-                isMaximized = true,
-                isPortrait = true,
-            )
-        )
+
         assertFalse(
             LiveRewind.shouldShowFullscreenLiveRewind(
                 videoType = PlayerFragment.STREAM,
                 hasLiveRewindOrigin = false,
                 isMaximized = false,
-                isPortrait = false,
             )
         )
         assertFalse(
@@ -93,7 +84,6 @@ class LiveRewindCatchUpTest {
                 videoType = PlayerFragment.VIDEO,
                 hasLiveRewindOrigin = false,
                 isMaximized = true,
-                isPortrait = false,
             )
         )
         assertFalse(
@@ -101,7 +91,6 @@ class LiveRewindCatchUpTest {
                 videoType = PlayerFragment.STREAM,
                 hasLiveRewindOrigin = true,
                 isMaximized = true,
-                isPortrait = false,
             )
         )
     }

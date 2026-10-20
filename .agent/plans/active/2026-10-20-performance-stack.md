@@ -83,6 +83,14 @@ Human QA completed: none in this continuation.
   Finished seek-preview hooks and added frame/placement/cancellation tests. Build running.
 - 2026-10-20: Step 5 passed assembleDebug, all 857 unit tests, lint (0 errors / 336
   warnings), focused native-render recheck and diff review. Device QA is pending.
+- 2026-10-20: Step 5 saved as `4f6210d87`; dedicated plan is under completed/.
+  Started portrait rewind: retain existing discovery/handoff, expose its existing
+  button for maximized portrait live playback, and put stats below the action row
+  to avoid collision. Compact/native/RTL/200% text tests added.
+- 2026-10-20: Step 6 passed assembleDebug, full test and lint (0 errors / 336
+  warnings). Reviewed native portrait, RTL, 200% text and landscape renders;
+  action and stats bounds stay separate. Existing discovery and player handoff
+  remain unchanged. Human playback/gesture/floating-chat QA remains pending.
 
 ## Decisions
 

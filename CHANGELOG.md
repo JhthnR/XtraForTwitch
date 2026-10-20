@@ -6,6 +6,7 @@ All notable changes to ThystTV should be documented here.
 
 ### Added
 - Finished online VoDs can show storyboard thumbnails and timestamps while dragging the seek bar.
+- The live-rewind button is available in the maximized portrait player too, with stream stats below the action row.
 
 ### Changed
 - Busy chats add new messages in short batches and look up emotes and 7TV users directly instead of scanning every emote, so chat scrolls more smoothly.
