@@ -13,11 +13,10 @@ Do not activate Superpowers or delegate this task.
 
 ## Current context
 
-Base: `ae3b1c6c7`. The task worktree was moved from
-`C:/Users/simon/Documents/Projects/ThystTV-perf` to
-`C:/Users/simon/Documents/Android/ThystTV/.private/worktrees/perf` on October 20
-so continuation stays inside the writable project. Originals and branches were
-preserved. The main checkout and its unrelated files remain untouched.
+Base: `ae3b1c6c7`. Continue in the existing isolated performance worktree. Its
+location was moved into the writable project during continuation, preserving the
+unfinished changes and branches. The main checkout and unrelated files remain
+untouched. Machine-specific paths and raw logs belong in ignored local evidence.
 
 Completed before the continuation:
 
@@ -43,7 +42,7 @@ Completed before the continuation:
 ## Risks
 
 Seek overlay and compact control geometry: medium. Build/profile tooling: medium.
-Media3: high because upstream reported legacy-backend audio without video and
+Media3: high because upstream reported Media3-service audio without video and
 ThystTV previously needed an HLS rollback. Keep the upgrade on its own final branch.
 
 ## Human approval
@@ -91,6 +90,43 @@ Human QA completed: none in this continuation.
   warnings). Reviewed native portrait, RTL, 200% text and landscape renders;
   action and stats bounds stay separate. Existing discovery and player handoff
   remain unchanged. Human playback/gesture/floating-chat QA remains pending.
+- 2026-10-20: Step 6 saved as `319cf27f9`, with 860 tests in 109 classes passing.
+  Step 7 adds the official 1.5.0 Baseline Profile plugin/producer and ProfileInstaller
+  1.4.1, isolated `.benchmark` packages, startup/local-Stats capture, and physical
+  cold-start comparisons. Building capture APKs before emulator generation.
+- 2026-10-20: Producer/capture APK builds passed and metadata confirms the isolated
+  `.benchmark` target. Release guards: 75 passed / 2 platform skips. Generation's
+  first invocation needed PowerShell quoting (documented); the existing AVD then
+  refused installation with only 320 MB free. Restarted the task emulator on a
+  fresh data image inside ignored `.private/emulator-perf`, preserving original
+  emulator app data. Profile generation is still pending.
+- 2026-10-20: Fresh-image installation worked and startup capture passed. Stats
+  capture found a retained UiAutomator accessibility node becoming stale after a
+  range update/swipe. Changed the generator to wait for idle and resolve current
+  list bounds per gesture, keeping navigation/filter/gesture checks intact.
+- 2026-10-20: Further capture diagnosis used actual emulator pixels/hierarchy:
+  after the app bar collapses, the list bounds reach behind the status bar and
+  the downward gesture opened system notifications. The generator now uses the
+  middle half of the current list bounds, retaining all navigation assertions.
+- 2026-10-20: Generation passed in 7m08s: both startup (iteration 8) and local
+  navigation (iteration 11) reached the default two stable iterations. The two
+  timing benchmarks were intentionally excluded by the profile-generation rule
+  selector. Saved both generated source profiles and removed stale handwritten
+  rules. Physical-device speedup is unmeasured. Normal build/release gates pending.
+- 2026-10-20: Corrected the inherited Media3 risk assessment after reading upstream
+  `9a919bfa06a2efd32bb4c5d1b72e0ec96d2f9dea` (2026-08-16): it deletes
+  `Media3Fragment`/`PlaybackService` and retains direct-bound `ExoPlayerService`.
+  Thus ThystTV's default path is exposed to the reported regression, not merely
+  its optional direct-bound backend. Step 8 must compare default playback first;
+  do not change defaults or import upstream's broad service removal.
+- 2026-10-21: Step 7 passed assembleDebug, test, lintDebug and assembleRelease:
+  860 tests in 109 classes, zero failures/errors/skips; lint zero errors / 335
+  warnings. Release guards passed 75 tests with two platform skips. Generated
+  profiles are consumed by R8 (9,174 residual rules, including ThystTVApp and
+  StatsFragment). The unsigned production APK contains baseline.prof (7,496
+  bytes) and baseline.profm (447 bytes), without the benchmark native library.
+  No physical startup speedup is claimed. Preserve this working artifact as the
+  1.9.3 control before evaluating Media3 1.11.1 on the next isolated branch.
 
 ## Decisions
 

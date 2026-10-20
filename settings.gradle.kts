@@ -21,3 +21,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "ThystTV"
 include(":app")
+include(":baselineprofile")

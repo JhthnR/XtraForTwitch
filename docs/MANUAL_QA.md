@@ -213,6 +213,13 @@ behavior remain unverified; emulator results are recorded separately in
 | Icon/banner assets look correct | [ ] | [ ] | |
 | No private account data exposed | [ ] | [ ] | |
 
+### Startup profiling (performance stack)
+
+- [ ] On physical hardware, compare cold startup with/without the saved profile
+  using `baselineprofile/README.md`. Record raw timings/device/API/commit and test
+  launch, navigation, first scroll and returning from background. Emulator profile
+  generation alone does not establish a speedup.
+
 ### Portrait live rewind (performance stack)
 
 - [ ] Portrait live player: the bottom-left rewind action opens the existing

@@ -1,5 +1,6 @@
 plugins {
     alias(libs.plugins.android.application)
+    alias(libs.plugins.baselineprofile)
     alias(libs.plugins.kotlin.parcelize)
     alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.ksp)
@@ -142,7 +143,8 @@ dependencies {
     implementation(libs.coroutines)
 
     // Baseline Profile installer for faster app startup
-    implementation("androidx.profileinstaller:profileinstaller:1.3.1")
+    implementation(libs.profileinstaller)
+    baselineProfile(project(":baselineprofile"))
 
     // Debug tools - LeakCanary for memory leak detection
     debugImplementation("com.squareup.leakcanary:leakcanary-android:2.14")
@@ -155,6 +157,23 @@ dependencies {
     testImplementation("org.mockito:mockito-core:5.10.0")
     testImplementation("org.mockito:mockito-inline:5.2.0")
     testImplementation("androidx.arch.core:core-testing:2.2.0")
+}
+
+baselineProfile {
+    automaticGenerationDuringBuild = false
+    saveInSrc = true
+    mergeIntoMain = true
+}
+
+// Profile tooling installs only these disposable variants, with the local debug key.
+// Keep the ordinary release package and conditional release signing unchanged.
+androidComponents.finalizeDsl { extension ->
+    extension.buildTypes.filter {
+        it.name.startsWith("nonMinified") || it.name.startsWith("benchmark")
+    }.forEach {
+        it.applicationIdSuffix = ".benchmark"
+        it.signingConfig = extension.signingConfigs.getByName("debug")
+    }
 }
 
 apollo {

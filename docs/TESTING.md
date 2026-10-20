@@ -53,6 +53,15 @@ both font sizes. Tests explicitly resolve layout direction for detached preview 
 These check Android layout/rendering, not real player playback, device window placement,
 or animation smoothness. Human checks below remain required.
 
+### Startup profile generation
+
+See [profile tooling](../baselineprofile/README.md) for reproducible capture and physical cold-start
+benchmarks. Normal builds consume committed profiles without starting a device.
+Profile generation checks startup and local Stats navigation; it does not certify
+network scrolling, chat performance or decoding. Verify the release APK contains
+nonempty `assets/dexopt/baseline.prof` and `baseline.profm`. Keep raw timing/trace
+outputs private and never report emulator timing as device performance evidence.
+
 ## Manual regression checklist
 
 ### September 27 TV remote navigation

@@ -33,6 +33,8 @@ If more code-style rules are needed later, add `docs/CONVENTIONS.md` in a separa
 
 ### Android App
 
+- Startup/profile tooling: `baselineprofile/README.md`; generated ART rules under
+  `app/src/main/generated/baselineProfiles/`. Tooling APKs use a separate `.benchmark` ID.
 - App module: `app/`
 - Build config: `app/build.gradle.kts`
 - Main activity / app-level player entry point: `app/src/main/java/com/github/andreyasadchy/xtra/ui/main/MainActivity.kt`
