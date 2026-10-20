@@ -109,6 +109,11 @@ Human QA completed:
 
 - 2026-10-20: Created plan as step 3 of the performance stack (`perf/3-chat-pipeline`).
 - 2026-10-20: Implemented in three commits: `ChatMessageStore` batching, `EmoteNameIndex` plus the 7TV user map, and `ChatRowImageBinder`. The chat adapters no longer hold the fragment; images load with the row view's context.
+- 2026-10-20: Agent emulator smoke test (not human QA), debug build on `Medium_Phone_API_36.1`.
+  A busy live chat ran for about three minutes: emote-only floods, 7TV/BTTV emotes, badges and
+  the prediction overlay rendered. Flinging up held the list and showed the jump-to-bottom
+  button, which returned to live messages. Home for 20 seconds and restore kept the same process
+  and chat continued. Logcat for the app had no crashes or RecyclerView inconsistency errors.
 
 ## Decisions
 
