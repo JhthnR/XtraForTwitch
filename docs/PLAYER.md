@@ -235,6 +235,27 @@ progress/accessibility updates, very short players and compact restoration, and
 renders phone/tablet feedback previews. Device gesture timing, playback and actual
 window insets still require the human player matrix below.
 
+## VoD seek previews
+
+`SeekPreview` draws a frame from a Twitch storyboard sprite sheet while the seek
+bar is dragged; it never seeks the decoder during the drag. `VideoStoryboard`
+derives the optional index from the existing animated-preview URL and validates
+the grid before mapping positions to cells. Missing or processing storyboards
+silently leave normal seeking available. Online finished VoDs with preview
+metadata are supported; clips, downloads, live rewind and spoiler-free mode do
+not request previews.
+
+The preview belongs to the player view. Hiding controls, minimizing, stopping,
+PiP and destroying the view cancel its sheet request and drop bitmap references.
+Request generations reject late callbacks, including a second drag on the same
+sheet. Drawing uses a source rectangle rather than creating a bitmap per frame;
+Coil owns cached sheet bitmaps, so they must not be recycled by the view.
+
+`VideoStoryboardTest` checks index parsing and sheet boundaries. `SeekPreviewTest`
+checks real Android controls, source-cell rendering, placement, cancellation and
+late callbacks. Native renders are under `app/build/ui-previews/seek-preview-*`.
+They do not establish actual Twitch availability, touch timing or playback.
+
 ## Required Checks For Player Work
 
 Run:

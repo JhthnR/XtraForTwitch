@@ -193,6 +193,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
     private var controllerIsAnimating = false
     private var controllerAnimation: ViewPropertyAnimator? = null
     private var tvRevealKeyCode: Int? = null
+    private var seekPreview: SeekPreview? = null
     private var backgroundColor: Int? = null
     private var backgroundVisible = false
     private val brightnessState = PlayerBrightnessState()
@@ -1238,6 +1239,20 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                 true
             }
             with(playerControls) {
+                if (videoType == VIDEO && liveRewindOrigin() == null &&
+                    !requireContext().prefs().getBoolean(C.PLAYER_SPOILER_FREE_VODS, false)
+                ) {
+                    seekPreview = SeekPreview(seekPreviewLayout, seekPreviewFrame, seekPreviewTime)
+                    viewModel.loadVideoStoryboard(
+                        requireContext().prefs().getString(C.NETWORK_LIBRARY, "OkHttp"),
+                        requireArguments().getString(KEY_VIDEO_ANIMATED_PREVIEW),
+                    )
+                    viewLifecycleOwner.lifecycleScope.launch {
+                        repeatOnLifecycle(Lifecycle.State.STARTED) {
+                            viewModel.videoStoryboard.collectLatest { seekPreview?.storyboard = it }
+                        }
+                    }
+                }
                 root.setOnTouchListener { _, event ->
                     controllerTapDetector?.onTouchEvent(event) == true
                 }
@@ -1251,13 +1266,16 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                         override fun onScrubStart(timeBar: TimeBar, position: Long) {
                             binding.playerControls.position.text = DateUtils.formatElapsedTime(position / 1000)
                             binding.playerControls.root.removeCallbacks(controllerHideAction)
+                            if (useController && isMaximized) seekPreview?.show(progressBar, position, getDuration())
                         }
 
                         override fun onScrubMove(timeBar: TimeBar, position: Long) {
                             binding.playerControls.position.text = DateUtils.formatElapsedTime(position / 1000)
+                            if (useController && isMaximized) seekPreview?.show(progressBar, position, getDuration())
                         }
 
                         override fun onScrubStop(timeBar: TimeBar, position: Long, canceled: Boolean) {
+                            seekPreview?.hide()
                             if (!canceled) {
                                 seek(position)
                             } else {
@@ -2965,6 +2983,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
     }
 
     private fun hideController(force: Boolean = false, immediate: Boolean = false) {
+        seekPreview?.hide()
         if (!force) {
             maybeShowPinchHint()
         }
@@ -3378,6 +3397,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
     override fun onPictureInPictureModeChanged(isInPictureInPictureMode: Boolean) {
         with(binding) {
             if (isInPictureInPictureMode) {
+                seekPreview?.hide()
                 liveRewindDiscovery?.cancel()
                 liveRewindDialog?.dismiss()
                 restoreBrightness()
@@ -3417,6 +3437,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
     }
 
     override fun onStop() {
+        seekPreview?.hide()
         liveRewindDiscovery?.cancel()
         liveRewindStartup?.cancel()
         liveRewindStartup = null
@@ -3879,6 +3900,8 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
     }
 
     override fun onDestroyView() {
+        seekPreview?.release()
+        seekPreview = null
         foldImeVisible = false
         liveRewindDiscovery?.cancel()
         liveRewindStartup?.cancel()

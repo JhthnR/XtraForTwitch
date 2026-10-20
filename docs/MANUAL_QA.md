@@ -213,6 +213,18 @@ behavior remain unverified; emulator results are recorded separately in
 | Icon/banner assets look correct | [ ] | [ ] | |
 | No private account data exposed | [ ] | [ ] | |
 
+### VoD seek previews (performance stack)
+
+- [ ] Finished online VoD: drag slowly, quickly and across sprite-sheet boundaries;
+  preview time follows the thumb, stays within the player at both ends and vanishes
+  on release/cancel. Playback seeks once on release as before.
+- [ ] Check compact portrait, landscape, tablet, RTL, enlarged fonts and TV D-pad.
+- [ ] Missing/processing storyboards and offline networking leave seeking usable.
+  Spoiler-free VoDs, downloads, clips, live and live rewind show no preview.
+- [ ] Minimize/restore, close/reopen, switch VoDs/live streams, rotate and enter/leave
+  PiP/background during a drag. No old preview or image request survives.
+- [ ] Live/VoD playback, speed/quality, gestures and floating chat remain usable.
+
 ## Evidence
 
 Screenshots, videos, logs, or APK links:

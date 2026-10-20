@@ -18,6 +18,7 @@ import com.github.andreyasadchy.xtra.graphql.type.BadgeImageSize
 import com.github.andreyasadchy.xtra.graphql.type.EmoteType
 import com.github.andreyasadchy.xtra.model.VideoPosition
 import com.github.andreyasadchy.xtra.model.VideoQuality
+import com.github.andreyasadchy.xtra.model.VideoStoryboard
 import com.github.andreyasadchy.xtra.model.chat.CheerEmote
 import com.github.andreyasadchy.xtra.model.chat.Emote
 import com.github.andreyasadchy.xtra.model.chat.RecentEmote
@@ -409,6 +410,29 @@ class PlayerRepository @Inject constructor(
                 }
             }
         }
+    }
+
+    suspend fun loadVideoStoryboard(networkLibrary: String?, url: String): VideoStoryboard? = withContext(Dispatchers.IO) {
+        val response = when {
+            networkLibrary == "HttpEngine" && Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && SdkExtensions.getExtensionVersion(Build.VERSION_CODES.S) >= 7 && httpEngine != null -> {
+                val response = suspendCancellableCoroutine { continuation ->
+                    httpEngine.get().newUrlRequestBuilder(url, cronetExecutor, HttpEngineUtils.byteArrayUrlCallback(continuation)).build().start()
+                }
+                if (response.first.httpStatusCode in 200..299) String(response.second) else null
+            }
+            networkLibrary == "Cronet" && cronetEngine != null -> {
+                val response = suspendCancellableCoroutine { continuation ->
+                    cronetEngine.get().newUrlRequestBuilder(url, getByteArrayCronetCallback(continuation), cronetExecutor).build().start()
+                }
+                if (response.first.httpStatusCode in 200..299) String(response.second) else null
+            }
+            else -> {
+                okHttpClient.newCall(Request.Builder().url(url).build()).execute().use { response ->
+                    if (response.isSuccessful) response.body.string() else null
+                }
+            }
+        }
+        response?.let { VideoStoryboard.from(url, json.decodeFromString<List<VideoStoryboard.Info>>(it)) }
     }
 
     suspend fun sendMinuteWatched(networkLibrary: String?, userId: String?, streamId: String?, channelId: String?, channelLogin: String?) = withContext(Dispatchers.IO) {
