@@ -249,6 +249,23 @@ behavior remain unverified; emulator results are recorded separately in
   PiP/background during a drag. No old preview or image request survives.
 - [ ] Live/VoD playback, speed/quality, gestures and floating chat remain usable.
 
+### Optional Google Cast
+
+- [ ] With Cast off, default live/VoD/clip/download playback and controls match the
+  local player. With Cast enabled, test Google Play services absent/unavailable.
+- [ ] On real hardware on the same network: discover, connect, play live, VoD and
+  clip, pause, seek VoD and change speed. Check automatic receiver quality and the
+  phone's remote status. Check receiver-supported codecs and URL/header limits.
+- [ ] Switch live/live, live/VoD and VoD/live while casting. Open a download: the
+  existing receiver session must remain, with an explanation on the phone.
+- [ ] Disconnect: one local player resumes the same paused/playing VoD position
+  and speed, or the live edge, using normal quality and HTTP configuration.
+- [ ] Background/lock/restore the phone, minimize/restore, rotate, lose/recover
+  sender and receiver networks, close/reopen, close from the notification and
+  remove the task. No duplicate audio, stale route dialog or orphaned receiver.
+- [ ] Repeat local speed/quality, gestures, floating chat and system PiP. Cast is
+  currently supported only by the default Media3 session backend.
+
 ## Evidence
 
 Screenshots, videos, logs, or APK links:

@@ -4,6 +4,7 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.ComponentName
 import android.content.Context
+import android.app.PictureInPictureParams
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import android.os.Build
@@ -23,6 +24,7 @@ import androidx.core.view.isVisible
 import androidx.core.widget.NestedScrollView
 import androidx.lifecycle.lifecycleScope
 import androidx.media3.common.PlaybackException
+import androidx.media3.common.DeviceInfo
 import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.Player
 import androidx.media3.common.Timeline
@@ -61,10 +63,14 @@ class Media3Fragment : PlayerFragment() {
     private val player: MediaController?
         get() = controllerFuture?.let { if (it.isDone && !it.isCancelled) it.get() else null }
     private var playerListener: Player.Listener? = null
+    private var castUi: PlayerCastUi? = null
     private val updateProgressAction = Runnable { if (view != null) updateProgress() }
 
     override fun onStart() {
         super.onStart()
+        if (castUi == null && videoType != OFFLINE_VIDEO && requireContext().prefs().getBoolean(C.PLAYER_CAST, false)) {
+            castUi = PlayerCastUi(binding.playerControls.castButtonStub)
+        }
         controllerFuture = MediaController.Builder(
             requireContext(),
             SessionToken(
@@ -74,8 +80,22 @@ class Media3Fragment : PlayerFragment() {
         ).buildAsync()
         controllerFuture?.addListener({
             val controller = controllerFuture?.get()
-            controller?.setVideoSurfaceView(binding.playerSurface)
+            if (controller?.isCommandAvailable(Player.COMMAND_SET_VIDEO_SURFACE) == true) {
+                controller.setVideoSurfaceView(binding.playerSurface)
+            }
             val listener = object : Player.Listener {
+
+                override fun onDeviceInfoChanged(deviceInfo: DeviceInfo) {
+                    updatePlaybackRouteUi()
+                    setSubtitlesButton()
+                    binding.castStatus.isVisible = isRemotePlayback()
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && requireActivity().packageManager.hasSystemFeature(android.content.pm.PackageManager.FEATURE_PICTURE_IN_PICTURE)) {
+                        requireActivity().setPictureInPictureParams(PictureInPictureParams.Builder()
+                            .setAutoEnterEnabled(!isRemotePlayback() && canEnterPictureInPicture() &&
+                                requireContext().prefs().getBoolean(C.PLAYER_PICTURE_IN_PICTURE, true)).build())
+                    }
+                    requireView().keepScreenOn = !isRemotePlayback() && player?.isPlaying == true
+                }
 
                 override fun onPlaybackStateChanged(playbackState: Int) {
                     if (playbackState == Player.STATE_READY) markLiveRewindReady()
@@ -119,6 +139,9 @@ class Media3Fragment : PlayerFragment() {
                 }
 
                 override fun onAvailableCommandsChanged(availableCommands: Player.Commands) {
+                    if (availableCommands.contains(Player.COMMAND_SET_VIDEO_SURFACE)) {
+                        player?.setVideoSurfaceView(binding.playerSurface)
+                    }
                     if (Util.shouldShowPlayButton(player)) {
                         binding.playerControls.playPause.setImageResource(R.drawable.baseline_play_arrow_black_48)
                         binding.playerControls.playPause.visibility = View.VISIBLE
@@ -161,12 +184,15 @@ class Media3Fragment : PlayerFragment() {
 
                 override fun onIsPlayingChanged(isPlaying: Boolean) {
                     updateProgress()
-                    if (!requireContext().prefs().getBoolean(C.PLAYER_KEEP_SCREEN_ON_WHEN_PAUSED, false) && canEnterPictureInPicture()) {
+                    if (isRemotePlayback()) {
+                        requireView().keepScreenOn = false
+                    } else if (!requireContext().prefs().getBoolean(C.PLAYER_KEEP_SCREEN_ON_WHEN_PAUSED, false) && canEnterPictureInPicture()) {
                         requireView().keepScreenOn = isPlaying
                     }
                 }
 
                 override fun onTracksChanged(tracks: Tracks) {
+                    if (isRemotePlayback()) return
                     if (!tracks.isEmpty && !viewModel.loaded.value) {
                         viewModel.loaded.value = true
                         toggleSubtitles(requireContext().prefs().getBoolean(C.PLAYER_SUBTITLES_ENABLED, false))
@@ -187,6 +213,7 @@ class Media3Fragment : PlayerFragment() {
                     binding.playerControls.progressBar.setDuration(duration)
                     binding.playerControls.duration.text = DateUtils.formatElapsedTime(duration / 1000)
                     updateProgress()
+                    if (isRemotePlayback()) return
                     if (reason == Player.TIMELINE_CHANGE_REASON_PLAYLIST_CHANGED && !timeline.isEmpty && viewModel.qualities?.find { it.name == AUTO_QUALITY } != null) {
                         viewModel.updateQualities = viewModel.quality?.name != AUDIO_ONLY_QUALITY
                     }
@@ -315,6 +342,10 @@ class Media3Fragment : PlayerFragment() {
                 }
 
                 override fun onPlayerError(error: PlaybackException) {
+                    if (isRemotePlayback()) {
+                        Toast.makeText(requireContext(), R.string.player_error, Toast.LENGTH_LONG).show()
+                        return
+                    }
                     if (handleLiveRewindFailure()) return
                     Log.e(tag, "Player error", error)
                     when (videoType) {
@@ -411,7 +442,7 @@ class Media3Fragment : PlayerFragment() {
             }
             controller?.addListener(listener)
             playerListener = listener
-            if (viewModel.restoreQuality) {
+            if (!isRemotePlayback() && viewModel.restoreQuality) {
                 viewModel.restoreQuality = false
                 changeQuality(viewModel.previousQuality)
             }
@@ -437,12 +468,14 @@ class Media3Fragment : PlayerFragment() {
                     }
                 }, MoreExecutors.directExecutor())
             }
-            if (viewModel.resume) {
+            if (!isRemotePlayback() && viewModel.resume) {
                 viewModel.resume = false
                 player?.playWhenReady = true
                 player?.prepare()
             }
             player?.let { player ->
+                updatePlaybackRouteUi()
+                binding.castStatus.isVisible = isRemotePlayback()
                 if (viewModel.loaded.value && player.currentMediaItem == null) {
                     viewModel.started = false
                 }
@@ -591,6 +624,8 @@ class Media3Fragment : PlayerFragment() {
 
     override fun getCurrentPosition() = player?.currentPosition
 
+    override fun isRemotePlayback() = player?.deviceInfo?.playbackType == DeviceInfo.PLAYBACK_TYPE_REMOTE
+
     override fun getDuration() = player?.duration ?: 0L
 
     override fun getCurrentSpeed() = player?.playbackParameters?.speed
@@ -651,6 +686,7 @@ class Media3Fragment : PlayerFragment() {
     }
 
     override fun toggleAudioCompressor() {
+        if (isRemotePlayback()) return
         player?.sendCustomCommand(
             SessionCommand(
                 PlaybackService.TOGGLE_DYNAMICS_PROCESSING,
@@ -672,7 +708,7 @@ class Media3Fragment : PlayerFragment() {
 
     override fun setSubtitlesButton() {
         with(binding.playerControls) {
-            val textTracks = player?.currentTracks?.groups?.find { it.type == androidx.media3.common.C.TRACK_TYPE_TEXT }
+            val textTracks = player?.currentTracks?.groups?.find { !isRemotePlayback() && it.type == androidx.media3.common.C.TRACK_TYPE_TEXT }
             if (textTracks != null && requireContext().prefs().getBoolean(C.PLAYER_SUBTITLES, false)) {
                 subtitles.visibility = View.VISIBLE
                 if (textTracks.isSelected) {
@@ -751,6 +787,7 @@ class Media3Fragment : PlayerFragment() {
     }
 
     override fun changeQuality(selectedQuality: VideoQuality?) {
+        if (isRemotePlayback()) return
         viewModel.previousQuality = viewModel.quality
         viewModel.quality = selectedQuality
         viewModel.quality?.let { quality ->
@@ -946,11 +983,18 @@ class Media3Fragment : PlayerFragment() {
         }
     }
 
-    override fun close() {
+    override fun close() = closePlayback(disconnect = false)
+
+    override fun closeSession() = closePlayback(disconnect = true)
+
+    private fun closePlayback(disconnect: Boolean) {
         savePosition()
         player?.pause()
         player?.stop()
         player?.clearMediaItems()
+        if (disconnect) {
+            player?.sendCustomCommand(SessionCommand(PlaybackService.END_CAST_SESSION, Bundle.EMPTY), Bundle.EMPTY)
+        }
         player?.sendCustomCommand(
             SessionCommand(PlaybackService.SET_SLEEP_TIMER, Bundle().apply {
                 putLong(PlaybackService.DURATION, 0L)
@@ -963,6 +1007,7 @@ class Media3Fragment : PlayerFragment() {
 
     override fun onStop() {
         super.onStop()
+        castUi?.dismissDialog()
         player?.let { player ->
             if (player.isConnected) {
                 savePosition()
@@ -976,45 +1021,47 @@ class Media3Fragment : PlayerFragment() {
                     )
                     viewModel.usingProxy = false
                 }
-                val isInteractive = (requireContext().getSystemService(Context.POWER_SERVICE) as PowerManager).isInteractive
-                val isInPIPMode = when {
-                    Build.VERSION.SDK_INT >= Build.VERSION_CODES.R -> requireActivity().isInPictureInPictureMode
-                    Build.VERSION.SDK_INT >= Build.VERSION_CODES.O -> !useController && isMaximized
-                    else -> false
-                }
-                if ((!isInPIPMode && isInteractive && requireContext().prefs().getBoolean(C.PLAYER_BACKGROUND_AUDIO, true))
-                    || (!isInPIPMode && !isInteractive && requireContext().prefs().getBoolean(C.PLAYER_BACKGROUND_AUDIO_LOCKED, true))
-                    || (isInPIPMode && isInteractive && requireContext().prefs().getBoolean(C.PLAYER_BACKGROUND_AUDIO_PIP_CLOSED, false))
-                    || (isInPIPMode && !isInteractive && requireContext().prefs().getBoolean(C.PLAYER_BACKGROUND_AUDIO_PIP_LOCKED, true))) {
-                    if (player.playWhenReady && viewModel.quality?.name != AUDIO_ONLY_QUALITY) {
-                        viewModel.restoreQuality = true
-                        viewModel.previousQuality = viewModel.quality
-                        viewModel.quality = viewModel.qualities?.find { it.name == AUDIO_ONLY_QUALITY }
-                        viewModel.quality?.let { quality ->
-                            player.currentMediaItem?.let { mediaItem ->
-                                if (requireContext().prefs().getBoolean(C.PLAYER_DISABLE_BACKGROUND_VIDEO, true)) {
-                                    player.trackSelectionParameters = player.trackSelectionParameters.buildUpon().apply {
-                                        setTrackTypeDisabled(androidx.media3.common.C.TRACK_TYPE_VIDEO, true)
-                                    }.build()
-                                    binding.playerSurface.visibility = View.GONE
-                                }
-                                if (requireContext().prefs().getBoolean(C.PLAYER_USE_BACKGROUND_AUDIO_TRACK, false)) {
-                                    quality.url?.let { url ->
-                                        val position = player.currentPosition
-                                        if (viewModel.qualities?.find { it.name == AUTO_QUALITY } != null) {
-                                            viewModel.playlistUrl = mediaItem.localConfiguration?.uri
+                if (!isRemotePlayback()) {
+                    val isInteractive = (requireContext().getSystemService(Context.POWER_SERVICE) as PowerManager).isInteractive
+                    val isInPIPMode = when {
+                        Build.VERSION.SDK_INT >= Build.VERSION_CODES.R -> requireActivity().isInPictureInPictureMode
+                        Build.VERSION.SDK_INT >= Build.VERSION_CODES.O -> !useController && isMaximized
+                        else -> false
+                    }
+                    if ((!isInPIPMode && isInteractive && requireContext().prefs().getBoolean(C.PLAYER_BACKGROUND_AUDIO, true))
+                        || (!isInPIPMode && !isInteractive && requireContext().prefs().getBoolean(C.PLAYER_BACKGROUND_AUDIO_LOCKED, true))
+                        || (isInPIPMode && isInteractive && requireContext().prefs().getBoolean(C.PLAYER_BACKGROUND_AUDIO_PIP_CLOSED, false))
+                        || (isInPIPMode && !isInteractive && requireContext().prefs().getBoolean(C.PLAYER_BACKGROUND_AUDIO_PIP_LOCKED, true))) {
+                        if (player.playWhenReady && viewModel.quality?.name != AUDIO_ONLY_QUALITY) {
+                            viewModel.restoreQuality = true
+                            viewModel.previousQuality = viewModel.quality
+                            viewModel.quality = viewModel.qualities?.find { it.name == AUDIO_ONLY_QUALITY }
+                            viewModel.quality?.let { quality ->
+                                player.currentMediaItem?.let { mediaItem ->
+                                    if (requireContext().prefs().getBoolean(C.PLAYER_DISABLE_BACKGROUND_VIDEO, true)) {
+                                        player.trackSelectionParameters = player.trackSelectionParameters.buildUpon().apply {
+                                            setTrackTypeDisabled(androidx.media3.common.C.TRACK_TYPE_VIDEO, true)
+                                        }.build()
+                                        binding.playerSurface.visibility = View.GONE
+                                    }
+                                    if (requireContext().prefs().getBoolean(C.PLAYER_USE_BACKGROUND_AUDIO_TRACK, false)) {
+                                        quality.url?.let { url ->
+                                            val position = player.currentPosition
+                                            if (viewModel.qualities?.find { it.name == AUTO_QUALITY } != null) {
+                                                viewModel.playlistUrl = mediaItem.localConfiguration?.uri
+                                            }
+                                            player.setMediaItem(mediaItem.buildUpon().setUri(url).build())
+                                            player.prepare()
+                                            player.seekTo(position)
                                         }
-                                        player.setMediaItem(mediaItem.buildUpon().setUri(url).build())
-                                        player.prepare()
-                                        player.seekTo(position)
                                     }
                                 }
                             }
                         }
+                    } else {
+                        viewModel.resume = player.playWhenReady
+                        player.pause()
                     }
-                } else {
-                    viewModel.resume = player.playWhenReady
-                    player.pause()
                 }
                 player.sendCustomCommand(
                     SessionCommand(
@@ -1031,7 +1078,19 @@ class Media3Fragment : PlayerFragment() {
         controllerFuture?.let { MediaController.releaseFuture(it) }
     }
 
+    override fun onDestroyView() {
+        castUi?.dispose()
+        castUi = null
+        super.onDestroyView()
+    }
+
+    override fun onPictureInPictureModeChanged(isInPictureInPictureMode: Boolean) {
+        if (isInPictureInPictureMode) castUi?.dismissDialog()
+        super.onPictureInPictureModeChanged(isInPictureInPictureMode)
+    }
+
     override fun onNetworkRestored() {
+        if (isRemotePlayback()) return
         if (isResumed) {
             if (videoType == STREAM) {
                 restartPlayer()
@@ -1042,6 +1101,7 @@ class Media3Fragment : PlayerFragment() {
     }
 
     override fun onNetworkLost() {
+        if (isRemotePlayback()) return
         if (videoType != STREAM && isResumed) {
             player?.stop()
         }

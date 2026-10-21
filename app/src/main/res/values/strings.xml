@@ -937,4 +937,11 @@
     <string name="channel_rewards_option" tools:ignore="MissingTranslation">%1$s · %2$s points</string>
     <string name="channel_rewards_text_input" tools:ignore="MissingTranslation">Message for this reward (required)</string>
     <string name="channel_rewards_check_twitch" tools:ignore="MissingTranslation">Check the previous redemption on Twitch.</string>
+    <string name="cast_enabled" tools:ignore="MissingTranslation">Google Cast</string>
+    <string name="cast_enabled_summary" tools:ignore="MissingTranslation">Cast online video with the default player. Reopen playback after changing this setting. Requires Google Play services and a receiver on the same network.</string>
+    <string name="cast_local_only" tools:ignore="MissingTranslation">This video can only play on this device.</string>
+    <string name="cast_disconnect_download" tools:ignore="MissingTranslation">Stop casting before opening a download.</string>
+    <string name="cast_quality_managed" tools:ignore="MissingTranslation">Video quality is managed by your Cast device.</string>
+    <string name="cast_auto_quality" tools:ignore="MissingTranslation">Auto (Cast)</string>
+    <string name="cast_playing_remotely" tools:ignore="MissingTranslation">Playing on your Cast device</string>
 </resources>

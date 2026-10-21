@@ -64,6 +64,31 @@ outputs private and never report emulator timing as device performance evidence.
 
 ## Manual regression checklist
 
+### Optional Google Cast
+
+`CastPlaybackHandoffTest` exercises local/remote source ownership, configured
+HTTP/parser source restoration, selected-quality return, VoD position/pause/speed,
+live-edge return, unsupported downloads/loopback URLs and stale receiver content
+on API 23/28. `CastCloseSessionTest` checks that explicit Close disconnects while
+stream replacement keeps the receiver route. Trusted custom commands remain
+covered by `PlaybackSessionCallbackTest`.
+
+October 21 local validation: the full suite passed 898 tests before the final
+close/switch distinction; its final focused pass passed 32 cases with no
+failures/errors/skips. Debug and unsigned release assembly and final lint passed
+(0 errors / 331 warnings). The API 36.1
+emulator rendered actual VoD video with Cast enabled and opened the native device
+chooser. No receiver was available: remote decoding, transfer, disconnect and
+network-loss behavior still require the hardware matrix in `MANUAL_QA.md`.
+
+Startup and local Stats profile generation passed on the task emulator after
+stopping the debug app (two capture journeys passed; the two physical timing
+benchmarks were intentionally excluded by the BaselineProfile rule filter).
+Generated rules contain `ThystTVApp` and no stale `AmethytwApp` references.
+This is profile correctness evidence, not a physical-device speed measurement.
+The rebuilt unsigned production APK retains code 14 and includes nonempty
+`baseline.prof` (6,299 bytes) and `baseline.profm` (460 bytes).
+
 ### October 21 performance stack / Media3
 
 - HLS fixtures run on API 23/28: Twitch live prefetch timing, VoD muted segments

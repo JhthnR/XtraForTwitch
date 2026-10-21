@@ -32,7 +32,7 @@ class PlaybackSessionCallbackTest {
             Player.COMMAND_PLAY_PAUSE, Player.COMMAND_SEEK_IN_CURRENT_MEDIA_ITEM)) {
             assertTrue("Missing player command $command", result.availablePlayerCommands.contains(command))
         }
-        for (command in listOf(PlaybackService.START_VIDEO, PlaybackService.START_STREAM, PlaybackService.GET_QUALITIES)) {
+        for (command in listOf(PlaybackService.START_VIDEO, PlaybackService.START_STREAM, PlaybackService.GET_QUALITIES, PlaybackService.END_CAST_SESSION)) {
             assertTrue(result.availableSessionCommands.contains(SessionCommand(command, Bundle.EMPTY)))
         }
     }
@@ -43,5 +43,6 @@ class PlaybackSessionCallbackTest {
         assertEquals(MediaSession.ConnectionResult.DEFAULT_UNTRUSTED_PLAYER_COMMANDS, result.availablePlayerCommands)
         assertFalse(result.availablePlayerCommands.contains(Player.COMMAND_PLAY_PAUSE))
         assertFalse(result.availableSessionCommands.contains(SessionCommand(PlaybackService.START_STREAM, Bundle.EMPTY)))
+        assertFalse(result.availableSessionCommands.contains(SessionCommand(PlaybackService.END_CAST_SESSION, Bundle.EMPTY)))
     }
 }

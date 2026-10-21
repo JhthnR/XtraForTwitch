@@ -236,6 +236,13 @@
             app:tint="@android:color/white"
             tools:visibility="visible" />
 
+        <ViewStub
+            android:id="@+id/castButtonStub"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:layout="@layout/player_cast_button"
+            android:visibility="gone" />
+
         <ImageButton
             android:id="@+id/menu"
             android:layout_width="40dp"

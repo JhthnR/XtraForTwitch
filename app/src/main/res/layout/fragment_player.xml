@@ -30,6 +30,18 @@
 
             </androidx.media3.ui.AspectRatioFrameLayout>
 
+            <TextView
+                android:id="@+id/castStatus"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:background="@android:color/black"
+                android:gravity="center"
+                android:padding="24dp"
+                android:text="@string/cast_playing_remotely"
+                android:textColor="@android:color/white"
+                android:textSize="18sp"
+                android:visibility="gone" />
+
             <androidx.media3.ui.SubtitleView
                 android:id="@+id/subtitleView"
                 android:layout_width="match_parent"

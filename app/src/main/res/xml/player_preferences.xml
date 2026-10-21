@@ -1,6 +1,14 @@
 <androidx.preference.PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto">
 
+    <SwitchPreferenceCompat
+        android:defaultValue="false"
+        android:key="player_cast"
+        android:title="@string/cast_enabled"
+        android:summary="@string/cast_enabled_summary"
+        app:iconSpaceReserved="false"
+        app:singleLineTitle="false" />
+
     <PreferenceCategory
         android:title="@string/settings_group_background"
         app:iconSpaceReserved="false">

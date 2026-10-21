@@ -336,3 +336,13 @@ frame rates as unknown. Content steering remains outside this port. Parser and
 connection regressions have focused coverage; see [testing evidence](TESTING.md)
 and [required device QA](MANUAL_QA.md). No broad service/lifecycle migration or
 default-backend change is included.
+
+## October 21, 2026 Cast adaptation
+
+Inspected [thiscallnet/Xtra#481](https://github.com/thiscallnet/Xtra/pull/481),
+merged as `c45058ebe80258b90f2dfdc424c19fe95fbba4d1`, and Spider19996/Xtra_Cast at
+`f3d0edc2c2cdbfebe200369f83b9e60f1b0d293b`. Adapted the official Media3 CastPlayer
+approach in the default session backend, with an optional route button, configured
+source retention and local-only download handling. No donor notification/service
+rewrite, ad behavior or retry machinery was imported. See PLAYER.md and
+MANUAL_QA.md for receiver limits and the required hardware matrix.

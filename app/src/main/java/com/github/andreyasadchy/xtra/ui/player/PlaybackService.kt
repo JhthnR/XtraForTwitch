@@ -114,6 +114,7 @@ class PlaybackService : MediaSessionService() {
     private var lastStatsTime: Long = 0L
 
     private var mediaSession: MediaSession? = null
+    private var castBridge: PlayerCastBridge? = null
     private var dynamicsProcessing: DynamicsProcessing? = null
     private var background = false
     private var proxyMediaPlaylist = false
@@ -126,7 +127,7 @@ class PlaybackService : MediaSessionService() {
 
     override fun onCreate() {
         super.onCreate()
-        val player = ExoPlayer.Builder(this).apply {
+        val localPlayer = ExoPlayer.Builder(this).apply {
             setLoadControl(
                 DefaultLoadControl.Builder().apply {
                     setBufferDurationsMs(
@@ -142,6 +143,9 @@ class PlaybackService : MediaSessionService() {
             setSeekBackIncrementMs(prefs().getString(C.PLAYER_REWIND, "10000")?.toLongOrNull() ?: 10000)
             setSeekForwardIncrementMs(prefs().getString(C.PLAYER_FORWARD, "10000")?.toLongOrNull() ?: 10000)
         }.build()
+        val bridge = PlayerCastBridge(this, localPlayer, prefs().getBoolean(C.PLAYER_CAST, false))
+        castBridge = bridge
+        val player = bridge.player
         player.addListener(
             object : Player.Listener {
                 override fun onIsPlayingChanged(isPlaying: Boolean) {
@@ -229,6 +233,10 @@ class PlaybackService : MediaSessionService() {
                 object : PlaybackSessionCallback() {
                     override fun onCustomCommand(session: MediaSession, controller: MediaSession.ControllerInfo, customCommand: SessionCommand, args: Bundle): ListenableFuture<SessionResult> {
                         return when (customCommand.customAction) {
+                            END_CAST_SESSION -> {
+                                bridge.endSession()
+                                Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
+                            }
                             START_STREAM -> {
                                 val uri = customCommand.customExtras.getString(URI)
                                 val title = customCommand.customExtras.getString(TITLE)
@@ -300,7 +308,7 @@ class PlaybackService : MediaSessionService() {
                                     }.build()
                                 } else null
                                 val networkLibrary = prefs().getString(C.NETWORK_LIBRARY, "OkHttp")
-                                player.setMediaSource(
+                                bridge.handoff.setSource(player,
                                     HlsMediaSource.Factory(
                                         DefaultDataSource.Factory(
                                             this@PlaybackService,
@@ -334,24 +342,23 @@ class PlaybackService : MediaSessionService() {
                                     ).apply {
                                         setPlaylistParserFactory(CustomHlsPlaylistParserFactory())
                                         setLoadErrorHandlingPolicy(DefaultLoadErrorHandlingPolicy(6))
-                                    }.createMediaSource(
-                                        MediaItem.Builder().apply {
-                                            setUri(uri?.toUri())
-                                            setMimeType(MimeTypes.APPLICATION_M3U8)
-                                            setLiveConfiguration(MediaItem.LiveConfiguration.Builder().apply {
-                                                prefs().getString(C.PLAYER_LIVE_MIN_SPEED, "")?.toFloatOrNull()?.let { setMinPlaybackSpeed(it) }
-                                                prefs().getString(C.PLAYER_LIVE_MAX_SPEED, "")?.toFloatOrNull()?.let { setMaxPlaybackSpeed(it) }
-                                                prefs().getString(C.PLAYER_LIVE_TARGET_OFFSET, "2000")?.toLongOrNull()?.let { setTargetOffsetMs(it) }
-                                            }.build())
-                                            setMediaMetadata(
-                                                MediaMetadata.Builder().apply {
-                                                    setTitle(title)
-                                                    setArtist(channelName)
-                                                    setArtworkUri(channelLogo?.toUri())
-                                                }.build()
-                                            )
-                                        }.build()
-                                    )
+                                    },
+                                    MediaItem.Builder().apply {
+                                        setUri(uri?.toUri())
+                                        setMimeType(MimeTypes.APPLICATION_M3U8)
+                                        setLiveConfiguration(MediaItem.LiveConfiguration.Builder().apply {
+                                            prefs().getString(C.PLAYER_LIVE_MIN_SPEED, "")?.toFloatOrNull()?.let { setMinPlaybackSpeed(it) }
+                                            prefs().getString(C.PLAYER_LIVE_MAX_SPEED, "")?.toFloatOrNull()?.let { setMaxPlaybackSpeed(it) }
+                                            prefs().getString(C.PLAYER_LIVE_TARGET_OFFSET, "2000")?.toLongOrNull()?.let { setTargetOffsetMs(it) }
+                                        }.build())
+                                        setMediaMetadata(
+                                            MediaMetadata.Builder().apply {
+                                                setTitle(title)
+                                                setArtist(channelName)
+                                                setArtworkUri(channelLogo?.toUri())
+                                            }.build()
+                                        )
+                                    }.build()
                                 )
                                 session.player.volume = prefs().getInt(C.PLAYER_VOLUME, 100) / 100f
                                 session.player.setPlaybackSpeed(1f)
@@ -383,7 +390,7 @@ class PlaybackService : MediaSessionService() {
                                 videoId = newId
                                 offlineVideoId = null
                                 val networkLibrary = prefs().getString(C.NETWORK_LIBRARY, "OkHttp")
-                                player.setMediaSource(
+                                bridge.handoff.setSource(player,
                                     HlsMediaSource.Factory(
                                         DefaultDataSource.Factory(
                                             this@PlaybackService,
@@ -401,19 +408,19 @@ class PlaybackService : MediaSessionService() {
                                         )
                                     ).apply {
                                         setPlaylistParserFactory(CustomHlsPlaylistParserFactory())
-                                    }.createMediaSource(
-                                        MediaItem.Builder().apply {
-                                            setMediaId("video:$newId")
-                                            setUri(uri?.toUri())
-                                            setMediaMetadata(
-                                                MediaMetadata.Builder().apply {
-                                                    setTitle(title)
-                                                    setArtist(channelName)
-                                                    setArtworkUri(channelLogo?.toUri())
-                                                }.build()
-                                            )
-                                        }.build()
-                                    )
+                                    },
+                                    MediaItem.Builder().apply {
+                                        setMediaId("video:$newId")
+                                        setUri(uri?.toUri())
+                                        setMimeType(MimeTypes.APPLICATION_M3U8)
+                                        setMediaMetadata(
+                                            MediaMetadata.Builder().apply {
+                                                setTitle(title)
+                                                setArtist(channelName)
+                                                setArtworkUri(channelLogo?.toUri())
+                                            }.build()
+                                        )
+                                    }.build()
                                 )
                                 session.player.volume = prefs().getInt(C.PLAYER_VOLUME, 100) / 100f
                                 session.player.setPlaybackSpeed(prefs().getFloat(C.PLAYER_SPEED, 1f))
@@ -440,7 +447,7 @@ class PlaybackService : MediaSessionService() {
                                 videoId = null
                                 offlineVideoId = null
                                 val networkLibrary = prefs().getString(C.NETWORK_LIBRARY, "OkHttp")
-                                player.setMediaSource(
+                                bridge.handoff.setSource(player,
                                     ProgressiveMediaSource.Factory(
                                         DefaultDataSource.Factory(
                                             this@PlaybackService,
@@ -456,18 +463,18 @@ class PlaybackService : MediaSessionService() {
                                                 }
                                             }
                                         )
-                                    ).createMediaSource(
-                                        MediaItem.Builder().apply {
-                                            setUri(uri?.toUri())
-                                            setMediaMetadata(
-                                                MediaMetadata.Builder().apply {
-                                                    setTitle(title)
-                                                    setArtist(channelName)
-                                                    setArtworkUri(channelLogo?.toUri())
-                                                }.build()
-                                            )
-                                        }.build()
-                                    )
+                                    ),
+                                    MediaItem.Builder().apply {
+                                        setUri(uri?.toUri())
+                                        setMimeType(MimeTypes.VIDEO_MP4)
+                                        setMediaMetadata(
+                                            MediaMetadata.Builder().apply {
+                                                setTitle(title)
+                                                setArtist(channelName)
+                                                setArtworkUri(channelLogo?.toUri())
+                                            }.build()
+                                        )
+                                    }.build()
                                 )
                                 session.player.volume = prefs().getInt(C.PLAYER_VOLUME, 100) / 100f
                                 session.player.setPlaybackSpeed(prefs().getFloat(C.PLAYER_SPEED, 1f))
@@ -476,6 +483,10 @@ class PlaybackService : MediaSessionService() {
                                 Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
                             }
                             START_OFFLINE_VIDEO -> {
+                                if (player.deviceInfo.playbackType == androidx.media3.common.DeviceInfo.PLAYBACK_TYPE_REMOTE) {
+                                    return Futures.immediateFuture(SessionResult(androidx.media3.session.SessionError.ERROR_NOT_SUPPORTED))
+                                }
+                                bridge.handoff.clear()
                                 val uri = customCommand.customExtras.getString(URI)
                                 val title = customCommand.customExtras.getString(TITLE)
                                 val channelId = customCommand.customExtras.getString(CHANNEL_ID)
@@ -732,10 +743,13 @@ class PlaybackService : MediaSessionService() {
 
     override fun onDestroy() {
         mediaSession?.run {
+            player.stop()
             player.release()
             release()
             mediaSession = null
         }
+        castBridge?.dispose()
+        castBridge = null
         super.onDestroy()
     }
 
@@ -754,6 +768,7 @@ class PlaybackService : MediaSessionService() {
         const val START_VIDEO = "startVideo"
         const val START_CLIP = "startClip"
         const val START_OFFLINE_VIDEO = "startOfflineVideo"
+        const val END_CAST_SESSION = "endCastSession"
         const val TOGGLE_DYNAMICS_PROCESSING = "toggleDynamicsProcessing"
         const val TOGGLE_PROXY = "toggleProxy"
         const val SET_SLEEP_TIMER = "setSleepTimer"

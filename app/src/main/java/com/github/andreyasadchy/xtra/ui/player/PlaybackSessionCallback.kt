@@ -23,6 +23,7 @@ internal open class PlaybackSessionCallback : MediaSession.Callback {
             add(SessionCommand(PlaybackService.START_VIDEO, Bundle.EMPTY))
             add(SessionCommand(PlaybackService.START_CLIP, Bundle.EMPTY))
             add(SessionCommand(PlaybackService.START_OFFLINE_VIDEO, Bundle.EMPTY))
+            add(SessionCommand(PlaybackService.END_CAST_SESSION, Bundle.EMPTY))
             add(SessionCommand(PlaybackService.TOGGLE_DYNAMICS_PROCESSING, Bundle.EMPTY))
             add(SessionCommand(PlaybackService.TOGGLE_PROXY, Bundle.EMPTY))
             add(SessionCommand(PlaybackService.SET_SLEEP_TIMER, Bundle.EMPTY))

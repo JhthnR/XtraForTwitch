@@ -293,6 +293,24 @@ For release-risk player work, also verify:
 ./gradlew assembleRelease
 ```
 
+## Optional Google Cast (default Media3 backend)
+
+Enable Google Cast in Player settings, then reopen playback. The route button is
+inflated only when enabled; devices without Google Play services keep local
+playback. Custom ExoPlayer and platform MediaPlayer backends are unchanged.
+
+Media3 CastPlayer owns the local/receiver switch and stops the inactive player.
+ThystTV retains only the current configured MediaSource for a return to local:
+VoDs preserve receiver position, speed and pause; live returns to the live edge.
+Downloads remain local, including a service-side rejection while casting. Close
+stops playback and ends the Cast session. Backgrounding the phone leaves receiver
+playback alone. Receiver quality is automatic; phone-only audio processing,
+track controls, live rewind discovery and system PiP are unavailable remotely.
+
+The receiver fetches the media URL directly. Phone HTTP headers/proxies are not
+forwarded. Receiver codec/network compatibility needs physical Cast QA; enabling
+the sender and passing state tests do not establish receiver playback support.
+
 ## Human QA Handoff
 
 Agents should not claim physical-device QA unless it was actually performed. Instead, list the required human QA from `docs/MANUAL_QA.md`.

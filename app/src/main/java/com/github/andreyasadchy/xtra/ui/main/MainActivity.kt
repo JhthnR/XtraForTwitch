@@ -536,7 +536,7 @@ class MainActivity : AppCompatActivity() {
         connectivityManager.unregisterNetworkCallback(networkCallback)
         unregisterReceiver(pipActionReceiver)
         if (isFinishing) {
-            playerFragment?.close()
+            playerFragment?.closeSession()
         }
         super.onDestroy()
     }
@@ -854,6 +854,10 @@ class MainActivity : AppCompatActivity() {
     }
 
     fun startOfflineVideo(video: OfflineVideo) {
+        if (playerFragment?.isRemotePlayback() == true) {
+            Toast.makeText(this, R.string.cast_disconnect_download, Toast.LENGTH_LONG).show()
+            return
+        }
         val fragment = when (prefs.getString(C.PLAYER, "ExoPlayer")) {
             "MediaPlayer" -> MediaPlayerFragment.newInstance(video)
             else -> {
@@ -889,7 +893,7 @@ class MainActivity : AppCompatActivity() {
             return
         }
         currentFragment?.let {
-            it.close()
+            it.closeSession()
             supportFragmentManager.beginTransaction()
                 .setTransition(FragmentTransaction.TRANSIT_FRAGMENT_FADE)
                 .remove(it)

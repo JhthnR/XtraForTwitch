@@ -295,9 +295,11 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
     open fun toggleSubtitles(enabled: Boolean) {}
     open fun showPlaylistTags(mediaPlaylist: Boolean) {}
     open fun changeQuality(selectedQuality: VideoQuality?) {}
+    open fun isRemotePlayback(): Boolean = false
     open fun startAudioOnly() {}
     open fun downloadVideo() {}
     open fun close() {}
+    open fun closeSession() { close() }
 
     private var liveRewindDiscovery: Job? = null
     private var liveRewindStartup: Job? = null
@@ -308,6 +310,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
     }
 
     internal fun showLiveRewindOptions() {
+        if (isRemotePlayback()) return
         if (videoType != STREAM || liveRewindDiscovery?.isActive == true || liveRewindDialog != null) return
         liveRewindDialog = requireContext().getAlertDialogBuilder()
             .setTitle(R.string.live_rewind)
@@ -443,7 +446,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
     }
 
     private fun updateFullscreenLiveRewind() {
-        val show = LiveRewind.shouldShowFullscreenLiveRewind(videoType, liveRewindOrigin() != null, isMaximized)
+        val show = !isRemotePlayback() && LiveRewind.shouldShowFullscreenLiveRewind(videoType, liveRewindOrigin() != null, isMaximized)
         binding.playerControls.bindLiveRewindButton(show, isPortrait) { showLiveRewindOptions() }
     }
 
@@ -608,6 +611,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
     }
 
     private fun currentQualityLabel(): String? {
+        if (isRemotePlayback()) return getString(R.string.cast_auto_quality)
         return getQualityMap()?.entries?.find { it.value == viewModel.quality }?.key
     }
 
@@ -1957,6 +1961,10 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
     }
 
     fun showQualityDialog() {
+        if (isRemotePlayback()) {
+            Toast.makeText(requireContext(), R.string.cast_quality_managed, Toast.LENGTH_LONG).show()
+            return
+        }
         if (!isMaximized) return
         val qualities = viewModel.qualities?.takeIf { it.isNotEmpty() } ?: return
         val panelWidth = PlayerPopupPolicy.panelWidthPx(
@@ -2703,6 +2711,19 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
         }
     }
 
+    protected fun updatePlaybackRouteUi() {
+        val remote = isRemotePlayback()
+        with(binding.playerControls) {
+            audioOnly.isVisible = !remote && prefs.getBoolean(C.PLAYER_MODE, false)
+            audioCompressor.isVisible = !remote && Build.VERSION.SDK_INT >= Build.VERSION_CODES.P &&
+                prefs.getBoolean(C.PLAYER_AUDIO_COMPRESSOR_BUTTON, true)
+            subtitles.isVisible = !remote && subtitles.isVisible
+        }
+        setQualityText()
+        updateFullscreenLiveRewind()
+        changePlayerMode()
+    }
+
     fun updateViewerCount(viewerCount: Int?) {
         with(binding.playerControls) {
             if (viewerCount != null) {
@@ -2907,7 +2928,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                 controllerHideOnTouch = false
                 showController(true)
                 updateProgress()
-                requireView().keepScreenOn = true
+                requireView().keepScreenOn = !isRemotePlayback()
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
                     requireActivity().packageManager.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE)
                 ) {
@@ -3102,6 +3123,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
     fun secondViewIsHidden() = !binding.chatLayout.isVisible && isMaximized
 
     fun canEnterPictureInPicture(): Boolean {
+        if (isRemotePlayback()) return false
         val quality = if (viewModel.restoreQuality) {
             viewModel.previousQuality
         } else {
