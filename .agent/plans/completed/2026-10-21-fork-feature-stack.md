@@ -18,8 +18,9 @@ Base is `perf/8-media3` at `5e0de159f`, the completed core performance stack.
 Continue in its existing isolated worktree; the main checkout has unrelated files.
 Create one local stacked branch per feature. Cast is `feat/9-cast` at `908b2e349`;
 PiP chat is `feat/10-pip-chat` at `3f3024909`;
-recovery is `feat/11-stream-recovery` at `535b99574`. Current branch:
-`feat/12-tv-device-login`.
+recovery is `feat/11-stream-recovery` at `535b99574`; TV device sign-in is
+`feat/12-tv-device-login` at `529d4de1b`. The latter is the final implementation
+branch, followed by the documentation handoff commit.
 
 The user explicitly authorized all four feature areas on 2026-10-21 and will have
 Claude Opus 5.5 review the result afterward. Earlier core-only scope is superseded
@@ -198,3 +199,17 @@ APK signature verification confirms the expected unsigned output. No credentials
 release signing, version bump or publication was used.
 `docs/FORK_FEATURE_STACK_REVIEW.md`
 records branch boundaries, risks and human QA for the later Claude Opus 5.5 review.
+
+## Outcome
+
+All four scoped implementations are committed on separate local stacked branches.
+Final debug/release assembly, all 952 tests, lint and strict profile capture passed.
+The diff was checked for regressions and whitespace; private evidence is ignored.
+The main checkout remains on `master` at `f146bbeaf`, with no tracked changes.
+No reviewer, push, PR, release signing or publication was started.
+
+This completes implementation and review preparation, not hardware certification.
+The native recovery interruption exhausted its bounded attempts after repeated
+behind-live-window failures; sustained reconnection remains unverified. Receiver,
+physical TV, camera, authenticated grant and the full player matrix remain human
+QA as listed in the review guide and `docs/MANUAL_QA.md`.
