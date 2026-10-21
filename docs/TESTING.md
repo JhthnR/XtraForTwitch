@@ -64,6 +64,20 @@ outputs private and never report emulator timing as device performance evidence.
 
 ## Manual regression checklist
 
+### Bounded live recovery
+
+`LivePlaybackRecoveryTest` runs 24 cases on API 23/28 using the production
+listener and virtual main-looper time: backoff/exhaustion, continuous-health
+reset versus flapping, finite offline wait, pause/stop/switch/close/Cast/disposal,
+non-live exclusion, behind-live-window ordering, buffering watchdog and nested
+HTTP classification. It checks that recovery neither replaces media nor changes
+play intent. October 22 debug assembly and the full suite passed 939 tests with
+no failures/errors/skips; final lint passed (0 errors / 331 warnings). API 36.1
+rendered real live video, retained a frame during a 33s connectivity interruption,
+and attempted recovery after connectivity returned. Repeated behind-live-window
+errors exhausted the budget; clean sustained reconnection was not demonstrated.
+Physical recovery and frame retention require the matrix in `MANUAL_QA.md`.
+
 ### Optional PiP chat
 
 `PlayerPipPolicyTest` covers eligibility and bounded video/composite source hints

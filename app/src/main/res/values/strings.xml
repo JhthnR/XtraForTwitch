@@ -937,6 +937,7 @@
     <string name="channel_rewards_option" tools:ignore="MissingTranslation">%1$s · %2$s points</string>
     <string name="channel_rewards_text_input" tools:ignore="MissingTranslation">Message for this reward (required)</string>
     <string name="channel_rewards_check_twitch" tools:ignore="MissingTranslation">Check the previous redemption on Twitch.</string>
+    <string name="live_recovery_exhausted" tools:ignore="MissingTranslation">Couldn’t reconnect. Press Play to retry or reopen the stream.</string>
     <string name="pip_chat" tools:ignore="MissingTranslation">Chat in picture-in-picture</string>
     <string name="pip_chat_summary" tools:ignore="MissingTranslation">Show live chat beneath the video when entering picture-in-picture from portrait. Chat is read-only; other layouts keep video only.</string>
     <string name="cast_enabled" tools:ignore="MissingTranslation">Google Cast</string>

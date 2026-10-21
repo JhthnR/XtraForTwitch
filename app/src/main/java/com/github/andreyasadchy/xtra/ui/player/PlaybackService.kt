@@ -2,6 +2,8 @@ package com.github.andreyasadchy.xtra.ui.player
 
 import android.app.PendingIntent
 import android.content.Intent
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 import android.media.audiofx.DynamicsProcessing
 import android.net.http.HttpEngine
 import android.os.Build
@@ -9,6 +11,7 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.os.ext.SdkExtensions
+import android.widget.Toast
 import androidx.annotation.OptIn
 import androidx.core.content.edit
 import androidx.core.net.toUri
@@ -21,7 +24,6 @@ import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DefaultDataSource
-import androidx.media3.datasource.HttpDataSource
 import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.hls.HlsManifest
@@ -38,6 +40,7 @@ import androidx.media3.session.MediaSessionService
 import androidx.media3.session.SessionCommand
 import androidx.media3.session.SessionResult
 import com.github.andreyasadchy.xtra.ui.stats.StatsRepository
+import com.github.andreyasadchy.xtra.R
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -115,6 +118,7 @@ class PlaybackService : MediaSessionService() {
 
     private var mediaSession: MediaSession? = null
     private var castBridge: PlayerCastBridge? = null
+    private var liveRecovery: LivePlaybackRecovery? = null
     private var dynamicsProcessing: DynamicsProcessing? = null
     private var background = false
     private var proxyMediaPlaylist = false
@@ -146,6 +150,15 @@ class PlaybackService : MediaSessionService() {
         val bridge = PlayerCastBridge(this, localPlayer, prefs().getBoolean(C.PLAYER_CAST, false))
         castBridge = bridge
         val player = bridge.player
+        liveRecovery = LivePlaybackRecovery(player, Handler(Looper.getMainLooper()), {
+            val connectivity = getSystemService(CONNECTIVITY_SERVICE) as ConnectivityManager
+            connectivity.getNetworkCapabilities(connectivity.activeNetwork)?.let {
+                it.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) &&
+                    it.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
+            } == true
+        }, {
+            Toast.makeText(this, R.string.live_recovery_exhausted, Toast.LENGTH_LONG).show()
+        })
         player.addListener(
             object : Player.Listener {
                 override fun onIsPlayingChanged(isPlaying: Boolean) {
@@ -171,7 +184,8 @@ class PlaybackService : MediaSessionService() {
                 }
 
                 override fun onPlayerError(error: PlaybackException) {
-                    if (background) {
+                    if (background && liveRecovery?.isLiveSource != true &&
+                        player.deviceInfo.playbackType != androidx.media3.common.DeviceInfo.PLAYBACK_TYPE_REMOTE) {
                         player.prepare()
                     }
                 }
@@ -238,6 +252,7 @@ class PlaybackService : MediaSessionService() {
                                 Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
                             }
                             START_STREAM -> {
+                                liveRecovery?.startSource(true)
                                 val uri = customCommand.customExtras.getString(URI)
                                 val title = customCommand.customExtras.getString(TITLE)
                                 val channelId = customCommand.customExtras.getString(CHANNEL_ID)
@@ -367,6 +382,7 @@ class PlaybackService : MediaSessionService() {
                                 Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
                             }
                             START_VIDEO -> {
+                                liveRecovery?.startSource(false)
                                 val uri = customCommand.customExtras.getString(URI)
                                 val title = customCommand.customExtras.getString(TITLE)
                                 val channelId = customCommand.customExtras.getString(CHANNEL_ID)
@@ -430,6 +446,7 @@ class PlaybackService : MediaSessionService() {
                                 Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
                             }
                             START_CLIP -> {
+                                liveRecovery?.startSource(false)
                                 val uri = customCommand.customExtras.getString(URI)
                                 val title = customCommand.customExtras.getString(TITLE)
                                 val channelId = customCommand.customExtras.getString(CHANNEL_ID)
@@ -487,6 +504,7 @@ class PlaybackService : MediaSessionService() {
                                     return Futures.immediateFuture(SessionResult(androidx.media3.session.SessionError.ERROR_NOT_SUPPORTED))
                                 }
                                 bridge.handoff.clear()
+                                liveRecovery?.startSource(false)
                                 val uri = customCommand.customExtras.getString(URI)
                                 val title = customCommand.customExtras.getString(TITLE)
                                 val channelId = customCommand.customExtras.getString(CHANNEL_ID)
@@ -614,7 +632,8 @@ class PlaybackService : MediaSessionService() {
                             }
                             GET_ERROR_CODE -> {
                                 Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS, Bundle().apply {
-                                    putInt(RESULT, (session.player.playerError?.cause as? HttpDataSource.InvalidResponseCodeException)?.responseCode ?: 0)
+                                    putInt(RESULT, LivePlaybackRecovery.httpCode(session.player.playerError))
+                                    putBoolean(RECOVERING, liveRecovery?.isErrorHandled == true)
                                 }))
                             }
                             GET_MEDIA_PLAYLIST -> {
@@ -742,6 +761,8 @@ class PlaybackService : MediaSessionService() {
     }
 
     override fun onDestroy() {
+        liveRecovery?.dispose()
+        liveRecovery = null
         mediaSession?.run {
             player.stop()
             player.release()
@@ -776,6 +797,7 @@ class PlaybackService : MediaSessionService() {
         const val GET_QUALITIES = "getQualities"
         const val GET_DURATION = "getDuration"
         const val GET_ERROR_CODE = "getErrorCode"
+        const val RECOVERING = "recovering"
         const val GET_MEDIA_PLAYLIST = "getMediaPlaylist"
         const val GET_MULTIVARIANT_PLAYLIST = "getMultivariantPlaylist"
 

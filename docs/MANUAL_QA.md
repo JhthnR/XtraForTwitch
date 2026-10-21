@@ -15,6 +15,21 @@ Agents should mark **Required** when a human should test an area. Mark **Complet
 
 ## Checklist
 
+### Bounded local live recovery (required)
+
+- [ ] Interrupt/restore connectivity during live playback in foreground, PiP,
+  background and audio-only. Verify quality, speed, volume and last-frame retention.
+- [ ] Stay offline over 60s and simulate repeated transient errors/buffering.
+  Recovery must stop and allow manual retry. Healthy playback over 30s should
+  permit another bounded recovery sequence.
+- [ ] Pause during the wait, then restore the network: no automatic playback.
+  Repeat close/reopen, switching, live/VoD transitions and sleep-timer expiry.
+  No old player may reopen or produce double audio.
+- [ ] Test ended/404, unauthorized and custom-proxy failures, including the
+  one-way fallback. Transfer to a Cast receiver during a pending wait.
+- [ ] Repeat live/VoD, minimize/restore, PiP/background, speed/quality, gestures
+  and floating chat. Check the optional legacy backend separately.
+
 ### Website presentation
 
 - [ ] On a physical phone and laptop, accept the visual layout in both themes;

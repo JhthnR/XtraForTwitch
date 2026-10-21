@@ -350,48 +350,34 @@ class Media3Fragment : PlayerFragment() {
                     Log.e(tag, "Player error", error)
                     when (videoType) {
                         STREAM -> {
-                            player?.sendCustomCommand(
+                            val controller = player ?: return
+                            val item = controller.currentMediaItem
+                            controller.sendCustomCommand(
                                 SessionCommand(PlaybackService.GET_ERROR_CODE, Bundle.EMPTY),
                                 Bundle.EMPTY
                             )?.let { result ->
                                 result.addListener({
-                                    if (result.get().resultCode == SessionResult.RESULT_SUCCESS) {
-                                        val responseCode = result.get().extras.getInt(PlaybackService.RESULT)
-                                        val connectivityManager = requireContext().getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
-                                        val networkCapabilities = connectivityManager.getNetworkCapabilities(connectivityManager.activeNetwork)
-                                        val isNetworkAvailable = networkCapabilities != null
-                                                && networkCapabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
-                                                && networkCapabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
-                                        if (isNetworkAvailable) {
-                                            when {
-                                                responseCode == 404 -> {
-                                                    Toast.makeText(requireContext(), R.string.stream_ended, Toast.LENGTH_LONG).show()
-                                                }
-                                                viewModel.useCustomProxy && responseCode >= 400 -> {
-                                                    Toast.makeText(requireContext(), R.string.proxy_error, Toast.LENGTH_LONG).show()
-                                                    viewModel.useCustomProxy = false
-                                                    viewLifecycleOwner.lifecycleScope.launch {
-                                                        delay(1500L)
-                                                        try {
-                                                            restartPlayer()
-                                                        } catch (e: Exception) {
-                                                        }
-                                                    }
-                                                }
-                                                else -> {
-                                                    Toast.makeText(requireContext(), R.string.player_error, Toast.LENGTH_SHORT).show()
-                                                    viewLifecycleOwner.lifecycleScope.launch {
-                                                        delay(1500L)
-                                                        try {
-                                                            restartPlayer()
-                                                        } catch (e: Exception) {
-                                                        }
-                                                    }
-                                                }
-                                            }
+                                    if (!isAdded || view == null || player !== controller || controller.currentMediaItem != item) return@addListener
+                                    val response = result.get()
+                                    if (response.resultCode == SessionResult.RESULT_SUCCESS &&
+                                        !response.extras.getBoolean(PlaybackService.RECOVERING)) {
+                                        val responseCode = response.extras.getInt(PlaybackService.RESULT)
+                                        // Keep the existing one-way proxy fallback, without a delayed
+                                        // callback that could reopen a replaced or paused player.
+                                        if (viewModel.useCustomProxy && responseCode >= 400 && controller.playWhenReady) {
+                                            viewModel.useCustomProxy = false
+                                            Toast.makeText(requireContext(), R.string.proxy_error, Toast.LENGTH_LONG).show()
+                                            restartPlayer()
+                                            return@addListener
                                         }
+                                        val message = when {
+                                            responseCode == 404 -> R.string.stream_ended
+                                            viewModel.useCustomProxy && responseCode >= 400 -> R.string.proxy_error
+                                            else -> R.string.player_error
+                                        }
+                                        Toast.makeText(requireContext(), message, Toast.LENGTH_LONG).show()
                                     }
-                                }, MoreExecutors.directExecutor())
+                                }, ContextCompat.getMainExecutor(requireContext()))
                             }
                         }
                         VIDEO -> {
@@ -1091,12 +1077,9 @@ class Media3Fragment : PlayerFragment() {
 
     override fun onNetworkRestored() {
         if (isRemotePlayback()) return
-        if (isResumed) {
-            if (videoType == STREAM) {
-                restartPlayer()
-            } else {
-                player?.prepare()
-            }
+        // Live recovery belongs to the service, including background playback.
+        if (isResumed && videoType != STREAM && player?.playWhenReady == true) {
+            player?.prepare()
         }
     }
 

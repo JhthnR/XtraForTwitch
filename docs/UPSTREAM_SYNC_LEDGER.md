@@ -6,6 +6,17 @@ decisions lives in [`UPSTREAM_SYNC.md`](UPSTREAM_SYNC.md). The 1.2-cycle ledger
 ([`RELEASE_1_2_UPSTREAM_COMMITS.md`](RELEASE_1_2_UPSTREAM_COMMITS.md)) is frozen history;
 new audits go here.
 
+## October 22, 2026: bounded live recovery adaptation
+
+Audited thiscallnet/Xtra's background recovery and network/frame-preservation
+work (PRs #469/#471; locally retained donor `PlaybackService.kt`). Implemented a
+small service-owned recovery listener rather than its broad service/proxy rewrite.
+Retry count, offline wait and buffering are bounded. Stable playback resets the
+budget; pause/switch/close/Cast cancel work. The implementation follows
+[Media3 player event ordering and retry guidance](https://developer.android.com/media/media3/exoplayer/listening-to-player-events)
+and its [error codes](https://developer.android.com/reference/androidx/media3/common/PlaybackException).
+The optional legacy backend is outside this port.
+
 ## October 22, 2026: optional PiP chat adaptation
 
 Adapted the interaction from [thiscallnet/Xtra #520](https://github.com/thiscallnet/Xtra/pull/520),

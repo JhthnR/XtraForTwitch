@@ -17,7 +17,8 @@ logic, multiview or Compose migrations. Keep one active playback owner.
 Base is `perf/8-media3` at `5e0de159f`, the completed core performance stack.
 Continue in its existing isolated worktree; the main checkout has unrelated files.
 Create one local stacked branch per feature. Cast is `feat/9-cast` at `908b2e349`;
-current branch: `feat/10-pip-chat`.
+PiP chat is `feat/10-pip-chat` at `3f3024909`; current branch:
+`feat/11-stream-recovery`.
 
 The user explicitly authorized all four feature areas on 2026-10-21 and will have
 Claude Opus 5.5 review the result afterward. Earlier core-only scope is superseded
@@ -120,8 +121,27 @@ continuing chat updates, native resize and repeated restoration. Switching to a
 VoD produced a video-only landscape PiP window. Physical/API 26–30 and
 authenticated composer QA remain required. No receiver or human checks claimed.
 
+Recovery progress (2026-10-22): production service listener and 24 focused API
+23/28 cases passed. Final debug assembly and the full suite passed 939 tests,
+117 suites, no failures/errors/skips. Final lint passed (0 errors / 331 warnings).
+API 36.1 rendered real live video and retained a frame during a 33s interruption.
+Retries ran after connectivity returned, then repeated behind-live-window errors
+exhausted the budget. Clean sustained native reconnection remains unverified;
+do not present this as a successful reconnection. Physical QA remains required.
+Full XML/log/screenshots/APK evidence saved under ignored step11 artifacts.
+
 ## Decisions
 
+- Live recovery belongs to a service-owned listener on the active player. Retry
+  network/timeouts, HTTP 408/429/5xx and behind-live-window failures at 1s/2.5s/5s,
+  with a 60s validated-network wait and a 15s buffering watchdog. Reset only after
+  30s actual continuous playback or an explicit source command. Keep the source,
+  tracks and play intent; never clear/rebuild it during retries. Stop buffering
+  before prepare because prepare alone is ineffective outside IDLE. Cancel for
+  pause, stop, source change, Cast, close and teardown. Permanent/auth/offline
+  errors stay visible; preserve the existing single one-way custom-proxy fallback.
+- The default Media3 backend receives this recovery change. The optional legacy
+  ExoPlayer backend is unchanged. No donor's ad/proxy/service rewrite is imported.
 - Use existing native UI patterns and small policy/coordinator helpers.
 - Keep each feature reviewable independently; preserve raw local verification.
 - Cast stays disabled by default and is confined to the existing Media3 session
