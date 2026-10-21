@@ -220,6 +220,16 @@ behavior remain unverified; emulator results are recorded separately in
   launch, navigation, first scroll and returning from background. Emulator profile
   generation alone does not establish a speedup.
 
+### Media3 1.11.1 (performance stack)
+
+- [ ] Default session service first: visible live/VoD video and usable quality,
+  seek and speed controls. An advancing position alone cannot establish video.
+- [ ] Stream switching, minimize/restore, close/reopen, PiP/background, rotation,
+  gestures and floating chat: one current session, no stale frame/audio overlap.
+- [ ] Repeat on the direct-bound custom ExoPlayer backend; check the platform
+  MediaPlayer alternative still opens and switches correctly. Cover an older
+  Android device as well as current Android, plus TV and foldable/window changes.
+
 ### Portrait live rewind (performance stack)
 
 - [ ] Portrait live player: the bottom-left rewind action opens the existing

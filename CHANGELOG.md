@@ -9,6 +9,7 @@ All notable changes to ThystTV should be documented here.
 - The live-rewind button is available in the maximized portrait player too, with stream stats below the action row.
 
 ### Changed
+- Update Media3 to 1.11.1, adapting session connection permissions and Twitch HLS metadata while preserving the default playback service.
 - Release builds include generated startup and local-navigation optimization profiles, with repeatable capture and cold-start benchmarks for validation.
 - Busy chats add new messages in short batches and look up emotes and 7TV users directly instead of scanning every emote, so chat scrolls more smoothly.
 

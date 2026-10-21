@@ -249,6 +249,8 @@ public final class HlsPlaylistParser implements ParsingLoadable.Parser<HlsPlayli
       Pattern.compile("IVS-NAME=" + ATTR_QUOTED_STRING_VALUE_PATTERN); // xtra: quality names
   private static final Pattern REGEX_STABLE_VARIANT_ID =
       Pattern.compile("STABLE-VARIANT-ID=" + ATTR_QUOTED_STRING_VALUE_PATTERN); // xtra: portrait variants
+  private static final Pattern REGEX_STABLE_RENDITION_ID =
+      Pattern.compile("STABLE-RENDITION-ID=" + ATTR_QUOTED_STRING_VALUE_PATTERN);
   private static final Pattern REGEX_GROUP_ID =
       Pattern.compile("GROUP-ID=" + ATTR_QUOTED_STRING_VALUE_PATTERN);
   private static final Pattern REGEX_CHARACTERISTICS =
@@ -580,7 +582,10 @@ public final class HlsPlaylistParser implements ParsingLoadable.Parser<HlsPlayli
                     String newCodecsString = obj.optString("CODECS");
                     String newResolutionString = obj.optString("RESOLUTION");
                     String id = obj.optString("STABLE-VARIANT-ID");
-                    float newFrameRate = obj.optInt("FRAME-RATE");
+                    float newFrameRate = (float) obj.optDouble("FRAME-RATE", Format.NO_VALUE);
+                    if (Float.isNaN(newFrameRate) || Float.isInfinite(newFrameRate) || newFrameRate <= 0) {
+                      newFrameRate = Format.NO_VALUE;
+                    }
                     int newWidth;
                     int newHeight;
                     if (!newResolutionString.isBlank()) {
@@ -615,7 +620,8 @@ public final class HlsPlaylistParser implements ParsingLoadable.Parser<HlsPlayli
                                     .build();
                     Variant variant =
                             new Variant(
-                                    newUri, format, null, null, null, null);
+                                    newUri, format, null, null, null, null,
+                                    /* pathwayId= */ null, id.isBlank() ? null : id);
                     variants.add(variant);
                     @Nullable ArrayList<VariantInfo> variantInfosForUrl = urlToVariantInfos.get(newUri);
                     if (variantInfosForUrl == null) {
@@ -657,7 +663,8 @@ public final class HlsPlaylistParser implements ParsingLoadable.Parser<HlsPlayli
                 .build();
         Variant variant =
             new Variant(
-                uri, format, videoGroupId, audioGroupId, subtitlesGroupId, closedCaptionsGroupId);
+                uri, format, videoGroupId, audioGroupId, subtitlesGroupId, closedCaptionsGroupId,
+                /* pathwayId= */ null, stableVariantId);
         variants.add(variant);
         @Nullable ArrayList<VariantInfo> variantInfosForUrl = urlToVariantInfos.get(uri);
         if (variantInfosForUrl == null) {
@@ -713,6 +720,8 @@ public final class HlsPlaylistParser implements ParsingLoadable.Parser<HlsPlayli
       line = mediaTags.get(i);
       String groupId = parseStringAttr(line, REGEX_GROUP_ID, variableDefinitions);
       String name = parseStringAttr(line, REGEX_NAME, variableDefinitions);
+      @Nullable String stableRenditionId =
+          parseOptionalStringAttr(line, REGEX_STABLE_RENDITION_ID, variableDefinitions);
       Format.Builder formatBuilder =
           new Format.Builder()
               .setId(groupId + ":" + name)
@@ -743,10 +752,10 @@ public final class HlsPlaylistParser implements ParsingLoadable.Parser<HlsPlayli
           if (uri == null) {
             // TODO: Remove this case and add a Rendition with a null uri to videos.
             formatBuilder.setMetadata(metadata);
-            videos.add(new Rendition(uri, formatBuilder.build(), groupId, name)); // xtra: quality names
+            videos.add(new Rendition(uri, formatBuilder.build(), groupId, name, stableRenditionId)); // xtra: quality names
           } else {
             formatBuilder.setMetadata(metadata);
-            videos.add(new Rendition(uri, formatBuilder.build(), groupId, name));
+            videos.add(new Rendition(uri, formatBuilder.build(), groupId, name, stableRenditionId));
           }
           break;
         case TYPE_AUDIO:
@@ -772,7 +781,7 @@ public final class HlsPlaylistParser implements ParsingLoadable.Parser<HlsPlayli
           formatBuilder.setSampleMimeType(sampleMimeType);
           if (uri != null) {
             formatBuilder.setMetadata(metadata);
-            audios.add(new Rendition(uri, formatBuilder.build(), groupId, name));
+            audios.add(new Rendition(uri, formatBuilder.build(), groupId, name, stableRenditionId));
           } else if (variant != null) {
             // TODO: Remove muxedAudioFormat and add a Rendition with a null uri to audios.
             muxedAudioFormat = formatBuilder.build();
@@ -792,7 +801,7 @@ public final class HlsPlaylistParser implements ParsingLoadable.Parser<HlsPlayli
           }
           formatBuilder.setSampleMimeType(sampleMimeType).setMetadata(metadata);
           if (uri != null) {
-            subtitles.add(new Rendition(uri, formatBuilder.build(), groupId, name));
+            subtitles.add(new Rendition(uri, formatBuilder.build(), groupId, name, stableRenditionId));
           } else {
             Log.w(LOG_TAG, "EXT-X-MEDIA tag with missing mandatory URI attribute: skipping");
           }
@@ -845,7 +854,8 @@ public final class HlsPlaylistParser implements ParsingLoadable.Parser<HlsPlayli
         muxedCaptionFormats,
         hasIndependentSegmentsTag,
         variableDefinitions,
-        sessionKeyDrmInitData);
+        sessionKeyDrmInitData,
+        /* contentSteeringInfo= */ null);
   }
 
   @Nullable
@@ -895,7 +905,8 @@ public final class HlsPlaylistParser implements ParsingLoadable.Parser<HlsPlayli
     long partTargetDurationUs = C.TIME_UNSET;
     boolean hasIndependentSegmentsTag = multivariantPlaylist.hasIndependentSegments;
     boolean hasEndTag = false;
-    @Nullable Segment initializationSegment = null;
+    @Nullable Segment initializationSegment =
+        previousMediaPlaylist != null ? previousMediaPlaylist.lastSeenInitSegment : null;
     HashMap<String, String> variableDefinitions = new HashMap<>();
     HashMap<String, Segment> urlToInferredInitSegment = new HashMap<>();
     List<Segment> segments = new ArrayList<>();
@@ -1545,7 +1556,8 @@ public final class HlsPlaylistParser implements ParsingLoadable.Parser<HlsPlayli
         trailingParts,
         serverControl,
         renditionReportMap,
-        interstitials);
+        interstitials,
+        initializationSegment);
   }
 
   private static DrmInitData getPlaylistProtectionSchemes(

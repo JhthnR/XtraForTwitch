@@ -64,6 +64,24 @@ outputs private and never report emulator timing as device performance evidence.
 
 ## Manual regression checklist
 
+### October 21 performance stack / Media3
+
+- HLS fixtures run on API 23/28: Twitch live prefetch timing, VoD muted segments
+  and offsets, initialization maps across ordinary/part-only delta refreshes,
+  portrait exclusion, stable variant/rendition identity and missing frame rates.
+- `PlaybackSessionCallbackTest` checks that trusted controller defaults retain
+  surface, track and playback commands plus ThystTV custom commands. Untrusted
+  controllers retain Media3's read permissions. The test does not decode media.
+- An API 36.1 emulator comparison preserved a 1.9.3 control and reproduced black
+  VoD video on 1.11.1 before the callback migration. Logs rejected surface commands
+  while playback position advanced. After migration, actual public live and VoD
+  video rendered; live quality changed to 480p with readable labels, and live
+  minimize/restore retained video. Actual VoD dragging showed a downloaded
+  storyboard frame/time, hid it on release and sought/resumed successfully.
+- These are emulator smoke observations, not physical-device or long-playback
+  certification. Audio overlap is unverified (the emulator ran without audio).
+  Keep the full player/backend and startup-device QA matrix below.
+
 ### September 27 TV remote navigation
 
 - `TvNavigationFocusTest` attaches the real activity layout and Material bottom

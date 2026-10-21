@@ -109,6 +109,13 @@ Update this list as the code evolves.
 
 ## Recent Lessons From ThystTV Fixes
 
+- Media3 1.11's old `Callback.onConnect` default is a placeholder. The default
+  session service negotiates through `PlaybackSessionCallback.onConnectAsync`
+  with controller-aware defaults; copying the old default loses surface, tracks
+  and playback permissions even while the service itself continues playing.
+  Keep existing custom commands for trusted controllers and Media3's read access
+  for untrusted controllers. A dependency update must test visible live/VoD video
+  and usable quality controls, not merely an advancing playback position.
 - For issue #5, logs did not show a clean app `FATAL EXCEPTION`; the safer fix was the narrow Media3/ExoPlayer rollback and HLS parser compatibility change, not broad WIP player sync.
 - Quality menu labels can regress to HLS variant indices after chat-only -> auto transitions. Preserve readable labels derived from labels, format height/frame rate, or URL path.
 - Mixed-codec Quality choices keep resolution as the primary label and show a standardized

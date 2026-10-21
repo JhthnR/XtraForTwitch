@@ -311,6 +311,28 @@ All three crackededed commits after `a3cbb0325`, through
 | `0497f3d2ca9085abd72102b609d3c6ef838bfee6` fix unlisted video qualities | N/A: ThystTV already skips only `FR_CODEC_NOT_REQUESTED`/`FR_DUALFORMAT_INCOMPATIBLE` (`isSkippedUnavailableReason`) and keeps blank variant attributes null. |
 
 Upstream moved Media3 to 1.11.x (`e08e2b3c2`, `61b165e99`, `8814b5bb2`). Its maintainer
-reported in crackededed/Xtra#1009 that the update broke the old custom playback service,
-which upstream then removed. ThystTV still ships that path behind
-`DEBUG_USE_CUSTOM_PLAYBACK_SERVICE`; a Media3 upgrade must retire or retest it.
+reported in [crackededed/Xtra#1009](https://github.com/crackededed/Xtra/issues/1009)
+that the update broke its old service. Commit
+[`9a919bfa06a2efd32bb4c5d1b72e0ec96d2f9dea`](https://github.com/crackededed/Xtra/commit/9a919bfa06a2efd32bb4c5d1b72e0ec96d2f9dea)
+removed `Media3Fragment`/`PlaybackService` and retained the direct-bound
+`ExoPlayerService`. ThystTV's **default** is the affected Media3 session path;
+`DEBUG_USE_CUSTOM_PLAYBACK_SERVICE=true` selects the direct-bound alternative.
+An isolated upgrade must retest the default first. Do not import the broad service
+removal or change the default based only on upstream's result.
+
+## October 21, 2026 isolated Media3 adaptation
+
+The performance stack evaluates 1.11.1 without importing upstream's service
+removal. Default-service emulator testing reproduced a black VoD surface while
+the service position advanced. Media3 1.11.1's old `Callback.onConnect` default
+is a placeholder; ThystTV had copied its empty player permissions. The narrow
+adaptation uses controller-aware `onConnectAsync` defaults and retains existing
+custom commands for trusted controllers. The same public VoD and current live
+video then rendered, with quality changes and minimize/restore working.
+
+The custom HLS parser adapts the new model signatures, retains stable identities,
+preserves initialization maps across updates, and treats missing/invalid JSON
+frame rates as unknown. Content steering remains outside this port. Parser and
+connection regressions have focused coverage; see [testing evidence](TESTING.md)
+and [required device QA](MANUAL_QA.md). No broad service/lifecycle migration or
+default-backend change is included.

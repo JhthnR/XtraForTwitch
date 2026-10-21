@@ -127,16 +127,60 @@ Human QA completed: none in this continuation.
   bytes) and baseline.profm (447 bytes), without the benchmark native library.
   No physical startup speedup is claimed. Preserve this working artifact as the
   1.9.3 control before evaluating Media3 1.11.1 on the next isolated branch.
+- 2026-10-21: Saved step 7 as `7bde0aec9`; branch `perf/8-media3` evaluates
+  1.11.1 with narrow HLS model compatibility. The preserved 1.9.3 control rendered
+  public live and VoD video on the default session service. The first candidate
+  compile required the new Variant/Rendition/master metadata signatures; the
+  focused fixtures then exposed missing frame-rate JSON becoming zero, rejected
+  by the newer Format builder. Preserve unknown rates as NO_VALUE and fractional
+  rates as floats. Candidate verification and default-service comparison pending.
+- 2026-10-21: Candidate HLS build and all 12 focused tests passed. Default-service
+  playback reproduced black video while session position advanced; logs rejected
+  controller commands 27/29 (surface/volume). Official 1.11.1 source shows the old
+  `Callback.onConnect` default returns a placeholder, whose empty player commands
+  were copied by ThystTV. Migrating only connection negotiation to `onConnectAsync`
+  with controller-aware defaults; keep the service/lifecycle/default backend.
+  Trusted controllers receive existing custom commands, while untrusted controllers
+  retain Media3's read permissions. Callback contract tests and render retest pending.
+- 2026-10-21: Callback migration passed assembleDebug and all 16 focused tests.
+  Actual default-service VoD/live video now renders, with normal session actions
+  and no rejected surface/volume commands. Changed a current live stream to 480p,
+  verified its selected readable label, and minimized/restored visible video.
+  Actual online VoD dragging showed a downloaded storyboard frame/time and then
+  sought/resumed. Native screenshots and before/after logs are private artifacts.
+  These are smoke checks without audible output, not the full human QA matrix.
+  Reviewed the frame-rate guard against SDK API metadata and used API-23-safe
+  NaN/infinity checks. Profile regeneration is running; broad gates remain.
+- 2026-10-21: Profile regeneration passed in 8m47s with default stability checks;
+  the final journey reached two stable iterations at iteration 12. Saved 18,686
+  baseline and 16,576 startup rules. Both timing benchmarks were deliberately
+  excluded by the generation selector, so no physical speedup is measured.
+  Stopped only the task emulator and started assembleDebug/test/lintDebug/
+  assembleRelease for the final candidate.
+- 2026-10-21: Full unit suite passed: 874 tests in 111 classes, zero failures,
+  errors or skips. Lint required the explicit Media3 API opt-in on the new callback;
+  added the same annotation used by PlaybackService. Final assembleDebug,
+  lintDebug and assembleRelease passed (lint zero errors / 331 warnings).
+  Verified production package `com.tzii.thysttv`, unsigned release behavior,
+  baseline.prof (7,559 bytes), baseline.profm (449 bytes), 9,367 R8 residual
+  rules including current app/Stats classes, and no benchmark native library.
+  Release APK: 33,258,169 bytes. Diff reviewed; all core implementation steps are
+  complete. APKs, hashes, native screenshots and raw logs stay in private artifacts.
 
 ## Decisions
 
 - Keep fork feature work out of the core stack, matching the user's scope choice.
 - Keep each saved step local, on its own branch, matching the user's git choice.
 
-## Final PR summary draft
+## Local handoff
 
-Summary: Separate scoped steps for chat, size, seeking, rewind and startup;
-Media3 is independently reviewable at the stack tip.
-Tests: Record actual outcomes below as each step completes.
-Human QA: Remains the player matrix plus physical startup measurement.
-Risks: Device-only playback and performance cannot be established by unit tests.
+The local stack ends at `perf/8-media3`. Step 5 is `4f6210d87`, step 6 is
+`319cf27f9`, and step 7 is `7bde0aec9`; earlier layers are listed above. Step 8
+contains the isolated dependency/parser/session adaptation and regenerated profiles.
+No pushes, PRs, releases, signing-key changes or broad service removal were made.
+
+Required automated checks passed as recorded above. Human QA remains live/VoD,
+switching, minimize/restore, close/reopen, PiP/background, speed/quality, gestures,
+floating chat, resizing and all playback backends. Physical startup measurement
+is still required before claiming a speedup. Larger fork features remain deferred
+pending the user's next scope choice.

@@ -226,27 +226,7 @@ class PlaybackService : MediaSessionService() {
                 )
             )
             setCallback(
-                object : MediaSession.Callback {
-                    override fun onConnect(session: MediaSession, controller: MediaSession.ControllerInfo): MediaSession.ConnectionResult {
-                        val connectionResult = super.onConnect(session, controller)
-                        val sessionCommands = connectionResult.availableSessionCommands.buildUpon().apply {
-                            add(SessionCommand(START_STREAM, Bundle.EMPTY))
-                            add(SessionCommand(START_VIDEO, Bundle.EMPTY))
-                            add(SessionCommand(START_CLIP, Bundle.EMPTY))
-                            add(SessionCommand(START_OFFLINE_VIDEO, Bundle.EMPTY))
-                            add(SessionCommand(TOGGLE_DYNAMICS_PROCESSING, Bundle.EMPTY))
-                            add(SessionCommand(TOGGLE_PROXY, Bundle.EMPTY))
-                            add(SessionCommand(SET_SLEEP_TIMER, Bundle.EMPTY))
-                            add(SessionCommand(CHECK_ADS, Bundle.EMPTY))
-                            add(SessionCommand(GET_QUALITIES, Bundle.EMPTY))
-                            add(SessionCommand(GET_DURATION, Bundle.EMPTY))
-                            add(SessionCommand(GET_ERROR_CODE, Bundle.EMPTY))
-                            add(SessionCommand(GET_MEDIA_PLAYLIST, Bundle.EMPTY))
-                            add(SessionCommand(GET_MULTIVARIANT_PLAYLIST, Bundle.EMPTY))
-                        }.build()
-                        return MediaSession.ConnectionResult.accept(sessionCommands, connectionResult.availablePlayerCommands)
-                    }
-
+                object : PlaybackSessionCallback() {
                     override fun onCustomCommand(session: MediaSession, controller: MediaSession.ControllerInfo, customCommand: SessionCommand, args: Bundle): ListenableFuture<SessionResult> {
                         return when (customCommand.customAction) {
                             START_STREAM -> {
