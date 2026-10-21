@@ -311,6 +311,22 @@ The receiver fetches the media URL directly. Phone HTTP headers/proxies are not
 forwarded. Receiver codec/network compatibility needs physical Cast QA; enabling
 the sender and passing state tests do not establish receiver playback support.
 
+## Optional chat in system PiP
+
+Player settings → Chat in picture-in-picture is off by default. A maximized local
+live stream with visible, ready portrait chat requests a 9:16 system PiP window:
+video above a read-only message list. VoDs/clips, landscape, minimized, floating
+or hinge-split chat, TV and Cast keep the normal video-only behavior. No extra
+player or overlay permission is involved.
+
+The window keeps the shape requested before entry. Layout and preference changes
+refresh the next request, including when Settings covers a running player. Chat
+containers measure/draw only the message path during PiP, so async polls, status,
+scroll buttons, emotes and composer cannot cover messages. Normal visibility and
+draft text remain intact on return; new messages follow the newest item in PiP.
+The composite source hint replaces the video-only hint tracker, retains system
+play/pause actions and disables seamless resize for non-video chat content.
+
 ## Human QA Handoff
 
 Agents should not claim physical-device QA unless it was actually performed. Instead, list the required human QA from `docs/MANUAL_QA.md`.

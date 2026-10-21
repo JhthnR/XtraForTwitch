@@ -937,6 +937,8 @@
     <string name="channel_rewards_option" tools:ignore="MissingTranslation">%1$s · %2$s points</string>
     <string name="channel_rewards_text_input" tools:ignore="MissingTranslation">Message for this reward (required)</string>
     <string name="channel_rewards_check_twitch" tools:ignore="MissingTranslation">Check the previous redemption on Twitch.</string>
+    <string name="pip_chat" tools:ignore="MissingTranslation">Chat in picture-in-picture</string>
+    <string name="pip_chat_summary" tools:ignore="MissingTranslation">Show live chat beneath the video when entering picture-in-picture from portrait. Chat is read-only; other layouts keep video only.</string>
     <string name="cast_enabled" tools:ignore="MissingTranslation">Google Cast</string>
     <string name="cast_enabled_summary" tools:ignore="MissingTranslation">Cast online video with the default player. Reopen playback after changing this setting. Requires Google Play services and a receiver on the same network.</string>
     <string name="cast_local_only" tools:ignore="MissingTranslation">This video can only play on this device.</string>

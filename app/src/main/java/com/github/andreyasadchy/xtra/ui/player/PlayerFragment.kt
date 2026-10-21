@@ -8,10 +8,12 @@ import android.app.PictureInPictureParams
 import android.app.RemoteAction
 import android.content.Context
 import android.content.Intent
+import android.content.SharedPreferences
 import android.content.pm.ActivityInfo
 import android.content.pm.PackageManager
 import android.content.res.Configuration
 import android.graphics.Color
+import android.graphics.Rect
 import android.graphics.drawable.Icon
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
@@ -38,6 +40,7 @@ import android.view.View
 import android.view.ViewConfiguration
 import android.view.ViewGroup
 import android.view.ViewPropertyAnimator
+import android.view.ViewTreeObserver
 import android.view.inputmethod.InputMethodManager
 import android.view.animation.DecelerateInterpolator
 import android.widget.Button
@@ -45,7 +48,6 @@ import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
-import androidx.activity.trackPipAnimationHintView
 import androidx.annotation.OptIn
 import androidx.core.content.edit
 import androidx.core.graphics.ColorUtils
@@ -155,6 +157,10 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
     override var isPortrait = false
     override var isMaximized = true
     private var isChatOpen = true
+    private var pipChatRequested = false
+    private var pipPresentation: PlayerPipPolicy.Presentation? = null
+    private var pipPreferenceListener: SharedPreferences.OnSharedPreferenceChangeListener? = null
+    private val pipLayoutListener = ViewTreeObserver.OnGlobalLayoutListener { refreshPipPresentation() }
     private var isKeyboardShown = false
     protected var displayMode = PlayerDisplayMode.FIT
     /** Fit-relative pinch zoom kept with Fit; 1 is plain Fit. See [PinchZoomController]. */
@@ -735,6 +741,12 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
     @SuppressLint("ClickableViewAccessibility")
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
+        pipPreferenceListener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+            if (key == C.PLAYER_PIP_CHAT || key == C.PLAYER_PICTURE_IN_PICTURE || key == C.CHAT_DISABLE) {
+                refreshPipPresentation()
+            }
+        }.also { prefs.registerOnSharedPreferenceChangeListener(it) }
+        view.viewTreeObserver.addOnGlobalLayoutListener(pipLayoutListener)
         watchLiveRewindCatchUp()
         watchFoldPosture()
         with(binding) {
@@ -790,13 +802,6 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                 // Capture system gesture insets for edge detection
                 gestureInsets = windowInsets.getInsets(WindowInsetsCompat.Type.systemGestures())
                 WindowInsetsCompat.CONSUMED
-            }
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && requireActivity().packageManager.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE)) {
-                viewLifecycleOwner.lifecycleScope.launch {
-                    repeatOnLifecycle(Lifecycle.State.STARTED) {
-                        requireActivity().trackPipAnimationHintView(playerLayout)
-                    }
-                }
             }
             if (requireContext().prefs().getBoolean(C.PLAYER_KEEP_SCREEN_ON_WHEN_PAUSED, false)) {
                 view.keepScreenOn = true
@@ -2936,6 +2941,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                 }
             }
         }
+        refreshPipPresentation()
     }
 
     protected fun showController(force: Boolean = false) {
@@ -3132,6 +3138,49 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
         return quality?.name != AUDIO_ONLY_QUALITY && quality?.name != CHAT_ONLY_QUALITY
     }
 
+    /** Cache requests before auto-enter, then retain that shape until the window exits PiP. */
+    private fun refreshPipPresentation() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O || !isAdded || _binding == null ||
+            !requireActivity().packageManager.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE)) return
+        if (!isInPipMode()) {
+            pipChatRequested = PlayerPipPolicy.ChatEligibility(
+                enabled = prefs.getBoolean(C.PLAYER_PIP_CHAT, false) && prefs.getBoolean(C.PLAYER_PICTURE_IN_PICTURE, true),
+                live = videoType == STREAM,
+                portrait = isPortrait,
+                maximized = isMaximized,
+                chatShown = isChatOpen && binding.chatLayout.isVisible && !prefs.getBoolean(C.CHAT_DISABLE, false),
+                chatReady = chatFragment?.supportsPipMode() == true,
+                local = !isRemotePlayback() && canEnterPictureInPicture(),
+                television = requireContext().isTelevision(),
+                floating = isFloatingChatEnabled,
+                splitAtHinge = foldLayout != null,
+            ).canShow()
+        }
+        val video = Rect()
+        val content = Rect()
+        binding.playerLayout.getGlobalVisibleRect(video)
+        binding.slidingLayout.getGlobalVisibleRect(content)
+        val presentation = PlayerPipPolicy.presentation(video, content, pipChatRequested) ?: return
+        if (pipPresentation == presentation) return
+        pipPresentation = presentation
+        requireActivity().setPictureInPictureParams(PictureInPictureParams.Builder().apply {
+            setAspectRatio(presentation.aspectRatio)
+            setSourceRectHint(presentation.source)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) setSeamlessResizeEnabled(!presentation.chat)
+        }.build())
+    }
+
+    private fun applyPictureInPictureChat() {
+        chatFragment?.setPipMode(pipChatRequested)
+        if (pipChatRequested) {
+            binding.chatLayout.visibility = View.VISIBLE
+        } else if (isPortrait) {
+            binding.chatLayout.visibility = View.GONE
+        } else {
+            hideChatLayout()
+        }
+    }
+
     protected fun setPipActions(playing: Boolean) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O &&
             requireActivity().packageManager.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE) &&
@@ -3179,6 +3228,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                     ))
                 }.build()
             )
+            refreshPipPresentation()
         }
     }
 
@@ -3194,13 +3244,11 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
             else -> false
         }
         if (isInPIPMode) {
-            if (isPortrait) {
-                binding.chatLayout.visibility = View.GONE
-            } else {
-                hideChatLayout()
-            }
+            applyPictureInPictureChat()
             useController = false
             updateFoldLayout()
+        } else {
+            refreshPipPresentation()
         }
     }
 
@@ -3406,6 +3454,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
             if (!isPortrait && isMaximized) {
                 maybeShowGestureGuide()
             }
+            refreshPipPresentation()
         }
     }
 
@@ -3428,11 +3477,9 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                     slidingLayout.scaleX = 1f
                     slidingLayout.scaleY = 1f
                 }
-                if (isPortrait) {
-                    chatLayout.visibility = View.GONE
-                } else {
-                    hideChatLayout()
-                }
+                (requireContext().getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager)
+                    .hideSoftInputFromWindow(chatLayout.windowToken, 0)
+                applyPictureInPictureChat()
                 useController = false
                 controllerAnimation?.cancel()
                 binding.playerControls.root.alpha = 0f
@@ -3444,11 +3491,14 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                 (chatFragment?.childFragmentManager?.findFragmentByTag("replyDialog") as? BottomSheetDialogFragment)?.dismiss()
                 (chatFragment?.childFragmentManager?.findFragmentByTag("imageDialog") as? BottomSheetDialogFragment)?.dismiss()
             } else {
+                chatFragment?.setPipMode(false)
                 useController = true
+                initLayout()
             }
         }
         updateFoldLayout()
         refreshDisplayZoom()
+        refreshPipPresentation()
     }
 
     override fun onStop() {
@@ -3915,6 +3965,12 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
     }
 
     override fun onDestroyView() {
+        pipPreferenceListener?.let { context?.prefs()?.unregisterOnSharedPreferenceChangeListener(it) }
+        pipPreferenceListener = null
+        _binding?.root?.viewTreeObserver?.takeIf { it.isAlive }?.removeOnGlobalLayoutListener(pipLayoutListener)
+        chatFragment?.setPipMode(false)
+        pipPresentation = null
+        pipChatRequested = false
         seekPreview?.release()
         seekPreview = null
         foldImeVisible = false

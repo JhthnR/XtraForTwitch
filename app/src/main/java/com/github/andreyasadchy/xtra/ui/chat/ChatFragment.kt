@@ -79,6 +79,7 @@ class ChatFragment : BaseNetworkFragment(), MessageClickedDialog.OnButtonClickLi
     private val binding get() = _binding!!
     private val viewModel: ChatViewModel by viewModels()
     private var adapter: ChatAdapter? = null
+    private var pipMode = false
 
     private var isChatTouched = false
     private var showChatStatus = false
@@ -109,6 +110,7 @@ class ChatFragment : BaseNetworkFragment(), MessageClickedDialog.OnButtonClickLi
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
+        applyPipChrome()
         viewLifecycleOwner.lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
                 viewModel.integrity.collectLatest {
@@ -845,7 +847,7 @@ class ChatFragment : BaseNetworkFragment(), MessageClickedDialog.OnButtonClickLi
                 is ChatMessageStore.Change.Cleared -> adapter.notifyItemRangeRemoved(0, change.count)
             }
         }
-        if (added && !isChatTouched && binding.btnDown.isGone && adapter.itemCount > 0) {
+        if (added && (pipMode || (!isChatTouched && binding.btnDown.isGone)) && adapter.itemCount > 0) {
             binding.recyclerView.scrollToPosition(adapter.itemCount - 1)
         }
     }
@@ -867,6 +869,30 @@ class ChatFragment : BaseNetworkFragment(), MessageClickedDialog.OnButtonClickLi
                 getCurrentPosition = (parentFragment as PlayerFragment)::getCurrentPosition,
                 getCurrentSpeed = (parentFragment as PlayerFragment)::getCurrentSpeed
             )
+        }
+    }
+
+    fun supportsPipMode() = _binding != null && adapter != null
+
+    /** Keep the existing list and drafts; PiP displays messages without chat actions. */
+    fun setPipMode(enabled: Boolean) {
+        if (pipMode == enabled) return
+        pipMode = enabled
+        applyPipChrome()
+        if (enabled) {
+            _binding?.let {
+                it.root.clearFocus()
+                val count = it.recyclerView.adapter?.itemCount ?: 0
+                if (count > 0) it.recyclerView.scrollToPosition(count - 1)
+            }
+        }
+    }
+
+    private fun applyPipChrome() {
+        _binding?.let {
+            it.root.firstChildOnly = pipMode
+            it.chatContentColumn.firstChildOnly = pipMode
+            it.chatViewportFrame.firstChildOnly = pipMode
         }
     }
 

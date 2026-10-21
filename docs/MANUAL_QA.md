@@ -249,6 +249,21 @@ behavior remain unverified; emulator results are recorded separately in
   PiP/background during a drag. No old preview or image request survives.
 - [ ] Live/VoD playback, speed/quality, gestures and floating chat remain usable.
 
+### Optional chat in picture-in-picture
+
+- [ ] Setting off: normal video-only PiP for live/VoD/clip on every backend.
+- [ ] Enable the option over an already running portrait live player. Home shows
+  video above readable, updating chat in a portrait PiP window. Resize, move,
+  stash, play/pause and restore; no input, emote, poll/status or scroll overlays.
+- [ ] Return with a typed draft/reply/emote panel open. Normal chat/input state
+  returns without sending or clearing the draft. Repeat entry/exit and rotate.
+- [ ] Landscape, minimized, disabled/hidden/unavailable chat, floating chat,
+  hinge-split layouts, VoD, clips and TV retain video-only PiP. Cast cannot enter
+  PiP. Test settings changes before entry and view recreation while in PiP.
+- [ ] Repeat minimize/restore, stream switching, close/reopen, background/lock,
+  speed/quality, gestures and floating chat. Check Android 8–11 manual entry and
+  Android 12+ gesture auto-entry on physical devices.
+
 ### Optional Google Cast
 
 - [ ] With Cast off, default live/VoD/clip/download playback and controls match the

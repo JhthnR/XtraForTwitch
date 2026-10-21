@@ -16,7 +16,8 @@ logic, multiview or Compose migrations. Keep one active playback owner.
 
 Base is `perf/8-media3` at `5e0de159f`, the completed core performance stack.
 Continue in its existing isolated worktree; the main checkout has unrelated files.
-Create one local stacked branch per feature. Current branch: `feat/9-cast`.
+Create one local stacked branch per feature. Cast is `feat/9-cast` at `908b2e349`;
+current branch: `feat/10-pip-chat`.
 
 The user explicitly authorized all four feature areas on 2026-10-21 and will have
 Claude Opus 5.5 review the result afterward. Earlier core-only scope is superseded
@@ -106,6 +107,18 @@ Human QA completed in this feature stack: none.
   unsigned production ID/code 14 unchanged, 34,221,698 bytes, embedded profile
   6,299 bytes and profile metadata 460 bytes. APK/log/report artifacts are saved
   locally. Cast implementation and local checks complete; hardware QA remains.
+
+PiP progress (2026-10-22): implemented optional portrait live chat using the
+existing RecyclerView. Full suite passed 913 tests with no failures/errors/skips;
+debug assembly passed. Initial lint passed with one new accessibility warning
+for the root's read-only touch override; replaced it with input suppression at
+dispatch, preserving ordinary click handling. Final debug assembly and 16 focused
+PiP cases passed, including two added platform-request cases. Final lint passed
+with 0 errors / 331 warnings. The final restored live player minimized/restored.
+API 36.1 emulator showed real live video/chat in a 336×597 portrait PiP window,
+continuing chat updates, native resize and repeated restoration. Switching to a
+VoD produced a video-only landscape PiP window. Physical/API 26–30 and
+authenticated composer QA remain required. No receiver or human checks claimed.
 
 ## Decisions
 

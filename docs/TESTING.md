@@ -64,6 +64,22 @@ outputs private and never report emulator timing as device performance evidence.
 
 ## Manual regression checklist
 
+### Optional PiP chat
+
+`PlayerPipPolicyTest` covers eligibility and bounded video/composite source hints
+on API 23/28. `PlayerPipRequestTest` checks actual platform requests, remote/unready
+fallback and preference changes across PiP entry/exit. `PipChatLayoutTest` measures
+and renders the real chat layout through compact/wide/compact sizes, preserving
+drafts and suppressing asynchronous overlays, input and inaccessible actions.
+
+October 22 local validation: full suite passed 913 tests before the final input
+dispatch change and two request tests; final debug assembly and 16 focused PiP
+cases passed. Final lint passed with 0 errors / 331 warnings. API 36.1 showed real
+live video and updating chat in portrait PiP, resizing and repeated restoration.
+VoD and the disabled option used video-only landscape PiP; restored live playback
+could minimize and restore. These are emulator observations, not physical-device
+or authenticated composer QA. Follow `MANUAL_QA.md` for the remaining matrix.
+
 ### Optional Google Cast
 
 `CastPlaybackHandoffTest` exercises local/remote source ownership, configured

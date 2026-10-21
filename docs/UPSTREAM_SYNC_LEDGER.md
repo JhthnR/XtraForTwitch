@@ -6,6 +6,16 @@ decisions lives in [`UPSTREAM_SYNC.md`](UPSTREAM_SYNC.md). The 1.2-cycle ledger
 ([`RELEASE_1_2_UPSTREAM_COMMITS.md`](RELEASE_1_2_UPSTREAM_COMMITS.md)) is frozen history;
 new audits go here.
 
+## October 22, 2026: optional PiP chat adaptation
+
+Adapted the interaction from [thiscallnet/Xtra #520](https://github.com/thiscallnet/Xtra/pull/520),
+merge `daf8eab52a280a2d8aecc6117e5ec7c427940273`. Retained ThystTV's existing
+RecyclerView chat, player surface, controls, fold geometry and draft state;
+did not import the donor's canvas renderer or player rewrite. The option defaults
+off. Portrait local live chat uses system PiP with guarded eligibility, a composite
+source hint and read-only message presentation. [Android PiP guidance](https://developer.android.com/develop/ui/views/picture-in-picture)
+informs the early request updates and non-video resize behavior.
+
 ## Latest audit
 
 - **Date checked:** 2026-10-04; crackededed rechecked 2026-10-10 and 2026-10-20
