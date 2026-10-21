@@ -39,6 +39,9 @@ If more code-style rules are needed later, add `docs/CONVENTIONS.md` in a separa
 - Build config: `app/build.gradle.kts`
 - Main activity / app-level player entry point: `app/src/main/java/com/github/andreyasadchy/xtra/ui/main/MainActivity.kt`
 - TV focus routing: `ui/main/TvNavigationFocus.kt`, `ui/player/PlayerTvFocus.kt` and `util/TvUi.kt` under the app's Kotlin package.
+- Device-code sign-in: `ui/login/LoginActivity.kt`, `DeviceCodeLoginController.kt`,
+  `DeviceCodeContentLayout.kt` and `DeviceCodeQr.kt`; adaptive
+  `view_device_code_login.xml`, existing `AuthRepository` and token validation/storage.
 - Player area: `app/src/main/java/com/github/andreyasadchy/xtra/ui/player/`
 - Chat/floating chat area: `app/src/main/java/com/github/andreyasadchy/xtra/ui/chat/`
 - Stats area: `app/src/main/java/com/github/andreyasadchy/xtra/ui/stats/`

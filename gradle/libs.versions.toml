@@ -1,4 +1,5 @@
 [versions]
+zxing = "3.5.4"
 activity = "1.12.4"
 android-gradle-plugin = "9.1.0"
 apollo = "4.4.3"
@@ -38,6 +39,7 @@ work = "2.11.2"
 detekt = "1.23.7"
 
 [libraries]
+zxing-core = { module = "com.google.zxing:core", version.ref = "zxing" }
 activity = { module = "androidx.activity:activity", version.ref = "activity" }
 apollo-api = { module = "com.apollographql.apollo:apollo-api", version.ref = "apollo" }
 benchmark-macro = { module = "androidx.benchmark:benchmark-macro-junit4", version.ref = "benchmark" }

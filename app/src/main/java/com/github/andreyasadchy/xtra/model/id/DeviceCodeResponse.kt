@@ -9,4 +9,8 @@ class DeviceCodeResponse(
     val deviceCode: String? = null,
     @SerialName("user_code")
     val userCode: String? = null,
+    @SerialName("expires_in")
+    val expiresIn: Int = 1800,
+    @SerialName("interval")
+    val interval: Int = 5,
 )

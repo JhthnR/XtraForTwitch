@@ -6,10 +6,25 @@ decisions lives in [`UPSTREAM_SYNC.md`](UPSTREAM_SYNC.md). The 1.2-cycle ledger
 ([`RELEASE_1_2_UPSTREAM_COMMITS.md`](RELEASE_1_2_UPSTREAM_COMMITS.md)) is frozen history;
 new audits go here.
 
+## October 22, 2026: TV device-code sign-in adaptation
+
+Audited razeNFR/XtraATV at `25b4a606f2768eb4ee2532f3570ce689bdd84d4c`, including
+its `TvLoginScreen.kt` account-method presentation. Kept native views, existing
+scopes, browser flow and storage instead of its Compose/account rewrite. Added a
+TV entry, local QR, expiry/retry and guarded manual checks to the existing grant.
+The canonical activation route and response timing follow
+[Twitch's device-code grant documentation](https://dev.twitch.tv/docs/authentication/getting-tokens-oauth/#device-code-grant-flow).
+QR encoding uses [ZXing core 3.5.4](https://github.com/zxing/zxing/releases/tag/zxing-3.5.4)
+(Apache 2.0); no external QR service. Real account/device authorization remains
+human QA, not an automated test claim.
+
 ## October 22, 2026: bounded live recovery adaptation
 
 Audited thiscallnet/Xtra's background recovery and network/frame-preservation
-work (PRs #469/#471; locally retained donor `PlaybackService.kt`). Implemented a
+work ([#469](https://github.com/thiscallnet/Xtra/pull/469), merge
+`2d5302f0f3680b4982720be21a5acde0951b580d`; [#471](https://github.com/thiscallnet/Xtra/pull/471),
+merge `07f7eebbc5936c25fff62d0d9ff0b01155ccf04a`; locally retained donor
+`PlaybackService.kt`). Implemented a
 small service-owned recovery listener rather than its broad service/proxy rewrite.
 Retry count, offline wait and buffering are bounded. Stable playback resets the
 budget; pause/switch/close/Cast cancel work. The implementation follows

@@ -93,6 +93,7 @@ dependencies {
     implementation("com.google.mlkit:translate:17.0.3")
 
     implementation(libs.material)
+    implementation(libs.zxing.core)
     implementation(libs.markwon.core)
     implementation(libs.markwon.linkify)
 

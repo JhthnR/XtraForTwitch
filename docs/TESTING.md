@@ -64,6 +64,32 @@ outputs private and never report emulator timing as device performance evidence.
 
 ## Manual regression checklist
 
+### TV device-code sign-in
+
+`DeviceCodeLoginControllerTest` covers provider metadata, explicit interval-bound
+checks, duplicate requests, expiry while hidden, stale noncancellable completions,
+disposal, invalid responses, network errors and provider rejection. UI state never
+contains the private device code. `DeviceCodeLoginViewTest` decodes actual QR
+pixels, checks cache/expiry actions and browser constraints, renders normal/200%
+text, and resizes retained views through compact/wide/compact geometry. Its
+browser constraint fixture uses an ordinary viewport because the detached
+Robolectric WebView reports zero height; actual WebView sizing was checked natively.
+
+On API 36.1, signed-out phone browser login rendered Twitch's login page with a
+full-height WebView after its viewport constraint correction. A disposable
+unauthenticated device-code request returned valid fields, 1800s expiry and 5s
+interval. No codes/tokens were printed or stored and no account was authorized.
+Camera scan, authenticated grant and physical TV/OEM remote behavior remain
+required human QA in `MANUAL_QA.md`.
+
+October 22 final debug assembly, full suite (952 tests / 119 suites, no failures,
+errors or skips) and lint (0 errors / 331 warnings) passed after browser sizing
+and retained-view resize corrections. Strict startup/Stats profile capture passed
+both journeys (two timing-only tests filtered out), and unsigned release assembly
+passed with nonempty packaged baseline/startup metadata. App ID, version and
+minSdk remain unchanged. See [the feature review guide](FORK_FEATURE_STACK_REVIEW.md)
+for exact profile/APK metadata and the remaining hardware gaps.
+
 ### Bounded live recovery
 
 `LivePlaybackRecoveryTest` runs 24 cases on API 23/28 using the production

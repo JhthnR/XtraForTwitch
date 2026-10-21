@@ -86,6 +86,15 @@ Hinge timing and real postures still need the device matrix in `MANUAL_QA.md`.
 
 ## Android TV remote input
 
+TV login exposes “Sign in with your phone”, explaining that some account features
+still need browser sign-in. The existing device grant now has a locally generated
+QR, readable code/instructions, provider expiry and an explicit “Check sign-in”
+action. Checks respect the provider interval and do not poll in the background.
+The countdown suspends while hidden and uses elapsed time when resumed. New code,
+expiry and teardown invalidate stale results. Browser sign-in retains its original
+Helix/GQL routing. The controller does not persist codes/tokens or send them to
+a QR service. Validation/storage and device scopes use the existing auth flow.
+
 Television UI mode enables remote focus routing; phone/tablet input is unchanged.
 The empty activity player container is not a focus target. On browsing roots,
 Back returns to the selected bottom-navigation item; UP returns to the current

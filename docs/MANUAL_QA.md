@@ -15,6 +15,20 @@ Agents should mark **Required** when a human should test an area. Mark **Complet
 
 ## Checklist
 
+### TV device-code sign-in (required)
+
+- [ ] Use a disposable account: entering the existing login activity revokes its
+  previous login tokens. On TV, reach phone sign-in by D-pad, read the limitation,
+  cancel and continue. Browser sign-in must remain available.
+- [ ] Scan the QR on a real phone and compare the displayed activation code.
+  Authorize, choose Check sign-in, and verify account identity and features.
+- [ ] Check before approval/twice rapidly, deny/revoke the code, interrupt
+  networking, expire it while visible/hidden and request a new code. Old results
+  must not sign in a new session. Close/reopen and rotate during each request.
+- [ ] Test browser fallback, no installed browser, phone external-code flow,
+  Helix/GQL preferences, enlarged fonts, compact/wide layouts and OEM remote
+  focus. All text/actions must remain readable/reachable by scrolling.
+
 ### Bounded local live recovery (required)
 
 - [ ] Interrupt/restore connectivity during live playback in foreground, PiP,

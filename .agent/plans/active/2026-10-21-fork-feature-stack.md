@@ -17,8 +17,9 @@ logic, multiview or Compose migrations. Keep one active playback owner.
 Base is `perf/8-media3` at `5e0de159f`, the completed core performance stack.
 Continue in its existing isolated worktree; the main checkout has unrelated files.
 Create one local stacked branch per feature. Cast is `feat/9-cast` at `908b2e349`;
-PiP chat is `feat/10-pip-chat` at `3f3024909`; current branch:
-`feat/11-stream-recovery`.
+PiP chat is `feat/10-pip-chat` at `3f3024909`;
+recovery is `feat/11-stream-recovery` at `535b99574`. Current branch:
+`feat/12-tv-device-login`.
 
 The user explicitly authorized all four feature areas on 2026-10-21 and will have
 Claude Opus 5.5 review the result afterward. Earlier core-only scope is superseded
@@ -132,6 +133,16 @@ Full XML/log/screenshots/APK evidence saved under ignored step11 artifacts.
 
 ## Decisions
 
+- TV adaptation: retain existing D-pad/player work and expose the existing device
+  grant through a TV entry with its browser-feature limitation explained first.
+  Use ZXing core 3.5.4 for local QR encoding, with a canonical Twitch activation
+  URL and a visible code fallback. Reuse the existing token validation/storage
+  path and scopes. Explicit checks respect the server interval; no token polling.
+  Expiry, generation checks, single requests, lifecycle clock suspension and
+  teardown prevent stale completions. Preserve browser/Helix sign-in routing.
+  Verify the QR round trip, layout/focus and controller failure/cancellation paths.
+  Regenerate profiles and assemble unsigned release after the dependency change.
+
 - Live recovery belongs to a service-owned listener on the active player. Retry
   network/timeouts, HTTP 408/429/5xx and behind-live-window failures at 1s/2.5s/5s,
   with a 60s validated-network wait and a 15s buffering watchdog. Reset only after
@@ -163,7 +174,27 @@ Full XML/log/screenshots/APK evidence saved under ignored step11 artifacts.
   preference changes; retain system actions and disable seamless resize for chat,
   following Android's platform PiP guidance.
 
-## Review handoff draft
+## Review handoff
 
-Implementation and validation pending. Final handoff will list branch boundaries,
-risks, observed behavior and required hardware QA for Claude Opus 5.5.
+TV progress (2026-10-22): code flow compiled and the original 12 focused cases
+passed. Native phone smoke caught a missing chain constraint; corrected it and
+confirmed actual full-height WebView bounds and Twitch login rendering. Added a
+viewport regression fixture (detached Robolectric WebView has zero height) and
+retained-view adaptation for rotation. A removed wide layout remained in AGP's
+compiled merge output; deleted that exact generated stale file, preserving source
+and gates. Final full checks now use the adaptive layout. A disposable anonymous
+Twitch device request returned valid metadata (1800s expiry / 5s interval); codes
+were not logged/stored and no account was authorized.
+
+Final debug assembly, full suite (952 tests / 119 suites, no failures/errors/skips)
+and lint (0 errors / 331 warnings) passed after the source/resource corrections.
+Strict startup/Stats profile capture passed: two journeys, no failures, two
+timing-only tests filtered out. Generated baseline/startup profiles have 19,140 /
+16,608 rules and no stale application-class references. Unsigned release assembly
+passed. The 34,262,994-byte APK retains `com.tzii.thysttv`, version code 14 /
+name 1.4.0 and minSdk 23. Packaged baseline.prof / baseline.profm are 6,532 / 528
+bytes. SHA-256: `f5907a41d8f5acb0a650268c4a65582571e5889c8a3d5506a089a956ba648c34`.
+APK signature verification confirms the expected unsigned output. No credentials,
+release signing, version bump or publication was used.
+`docs/FORK_FEATURE_STACK_REVIEW.md`
+records branch boundaries, risks and human QA for the later Claude Opus 5.5 review.
