@@ -208,6 +208,11 @@ class ChatViewModel @Inject constructor(
     fun resumeReplay(channelId: String?, channelLogin: String?, chatUrl: String?, videoId: String?, startTime: Int, getCurrentPosition: () -> Long?, getCurrentSpeed: () -> Float?) {
         if (chatReplayManager?.isActive == false || chatReplayManagerLocal?.isActive == false) {
             startReplayChat(videoId, startTime, chatUrl, getCurrentPosition, getCurrentSpeed, channelId, channelLogin)
+            // Playback can remain READY through PiP/background, without another state event.
+            // Wait for the existing READY hook if the controller's position is not known yet.
+            if (getCurrentPosition() != null) {
+                startReplayChatLoad()
+            }
         }
     }
 
