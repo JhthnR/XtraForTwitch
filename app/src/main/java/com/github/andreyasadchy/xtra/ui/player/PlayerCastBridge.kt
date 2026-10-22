@@ -13,6 +13,7 @@ import androidx.media3.common.ForwardingSimpleBasePlayer
 import androidx.media3.common.DeviceInfo
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.source.MediaSource
 import com.github.andreyasadchy.xtra.R
 import com.google.android.gms.cast.framework.CastContext
 
@@ -21,6 +22,7 @@ internal class PlayerCastBridge(
     private val context: Context,
     enabled: Boolean,
     private val createLocal: () -> ExoPlayer,
+    private val sourceFactoryChanged: (MediaSource.Factory?) -> Unit = {},
     private val endCurrentSession: () -> Unit = {
         // This accessor does not initialize Cast for default-off playback.
         @Suppress("DEPRECATION")
@@ -39,7 +41,7 @@ internal class PlayerCastBridge(
     private var generation = 0
     private var configured = enabled
     private var local = createLocal()
-    var handoff = CastPlaybackHandoff(local)
+    var handoff = CastPlaybackHandoff(local, sourceFactoryChanged)
         private set
     private var active = buildPlayer(enabled)
     private val routing = RoutePlayer(active)
@@ -77,7 +79,7 @@ internal class PlayerCastBridge(
         handoff.clear()
         endCurrentSession()
         local = createLocal().also { it.trackSelectionParameters = selection }
-        handoff = CastPlaybackHandoff(local)
+        handoff = CastPlaybackHandoff(local, sourceFactoryChanged)
         active = buildPlayer(enabled)
         routing.replace(active)
         previous.release()

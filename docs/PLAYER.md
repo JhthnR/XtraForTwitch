@@ -36,6 +36,11 @@ timing/state/error/offset values and exclude URLs, headers and account metadata.
 Exhaustion asks the viewer to retry or reopen. The optional legacy backend and
 ordinary VoD recovery are unchanged.
 
+Manual quality and audio-only MediaItem changes now use the current configured
+source factory too, preserving its HLS parser, HTTP headers and load-error policy.
+Replacing the source changes the delegate; offline/download playback clears it
+and uses the normal default factory. This also covers local playback with Cast off.
+
 ## Core Invariants
 
 - Only one active player session should exist.

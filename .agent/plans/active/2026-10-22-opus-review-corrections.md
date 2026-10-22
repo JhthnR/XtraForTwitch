@@ -102,3 +102,8 @@ Human QA completed: none.
 - Native Robb576 broadcast ended during the rebuilt-candidate checks (profile now
   shows a 33:54 past broadcast). Select another live source; do not conflate this
   external stream ending with a player recovery failure.
+- Corrected the review's pre-existing source-factory gap in a separate change:
+  a delegating ExoPlayer media-source factory follows the active HLS/HTTP/parser
+  factory through manual quality/audio item changes and resets for downloads.
+  Real local ExoPlayer tests verify retained and replaced delegates; combined
+  Cast/recovery/source tests and debug assembly passed. No new dependency.

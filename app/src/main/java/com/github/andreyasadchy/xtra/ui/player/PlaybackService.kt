@@ -35,6 +35,7 @@ import androidx.media3.exoplayer.hls.playlist.HlsMultivariantPlaylist
 import androidx.media3.exoplayer.hls.playlist.HlsPlaylist
 import androidx.media3.exoplayer.hls.playlist.HlsPlaylistParserFactory
 import androidx.media3.exoplayer.source.ProgressiveMediaSource
+import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.exoplayer.upstream.DefaultLoadErrorHandlingPolicy
 import androidx.media3.exoplayer.upstream.ParsingLoadable
 import androidx.media3.session.MediaSession
@@ -135,8 +136,11 @@ class PlaybackService : MediaSessionService() {
 
     override fun onCreate() {
         super.onCreate()
-        val bridge = PlayerCastBridge(this, enabled = prefs().getBoolean(C.PLAYER_CAST, false), createLocal = {
+        val sourceFactory = ConfiguredMediaSourceFactory(DefaultMediaSourceFactory(this))
+        val bridge = PlayerCastBridge(this, enabled = prefs().getBoolean(C.PLAYER_CAST, false),
+            sourceFactoryChanged = sourceFactory::configure, createLocal = {
             ExoPlayer.Builder(this).apply {
+                setMediaSourceFactory(sourceFactory)
                 setLoadControl(
                     DefaultLoadControl.Builder().apply {
                         setBufferDurationsMs(

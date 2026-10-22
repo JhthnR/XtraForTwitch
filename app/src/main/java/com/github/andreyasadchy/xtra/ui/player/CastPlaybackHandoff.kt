@@ -18,6 +18,7 @@ import java.net.UnknownHostException
 @OptIn(UnstableApi::class)
 internal class CastPlaybackHandoff(
     private val local: ExoPlayer,
+    private val sourceFactoryChanged: (MediaSource.Factory?) -> Unit = {},
     private val transferOnline: (Player, Player) -> Unit = CastPlayer.TransferCallback.DEFAULT::transferState,
 ) {
     private var source: MediaSource? = null
@@ -57,6 +58,7 @@ internal class CastPlaybackHandoff(
 
     fun setSource(active: Player, factory: MediaSource.Factory, item: MediaItem) {
         this.factory = factory
+        sourceFactoryChanged(factory)
         setSource(active, factory.createMediaSource(item))
     }
 
@@ -87,7 +89,10 @@ internal class CastPlaybackHandoff(
         source?.takeIf { it.mediaItem.localConfiguration?.uri == item.localConfiguration?.uri }
             ?: factory?.createMediaSource(item)?.also { source = it }
 
-    fun clear() { source = null; factory = null; ownedItem = null; rejected = null }
+    fun clear() {
+        source = null; factory = null; ownedItem = null; rejected = null
+        sourceFactoryChanged(null)
+    }
 
     companion object {
         fun canCast(item: MediaItem?): Boolean {

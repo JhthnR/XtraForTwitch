@@ -64,6 +64,12 @@ loopback literals, receiver-owned volume/speed and screen-on after local return.
 They use real local ExoPlayers with injected receiver creation; physical receiver
 network/volume/codec behavior remains human QA.
 
+ConfiguredMediaSourceFactoryTest drives real ExoPlayer.setMediaItem calls through
+master/quality/audio URI changes, source replacement and download fallback. It
+verifies the exact configured factory is retained and the previous stream factory
+cannot leak into the next source. These cover the pre-existing factory gap flagged
+by Opus, including default-off Cast playback.
+
 ### Startup profile generation
 
 See [profile tooling](../baselineprofile/README.md) for reproducible capture and physical cold-start
