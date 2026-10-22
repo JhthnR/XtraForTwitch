@@ -1,6 +1,7 @@
 package com.github.andreyasadchy.xtra.ui.player
 
 import android.app.Application
+import android.app.Activity
 import android.app.PictureInPictureParams
 import android.content.pm.PackageManager
 import android.util.Rational
@@ -20,6 +21,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.mockito.kotlin.*
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.Robolectric
 import org.robolectric.RuntimeEnvironment
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
@@ -61,6 +63,21 @@ class PlayerPipRequestTest {
         assertFalse(ReflectionHelpers.getField(harness.fragment, "pipChatRequested"))
     }
 
+    @Test fun `PiP window listener is detached before fragment view destruction`() {
+        val harness = Harness()
+        val host = Robolectric.buildActivity(Activity::class.java).setup().visible().get()
+        val container = FrameLayout(host).also(host::setContentView)
+        container.addView(harness.binding.root)
+        ReflectionHelpers.callInstanceMethod<Unit>(harness.fragment, "watchPipPresentation",
+            ReflectionHelpers.ClassParameter.from(View::class.java, harness.binding.root))
+        container.viewTreeObserver.dispatchOnGlobalLayout()
+        verify(harness.fragment, atLeastOnce()).isAdded
+        container.removeView(harness.binding.root)
+        clearInvocations(harness.fragment)
+        container.viewTreeObserver.dispatchOnGlobalLayout()
+        verify(harness.fragment, never()).isAdded
+    }
+
     private class Harness {
         val context = ContextThemeWrapper(RuntimeEnvironment.getApplication(), R.style.BaseDarkTheme)
         val activity = mock<FragmentActivity>()
@@ -79,6 +96,7 @@ class PlayerPipRequestTest {
             doReturn(true).whenever(fragment).canEnterPictureInPicture()
             whenever(chat.supportsPipMode()).thenReturn(true)
             ReflectionHelpers.setField(fragment, "_binding", binding)
+            ReflectionHelpers.setField(fragment, "pipSupported", true)
             ReflectionHelpers.setField(fragment, "chatFragment", chat)
             ReflectionHelpers.setField(fragment, "videoType", PlayerFragment.STREAM)
             ReflectionHelpers.setField(fragment, "isPortrait", true)

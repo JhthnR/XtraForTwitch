@@ -351,6 +351,10 @@ refresh the next request, including when Settings covers a running player. Chat
 containers measure/draw only the message path during PiP, so async polls, status,
 scroll buttons, emotes and composer cannot cover messages. Normal visibility and
 draft text remain intact on return; new messages follow the newest item in PiP.
+Video-only requests explicitly restore 16:9 in wide/side-chat/fold layouts and
+use the video frame for the animation hint. PiP layout observation ends on view
+detachment. Returning from PiP chat clears stale scroll-up/touch flags so normal
+message following resumes.
 The composite source hint replaces the video-only hint tracker, retains system
 play/pause actions and disables seamless resize for non-video chat content.
 

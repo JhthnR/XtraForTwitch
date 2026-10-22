@@ -36,6 +36,7 @@ class PipChatLayoutTest {
         binding.editText.setText("Unsent draft with emotes")
         binding.replyText.text = "Reply target"
         binding.btnDown.visibility = View.VISIBLE
+        ReflectionHelpers.setField(fragment, "isChatTouched", true)
         measure(600, 900)
         assertTrue(binding.messageView.height > 0)
         fragment.setPipMode(true)
@@ -51,7 +52,8 @@ class PipChatLayoutTest {
         measure(600, 900)
         assertTrue(binding.messageView.height > 0)
         assertTrue(binding.replyView.height > 0)
-        assertTrue(binding.btnDown.height > 0)
+        assertEquals(View.GONE, binding.btnDown.visibility)
+        assertFalse(ReflectionHelpers.getField(fragment, "isChatTouched"))
         assertEquals("Unsent draft with emotes", binding.editText.text.toString())
         assertEquals("Reply target", binding.replyText.text.toString())
     }

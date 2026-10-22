@@ -159,6 +159,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
     private var isChatOpen = true
     private var pipChatRequested = false
     private var pipPresentation: PlayerPipPolicy.Presentation? = null
+    private var pipSupported = false
     private var pipPreferenceListener: SharedPreferences.OnSharedPreferenceChangeListener? = null
     private val pipLayoutListener = ViewTreeObserver.OnGlobalLayoutListener { refreshPipPresentation() }
     private var isKeyboardShown = false
@@ -741,12 +742,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
     @SuppressLint("ClickableViewAccessibility")
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
-        pipPreferenceListener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
-            if (key == C.PLAYER_PIP_CHAT || key == C.PLAYER_PICTURE_IN_PICTURE || key == C.CHAT_DISABLE) {
-                refreshPipPresentation()
-            }
-        }.also { prefs.registerOnSharedPreferenceChangeListener(it) }
-        view.viewTreeObserver.addOnGlobalLayoutListener(pipLayoutListener)
+        watchPipPresentation(view)
         watchLiveRewindCatchUp()
         watchFoldPosture()
         with(binding) {
@@ -3138,10 +3134,21 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
         return quality?.name != AUDIO_ONLY_QUALITY && quality?.name != CHAT_ONLY_QUALITY
     }
 
+    private fun watchPipPresentation(view: View) {
+        pipSupported = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O &&
+            requireActivity().packageManager.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE)
+        if (!pipSupported) return
+        pipPreferenceListener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+            if (key == C.PLAYER_PIP_CHAT || key == C.PLAYER_PICTURE_IN_PICTURE || key == C.CHAT_DISABLE) {
+                refreshPipPresentation()
+            }
+        }.also { prefs.registerOnSharedPreferenceChangeListener(it) }
+        view.addWindowGlobalLayoutListener(pipLayoutListener)
+    }
+
     /** Cache requests before auto-enter, then retain that shape until the window exits PiP. */
     private fun refreshPipPresentation() {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O || !isAdded || _binding == null ||
-            !requireActivity().packageManager.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE)) return
+        if (!pipSupported || !isAdded || _binding == null) return
         if (!isInPipMode()) {
             pipChatRequested = PlayerPipPolicy.ChatEligibility(
                 enabled = prefs.getBoolean(C.PLAYER_PIP_CHAT, false) && prefs.getBoolean(C.PLAYER_PICTURE_IN_PICTURE, true),
@@ -3158,7 +3165,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
         }
         val video = Rect()
         val content = Rect()
-        binding.playerLayout.getGlobalVisibleRect(video)
+        binding.aspectRatioFrameLayout.getGlobalVisibleRect(video)
         binding.slidingLayout.getGlobalVisibleRect(content)
         val presentation = PlayerPipPolicy.presentation(video, content, pipChatRequested) ?: return
         if (pipPresentation == presentation) return
@@ -3967,7 +3974,8 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
     override fun onDestroyView() {
         pipPreferenceListener?.let { context?.prefs()?.unregisterOnSharedPreferenceChangeListener(it) }
         pipPreferenceListener = null
-        _binding?.root?.viewTreeObserver?.takeIf { it.isAlive }?.removeOnGlobalLayoutListener(pipLayoutListener)
+        // The attached-window listener removes itself before Fragment destroys the view.
+        pipSupported = false
         chatFragment?.setPipMode(false)
         pipPresentation = null
         pipChatRequested = false

@@ -53,4 +53,10 @@ class PlayerPipPolicyTest {
         assertNull(PlayerPipPolicy.presentation(Rect(), Rect(0, 0, 0, 900), true))
         assertNull(PlayerPipPolicy.presentation(Rect(), Rect(0, 0, 900, 1200), false))
     }
+
+    @Test fun `video only PiP keeps sixteen by nine across wide sidebar and tall containers`() {
+        for (video in listOf(Rect(0, 0, 2400, 1080), Rect(0, 0, 1600, 1080), Rect(0, 0, 600, 1000))) {
+            assertEquals(Rational(16, 9), PlayerPipPolicy.presentation(video, video, false)!!.aspectRatio)
+        }
+    }
 }

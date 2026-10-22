@@ -29,8 +29,8 @@ internal object PlayerPipPolicy {
             source.bottom = minOf(source.bottom, source.top + (source.width().toLong() * 16 / 9).toInt())
             Rational(9, 16)
         } else {
-            Rational(source.width(), source.height()).takeIf { it.toFloat() in 0.42f..2.39f }
-                ?: Rational(16, 9)
+            // Reset a prior chat request as well as preserving legacy video-only PiP.
+            Rational(16, 9)
         }
         return Presentation(ratio, source, chat)
     }

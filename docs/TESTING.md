@@ -55,6 +55,11 @@ or animation smoothness. Human checks below remain required.
 
 ### Startup profile generation
 
+PiP correction coverage includes wide/sidebar/tall video-only 16:9 policy,
+actual window-listener detachment before fragment view destruction, and restored
+chat auto-follow flags with composer/reply drafts preserved. Focused cases use
+the production observer-registration path and actual Android layout containers.
+
 See [profile tooling](../baselineprofile/README.md) for reproducible capture and physical cold-start
 benchmarks. Normal builds consume committed profiles without starting a device.
 Profile generation checks startup and local Stats navigation; it does not certify

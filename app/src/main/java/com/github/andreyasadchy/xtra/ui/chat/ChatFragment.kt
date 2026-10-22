@@ -885,6 +885,11 @@ class ChatFragment : BaseNetworkFragment(), MessageClickedDialog.OnButtonClickLi
                 val count = it.recyclerView.adapter?.itemCount ?: 0
                 if (count > 0) it.recyclerView.scrollToPosition(count - 1)
             }
+        } else {
+            // PiP followed the newest message without a scroll-state transition.
+            // Restore normal following instead of retaining the old scrolled-up flag.
+            isChatTouched = false
+            _binding?.btnDown?.visibility = View.GONE
         }
     }
 
