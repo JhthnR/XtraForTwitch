@@ -106,10 +106,27 @@ passed, nor does it establish long-run performance or memory safety.
 
 1. A debug **LeakCanary screen listed six distinct leaks**, including
    Search-related fragment types, after reinstalling the debug app
-   (`final-after-install.png`). The report may include retained findings
-   from earlier emulator sessions. No ownership/cause assessment or fresh
-   heap analysis was performed; investigate it before treating memory leak
-   hardening as complete.
+   (`final-after-install.png`).
+
+   **Resolved on 2026-10-23 as historical.** LeakCanary's `leaks.db` was
+   last written on 2026-08-12, and its only two heap dumps date from
+   August 12 as well. The six leaks
+   were `LifecycleRegistry.observerMap` (the Search ViewPager2 adapter held by
+   `SearchPagerFragment`'s retained lifecycle) and `pagingAdapter` leaks in
+   `ChannelSearchFragment`, `GameSearchFragment`, `StreamSearchFragment`,
+   `VideoSearchFragment` and `TopStreamsFragment` (adapter observers holding
+   detached `RecyclerView`s). Both were fixed after that date by `672a989cd`
+   (list adapters released on view teardown, 2026-09-27) and `6c4f6eaae`
+   (Search pager released with its view, issue #14, 2026-10-12).
+
+   Fresh check on `89b6bd661`, `Medium_Phone_API_36.1`: the old database was
+   backed up to `.private/artifacts/leakcanary-2026-10-23/leaks-before.db` and
+   cleared. Four Search sessions (each visiting all four tabs), bottom-nav
+   switches across every top-level destination, and a landscape/portrait
+   rotation inside Search were followed by backgrounding the app. LeakCanary
+   watched 147 instances (12 of each Search pager/tab fragment) and reported
+   **no retained objects**, no new `leaks.db` and no new heap dump. This does
+   not cover player open/close heap growth, which remains a device QA item.
 
 ## Outstanding human/device QA
 
