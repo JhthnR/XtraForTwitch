@@ -782,7 +782,12 @@ class PlaybackService : MediaSessionService() {
     private fun watchRecoveryConnectivity() {
         val connectivity = getSystemService(CONNECTIVITY_SERVICE) as ConnectivityManager
         val callback = object : ConnectivityManager.NetworkCallback() {
-            private fun update() { networkHandler.post { liveRecovery?.onConnectivityChanged(isNetworkAvailable()) } }
+            private fun update() {
+                if (networkCallback !== this) return
+                networkHandler.post {
+                    if (networkCallback === this) liveRecovery?.onConnectivityChanged(isNetworkAvailable())
+                }
+            }
             override fun onAvailable(network: Network) = update()
             override fun onLost(network: Network) = update()
             override fun onCapabilitiesChanged(network: Network, capabilities: NetworkCapabilities) = update()
@@ -790,7 +795,16 @@ class PlaybackService : MediaSessionService() {
         networkCallback = callback
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) connectivity.registerDefaultNetworkCallback(callback)
         else connectivity.registerNetworkCallback(NetworkRequest.Builder()
-            .addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET).build(), callback)
+            .addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+            .removeCapability(NetworkCapabilities.NET_CAPABILITY_NOT_VPN).build(), callback)
+    }
+
+    private fun stopRecoveryConnectivity() {
+        networkCallback?.let {
+            (getSystemService(CONNECTIVITY_SERVICE) as ConnectivityManager).unregisterNetworkCallback(it)
+        }
+        networkCallback = null
+        networkHandler.removeCallbacksAndMessages(null)
     }
 
     override fun onTaskRemoved(rootIntent: Intent?) {
@@ -800,11 +814,7 @@ class PlaybackService : MediaSessionService() {
     }
 
     override fun onDestroy() {
-        networkCallback?.let {
-            (getSystemService(CONNECTIVITY_SERVICE) as ConnectivityManager).unregisterNetworkCallback(it)
-        }
-        networkCallback = null
-        networkHandler.removeCallbacksAndMessages(null)
+        stopRecoveryConnectivity()
         liveRecovery?.dispose()
         liveRecovery = null
         castBridge?.dispose()

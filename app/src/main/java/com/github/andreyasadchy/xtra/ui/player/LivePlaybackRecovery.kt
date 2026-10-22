@@ -8,6 +8,7 @@ import androidx.media3.common.DeviceInfo
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
+import androidx.media3.common.Timeline
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.HttpDataSource
 import com.github.andreyasadchy.xtra.BuildConfig
@@ -71,7 +72,7 @@ internal class LivePlaybackRecovery(
         val returned = offlineObserved && available
         offlineObserved = !available
         if (!available) needsLiveEdge = true
-        if (!returned || !notified || networkResumeUsed || !eligible() || owner != player.currentMediaItem ||
+        if (!returned || !notified || networkResumeUsed || !eligible() || !sameSource(owner, player.currentMediaItem) ||
             player.playbackState == Player.STATE_ENDED || player.playerError?.let {
                 !isTransient(it) || (proxied && httpCode(it) >= 400)
             } == true) return
@@ -93,7 +94,7 @@ internal class LivePlaybackRecovery(
     }
 
     override fun onEvents(player: Player, events: Player.Events) {
-        if (owner != player.currentMediaItem) {
+        if (!sameSource(owner, player.currentMediaItem)) {
             cancelCallbacks()
             owner = player.currentMediaItem
             attempts = 0
@@ -118,6 +119,7 @@ internal class LivePlaybackRecovery(
                         attempts = 0
                         notified = false
                         networkResumeUsed = false
+                        trace("healthy")
                     }
                 }.also { handler.postDelayed(it, HEALTHY_MS) }
             }
@@ -127,7 +129,7 @@ internal class LivePlaybackRecovery(
                 val item = player.currentMediaItem
                 stall = Runnable {
                     stall = null
-                    if (eligible() && player.currentMediaItem == item && player.playbackState == Player.STATE_BUFFERING) schedule(false)
+                    if (eligible() && sameSource(player.currentMediaItem, item) && player.playbackState == Player.STATE_BUFFERING) schedule(false)
                 }.also { handler.postDelayed(it, STALL_MS) }
             }
         }
@@ -146,7 +148,7 @@ internal class LivePlaybackRecovery(
         val task = object : Runnable {
             override fun run() {
                 if (retry !== this) return
-                if (!eligible() || player.currentMediaItem != item) {
+                if (!eligible() || !sameSource(player.currentMediaItem, item)) {
                     cancelRetry()
                     return
                 }
@@ -191,13 +193,22 @@ internal class LivePlaybackRecovery(
     private fun cancelStall() { stall?.let(handler::removeCallbacks); stall = null }
     private fun cancelCallbacks() { cancelRetry(); cancelHealthy(); cancelStall() }
 
+    private fun sameSource(first: MediaItem?, second: MediaItem?) = first === second ||
+        (first != null && second != null && first.mediaId == second.mediaId &&
+            first.localConfiguration?.uri == second.localConfiguration?.uri)
+
     private fun trace(event: String, error: PlaybackException? = player.playerError) {
         if (!BuildConfig.DEBUG) return
         // Deliberately exclude URLs, headers, tokens and account/channel metadata.
+        val window = runCatching {
+            player.currentTimeline.getWindow(player.currentMediaItemIndex, Timeline.Window())
+        }.getOrNull()
         Log.d("LiveRecovery", "event=$event attempt=$attempts state=${player.playbackState} " +
             "play=${player.playWhenReady} playing=${player.isPlaying} error=${error?.errorCode} " +
             "http=${httpCode(error)} position=${player.currentPosition} offset=${player.currentLiveOffset} " +
-            "duration=${player.duration} online=${networkAvailable()} exhausted=$notified")
+            "duration=${player.duration} online=${networkAvailable()} exhausted=$notified " +
+            "window=${window?.windowStartTimeMs}:${window?.durationMs}:${window?.defaultPositionMs} " +
+            "placeholder=${window?.isPlaceholder}")
     }
 
     companion object {

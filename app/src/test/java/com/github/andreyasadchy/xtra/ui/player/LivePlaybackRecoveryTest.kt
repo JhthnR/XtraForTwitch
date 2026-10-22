@@ -5,6 +5,7 @@ import android.os.Handler
 import android.os.Looper
 import androidx.media3.common.DeviceInfo
 import androidx.media3.common.MediaItem
+import androidx.media3.common.MediaMetadata
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.datasource.DataSpec
@@ -228,6 +229,24 @@ class LivePlaybackRecoveryTest {
         h.fail()
         assertTrue(h.recovery.isExhausted)
         verify(h.player, times(3)).prepare()
+    }
+
+    @Test fun `metadata refresh keeps a pending attempt and does not restart the healthy timer`() {
+        val h = Harness()
+        h.fail()
+        h.item = h.item!!.buildUpon().setMediaMetadata(MediaMetadata.Builder().setTitle("updated title").build()).build()
+        h.events()
+        h.advance(1000)
+        verify(h.player).prepare()
+        h.ready()
+        h.advance(20_000)
+        h.item = h.item!!.buildUpon().setMediaMetadata(MediaMetadata.Builder().setTitle("another update").build()).build()
+        h.events()
+        h.advance(10_000)
+        h.fail()
+        h.advance(1000)
+        verify(h.player, times(2)).prepare()
+        assertFalse(h.recovery.isExhausted)
     }
 
     @Test fun `a long offline wait gets one finite network-return episode and network flaps cannot rearm it`() {

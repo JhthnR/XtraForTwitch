@@ -1,6 +1,7 @@
 package com.github.andreyasadchy.xtra.ui.player
 
 import android.app.Application
+import android.view.SurfaceView
 import androidx.media3.cast.CastPlayer
 import androidx.media3.common.DeviceInfo
 import androidx.media3.common.ForwardingPlayer
@@ -107,6 +108,24 @@ class PlayerCastBridgeTest {
             val item = MediaItem.fromUri("https://example.com/local.m3u8")
             bridge.player.setMediaItem(item)
             assertEquals(item, bridge.player.currentMediaItem)
+        } finally { bridge.dispose(); bridge.player.release() }
+    }
+
+    @Test fun `route replacement rebinds the current surface and never revives a cleared output`() {
+        val locals = mutableListOf<ExoPlayer>()
+        val bridge = PlayerCastBridge(context, false,
+            createLocal = { spy(ExoPlayer.Builder(context).build()).also(locals::add) },
+            endCurrentSession = {}, createCast = { local, _ -> ForwardingPlayer(local) })
+        try {
+            val surface = SurfaceView(context)
+            bridge.player.setVideoSurfaceView(surface)
+            verify(locals[0]).setVideoSurfaceView(surface)
+            bridge.configure(true)
+            verify(locals[0]).clearVideoSurfaceView(surface)
+            verify(locals[1]).setVideoSurfaceView(surface)
+            bridge.player.clearVideoSurfaceView(surface)
+            bridge.configure(false)
+            verify(locals[2], never()).setVideoSurfaceView(any())
         } finally { bridge.dispose(); bridge.player.release() }
     }
 }

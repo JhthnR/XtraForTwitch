@@ -16,6 +16,7 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.MediaSource
 import com.github.andreyasadchy.xtra.R
 import com.google.android.gms.cast.framework.CastContext
+import com.google.common.util.concurrent.ListenableFuture
 
 @OptIn(UnstableApi::class)
 internal class PlayerCastBridge(
@@ -87,6 +88,7 @@ internal class PlayerCastBridge(
     }
 
     fun dispose() {
+        if (closed) return
         closed = true
         handler.removeCallbacksAndMessages(null)
         handoff.clear()
@@ -94,11 +96,60 @@ internal class PlayerCastBridge(
     }
 
     fun endSession() {
+        routing.detachOutput()
         endCurrentSession()
     }
 
     private class RoutePlayer(player: Player) : ForwardingSimpleBasePlayer(player) {
-        fun replace(player: Player) = setPlayer(player)
+        private var videoOutput: Any? = null
+        private var replayOutput = false
+        private val outputListener = object : Player.Listener {
+            override fun onAvailableCommandsChanged(availableCommands: Player.Commands) = updateOutput()
+        }
+
+        init { player.addListener(outputListener) }
+
+        override fun handleSetVideoOutput(output: Any): ListenableFuture<*> {
+            videoOutput = output
+            replayOutput = false
+            return super.handleSetVideoOutput(output)
+        }
+
+        override fun handleClearVideoOutput(output: Any?): ListenableFuture<*> {
+            if (output == null || output === videoOutput) { videoOutput = null; replayOutput = false }
+            return super.handleClearVideoOutput(output)
+        }
+
+        fun replace(player: Player) {
+            // Media3 setPlayer changes listeners/state, not the attached video output.
+            getPlayer().removeListener(outputListener)
+            if (getPlayer().isCommandAvailable(Player.COMMAND_SET_VIDEO_SURFACE)) {
+                videoOutput?.let { super.handleClearVideoOutput(it) }
+            }
+            setPlayer(player)
+            player.addListener(outputListener)
+            replayOutput = true
+            updateOutput()
+        }
+
+        fun detachOutput() {
+            videoOutput = null
+            replayOutput = true
+            updateOutput()
+        }
+
+        private fun updateOutput() {
+            if (replayOutput && getPlayer().isCommandAvailable(Player.COMMAND_SET_VIDEO_SURFACE)) {
+                replayOutput = false
+                videoOutput?.let { super.handleSetVideoOutput(it) } ?: super.handleClearVideoOutput(null)
+            }
+        }
+
+        override fun handleRelease(): ListenableFuture<*> {
+            getPlayer().removeListener(outputListener)
+            videoOutput = null
+            return super.handleRelease()
+        }
     }
 }
 

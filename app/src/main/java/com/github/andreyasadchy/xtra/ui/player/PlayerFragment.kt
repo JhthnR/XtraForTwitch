@@ -3148,7 +3148,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
 
     /** Cache requests before auto-enter, then retain that shape until the window exits PiP. */
     private fun refreshPipPresentation() {
-        if (!pipSupported || !isAdded || _binding == null) return
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O || !pipSupported || !isAdded || _binding == null) return
         if (!isInPipMode()) {
             pipChatRequested = PlayerPipPolicy.ChatEligibility(
                 enabled = prefs.getBoolean(C.PLAYER_PIP_CHAT, false) && prefs.getBoolean(C.PLAYER_PICTURE_IN_PICTURE, true),
