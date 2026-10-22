@@ -4,6 +4,8 @@ import android.app.PendingIntent
 import android.content.Intent
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
+import android.net.Network
+import android.net.NetworkRequest
 import android.media.audiofx.DynamicsProcessing
 import android.net.http.HttpEngine
 import android.os.Build
@@ -119,6 +121,8 @@ class PlaybackService : MediaSessionService() {
     private var mediaSession: MediaSession? = null
     private var castBridge: PlayerCastBridge? = null
     private var liveRecovery: LivePlaybackRecovery? = null
+    private val networkHandler = Handler(Looper.getMainLooper())
+    private var networkCallback: ConnectivityManager.NetworkCallback? = null
     private var dynamicsProcessing: DynamicsProcessing? = null
     private var background = false
     private var proxyMediaPlaylist = false
@@ -151,15 +155,10 @@ class PlaybackService : MediaSessionService() {
         })
         castBridge = bridge
         val player = bridge.player
-        liveRecovery = LivePlaybackRecovery(player, Handler(Looper.getMainLooper()), {
-            val connectivity = getSystemService(CONNECTIVITY_SERVICE) as ConnectivityManager
-            connectivity.getNetworkCapabilities(connectivity.activeNetwork)?.let {
-                it.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) &&
-                    it.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
-            } == true
-        }, {
+        liveRecovery = LivePlaybackRecovery(player, Handler(Looper.getMainLooper()), ::isNetworkAvailable, {
             Toast.makeText(this, R.string.live_recovery_exhausted, Toast.LENGTH_LONG).show()
         })
+        watchRecoveryConnectivity()
         player.addListener(
             object : Player.Listener {
                 override fun onIsPlayingChanged(isPlaying: Boolean) {
@@ -205,6 +204,11 @@ class PlaybackService : MediaSessionService() {
         mediaSession = MediaSession.Builder(
             this,
             object : ForwardingSimpleBasePlayer(player) {
+                override fun handlePrepare(): ListenableFuture<*> {
+                    liveRecovery?.onExplicitPrepare()
+                    return super.handlePrepare()
+                }
+
                 override fun getState(): State {
                     val state = super.getState()
                     return state
@@ -254,7 +258,7 @@ class PlaybackService : MediaSessionService() {
                             }
                             START_STREAM -> {
                                 bridge.configure(prefs().getBoolean(C.PLAYER_CAST, false))
-                                liveRecovery?.startSource(true)
+                                liveRecovery?.startSource(true, customCommand.customExtras.getBoolean(CUSTOM_PROXY))
                                 val uri = customCommand.customExtras.getString(URI)
                                 val title = customCommand.customExtras.getString(TITLE)
                                 val channelId = customCommand.customExtras.getString(CHANNEL_ID)
@@ -635,6 +639,7 @@ class PlaybackService : MediaSessionService() {
                                 Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS, Bundle().apply {
                                     putInt(RESULT, LivePlaybackRecovery.httpCode(session.player.playerError))
                                     putBoolean(RECOVERING, liveRecovery?.isErrorHandled == true)
+                                    putBoolean(RECOVERY_EXHAUSTED, liveRecovery?.isExhausted == true)
                                 }))
                             }
                             GET_CAST_AVAILABLE -> Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS,
@@ -757,6 +762,28 @@ class PlaybackService : MediaSessionService() {
 
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? = mediaSession
 
+    private fun isNetworkAvailable(): Boolean {
+        val connectivity = getSystemService(CONNECTIVITY_SERVICE) as ConnectivityManager
+        return connectivity.getNetworkCapabilities(connectivity.activeNetwork)?.let {
+            it.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) &&
+                it.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
+        } == true
+    }
+
+    private fun watchRecoveryConnectivity() {
+        val connectivity = getSystemService(CONNECTIVITY_SERVICE) as ConnectivityManager
+        val callback = object : ConnectivityManager.NetworkCallback() {
+            private fun update() { networkHandler.post { liveRecovery?.onConnectivityChanged(isNetworkAvailable()) } }
+            override fun onAvailable(network: Network) = update()
+            override fun onLost(network: Network) = update()
+            override fun onCapabilitiesChanged(network: Network, capabilities: NetworkCapabilities) = update()
+        }
+        networkCallback = callback
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) connectivity.registerDefaultNetworkCallback(callback)
+        else connectivity.registerNetworkCallback(NetworkRequest.Builder()
+            .addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET).build(), callback)
+    }
+
     override fun onTaskRemoved(rootIntent: Intent?) {
         savePosition()
         mediaSession?.player?.clearMediaItems()
@@ -764,6 +791,11 @@ class PlaybackService : MediaSessionService() {
     }
 
     override fun onDestroy() {
+        networkCallback?.let {
+            (getSystemService(CONNECTIVITY_SERVICE) as ConnectivityManager).unregisterNetworkCallback(it)
+        }
+        networkCallback = null
+        networkHandler.removeCallbacksAndMessages(null)
         liveRecovery?.dispose()
         liveRecovery = null
         castBridge?.dispose()
@@ -802,6 +834,8 @@ class PlaybackService : MediaSessionService() {
         const val GET_DURATION = "getDuration"
         const val GET_ERROR_CODE = "getErrorCode"
         const val RECOVERING = "recovering"
+        const val RECOVERY_EXHAUSTED = "recoveryExhausted"
+        const val CUSTOM_PROXY = "customProxy"
         const val GET_MEDIA_PLAYLIST = "getMediaPlaylist"
         const val GET_MULTIVARIANT_PLAYLIST = "getMultivariantPlaylist"
 

@@ -81,3 +81,10 @@ Human QA completed: none.
   policy, reject expanded/mapped loopback literals without hostname resolution.
   Final 44 focused cases passed, including SDK-unavailable fallback. No physical
   receiver is available; native single-player and setting changes remain to check.
+- Recovery: R2/R3/R4/R5 corrected. Proxy HTTP failures reach the guarded direct
+  fallback; exhaustion no longer masks later errors; explicit Prepare rearms the
+  budget; a single observed network-return episode remains bounded against flaps.
+  Confirmed offline return seeks live. Added sanitized debug-only traces for R1.
+  Debug and 32 coordinator cases passed, then 40 coordinator/fragment integration
+  cases passed. A fixture compile error was corrected without weakening checks.
+  Task emulator restarted on dedicated port 5568 / ADB 5038 for native R1 work.

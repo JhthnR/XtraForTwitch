@@ -54,7 +54,8 @@ class LivePlaybackRecoveryTest {
         h.fail()
         verify(h.player, times(3)).prepare()
         assertEquals(1, h.exhaustions)
-        assertTrue(h.recovery.isErrorHandled)
+        assertFalse(h.recovery.isErrorHandled)
+        assertTrue(h.recovery.isExhausted)
     }
 
     @Test fun `thirty seconds of continuous playback grants a fresh retry budget`() {
@@ -182,6 +183,82 @@ class LivePlaybackRecoveryTest {
         assertFalse(LivePlaybackRecovery.isTransient(PlaybackException("decoder", null, PlaybackException.ERROR_CODE_DECODING_FAILED)))
     }
 
+    @Test fun `custom proxy HTTP failures stay available for the direct fallback instead of retrying the proxy`() {
+        for (code in listOf(408, 429, 500, 503, 599)) {
+            val h = Harness()
+            h.recovery.startSource(true, customProxy = true)
+            h.error = httpError(code)
+            h.listener.onPlayerError(h.error!!)
+            h.events()
+            h.advance(120_000)
+            assertFalse(h.recovery.isErrorHandled)
+            assertFalse(h.recovery.isExhausted)
+            assertEquals(code, LivePlaybackRecovery.httpCode(h.error))
+            verify(h.player, never()).prepare()
+            h.recovery.dispose()
+        }
+    }
+
+    @Test fun `exhaustion does not hide a later permanent error and explicit prepare restores the retry budget`() {
+        val h = Harness()
+        h.exhaust()
+        h.error = httpError(404)
+        h.listener.onPlayerError(h.error!!)
+        assertFalse(h.recovery.isErrorHandled)
+        assertEquals(404, LivePlaybackRecovery.httpCode(h.error))
+        h.recovery.onExplicitPrepare()
+        assertFalse(h.recovery.isExhausted)
+        h.fail()
+        h.advance(1000)
+        verify(h.player, times(4)).prepare()
+    }
+
+    @Test fun `a long offline wait gets one finite network-return episode and network flaps cannot rearm it`() {
+        val h = Harness()
+        h.network = false
+        h.recovery.onConnectivityChanged(false)
+        h.fail()
+        h.advance(60_000)
+        assertTrue(h.recovery.isExhausted)
+        h.network = true
+        h.recovery.onConnectivityChanged(true)
+        h.recovery.onConnectivityChanged(true)
+        h.advance(1000)
+        verify(h.player).seekToDefaultPosition()
+        verify(h.player).prepare()
+        h.fail(); h.advance(2500)
+        h.fail(); h.advance(5000)
+        h.fail()
+        assertTrue(h.recovery.isExhausted)
+        h.recovery.onConnectivityChanged(false)
+        h.recovery.onConnectivityChanged(true)
+        h.advance(120_000)
+        verify(h.player, times(3)).prepare()
+        assertEquals(2, h.exhaustions)
+    }
+
+    @Test fun `network return cannot revive paused remote replaced disposed or permanently failed sources`() {
+        for (condition in listOf("paused", "remote", "replaced", "disposed", "permanent")) {
+            val h = Harness()
+            h.network = false
+            h.recovery.onConnectivityChanged(false)
+            h.fail()
+            h.advance(60_000)
+            when (condition) {
+                "paused" -> h.wantsPlay = false
+                "remote" -> h.remote = true
+                "replaced" -> { h.item = MediaItem.fromUri("https://example.com/new.m3u8"); h.events() }
+                "disposed" -> h.recovery.dispose()
+                "permanent" -> { h.error = httpError(404); h.listener.onPlayerError(h.error!!) }
+            }
+            h.network = true
+            h.recovery.onConnectivityChanged(true)
+            h.advance(120_000)
+            verify(h.player, never()).prepare()
+            h.recovery.dispose()
+        }
+    }
+
     private fun httpError(code: Int): PlaybackException {
         val cause = HttpDataSource.InvalidResponseCodeException(code, "error", null, emptyMap(),
             DataSpec.Builder().setUri("https://example.com/live.m3u8").build(), byteArrayOf())
@@ -230,6 +307,10 @@ class LivePlaybackRecoveryTest {
             state = Player.STATE_READY
             playing = true
             events()
+        }
+        fun exhaust() {
+            for (delay in listOf(1000L, 2500L, 5000L)) { fail(); advance(delay) }
+            fail()
         }
     }
 }

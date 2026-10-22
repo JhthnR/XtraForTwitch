@@ -103,6 +103,14 @@ for exact profile/APK metadata and the remaining hardware gaps.
 
 ### Bounded live recovery
 
+The Opus correction cases cover custom-proxy transient HTTP failures bypassing
+recovery, 404 visibility after exhaustion, explicit Prepare rearming, one finite
+offline-return episode, and rejection of paused/remote/replaced/disposed/permanent
+sources. Integration tests feed production recovery flags into the fragment's
+actual error callback and assert the one-way proxy restart, pause preservation,
+ended-stream UI and accurate non-retrying feedback. Forty focused API 23/28 cases
+and debug assembly passed; these do not establish native reconnection success.
+
 `LivePlaybackRecoveryTest` runs 24 cases on API 23/28 using the production
 listener and virtual main-looper time: backoff/exhaustion, continuous-health
 reset versus flapping, finite offline wait, pause/stop/switch/close/Cast/disposal,

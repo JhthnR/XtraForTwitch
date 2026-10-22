@@ -11,18 +11,27 @@ The paths below are a map, not a guarantee. If code has moved, search for the cu
 ## Bounded live recovery
 
 Live recovery in the default Media3 service is bounded: three retries at
-1s/2.5s/5s for transient connection/timeouts, HTTP 408/429/5xx and
+1s/2.5s/5s for transient connection/timeouts, direct HTTP 408/429/5xx and
 behind-live-window errors. Continuous buffering is checked after 15s. A retry
 waits at most 60s for validated connectivity, without repeatedly fetching while
-offline. Only 30s of continuous actual playback or an explicit source command
-resets the budget. Brief ready/error flaps do not.
+offline. Thirty seconds of continuous actual playback, an explicit controller
+Prepare (manual retry) or a new source resets the budget. Brief ready/error flaps
+do not. After exhaustion, an observed offline-to-validated transition permits one
+additional three-attempt episode; further network flaps cannot rearm it until
+healthy playback or explicit user intent. The service observes connectivity even
+without a foreground player fragment, and rejects paused/remote/stale/ended or
+permanently failed sources on return. A retry after confirmed loss seeks live.
 
 Recovery retains the configured source, selected tracks, volume and play intent.
 It avoids clearing media/surface; last-frame retention still needs device QA.
 Behind-live-window failures seek to live. Pause, stop, source replacement, close,
 Cast and service destruction cancel callbacks. Live network restoration no longer
 rebuilds a paused player. Permanent/auth/404 errors remain visible; the existing
-one-way custom-proxy fallback is guarded against stale or paused players.
+one-way custom-proxy HTTP fallback runs before automatic retries and is guarded
+against stale or paused players. Exhaustion is a separate state, not a blanket
+handled-error flag; later 404/auth failures stay visible. Feedback promises a
+retry only while one is actually scheduled. Debug-only recovery traces contain
+timing/state/error/offset values and exclude URLs, headers and account metadata.
 Exhaustion asks the viewer to retry or reopen. The optional legacy backend and
 ordinary VoD recovery are unchanged.
 

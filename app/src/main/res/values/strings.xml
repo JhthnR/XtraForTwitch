@@ -950,6 +950,7 @@
     <string name="device_code_expiry" tools:ignore="MissingTranslation">Code expires in %1$d:%2$02d</string>
     <string name="device_code_limitations" tools:ignore="MissingTranslation">Authorize this TV using your phone. Some account features also need browser sign-in, which remains available.</string>
     <string name="live_recovery_exhausted" tools:ignore="MissingTranslation">Couldn’t reconnect. Press Play to retry or reopen the stream.</string>
+    <string name="player_error_stopped" tools:ignore="MissingTranslation">Playback failed. Press Play to retry or reopen the stream.</string>
     <string name="pip_chat" tools:ignore="MissingTranslation">Chat in picture-in-picture</string>
     <string name="pip_chat_summary" tools:ignore="MissingTranslation">Show live chat beneath the video when entering picture-in-picture from portrait. Chat is read-only; other layouts keep video only.</string>
     <string name="cast_enabled" tools:ignore="MissingTranslation">Google Cast</string>

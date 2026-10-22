@@ -2,6 +2,7 @@ package com.github.andreyasadchy.xtra.ui.player
 
 import android.os.Handler
 import android.os.SystemClock
+import android.util.Log
 import androidx.annotation.OptIn
 import androidx.media3.common.DeviceInfo
 import androidx.media3.common.MediaItem
@@ -9,6 +10,7 @@ import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.HttpDataSource
+import com.github.andreyasadchy.xtra.BuildConfig
 
 /** One main-looper recovery owner for the current local live source. Never starts playback. */
 @OptIn(UnstableApi::class)
@@ -26,25 +28,66 @@ internal class LivePlaybackRecovery(
     private var healthy: Runnable? = null
     private var stall: Runnable? = null
     private var notified = false
+    private var proxied = false
+    private var offlineObserved = false
+    private var networkResumeUsed = false
+    private var needsLiveEdge = false
     val isLiveSource get() = live
     val isRecovering get() = retry != null
-    val isErrorHandled get() = isRecovering || notified
+    val isErrorHandled get() = isRecovering
+    val isExhausted get() = notified
 
     init { player.addListener(this) }
 
     /** Called before an explicit source command, including switching away from live. */
-    fun startSource(isLive: Boolean) {
+    fun startSource(isLive: Boolean, customProxy: Boolean = false) {
         cancelCallbacks()
         live = isLive
         owner = null
         attempts = 0
         notified = false
+        proxied = customProxy
+        offlineObserved = !networkAvailable()
+        needsLiveEdge = offlineObserved
+        networkResumeUsed = false
+    }
+
+    /** A controller Prepare is explicit intent; automatic attempts bypass this hook. */
+    fun onExplicitPrepare() {
+        if (disposed || !live || player.deviceInfo.playbackType == DeviceInfo.PLAYBACK_TYPE_REMOTE) return
+        cancelCallbacks()
+        attempts = 0
+        notified = false
+        networkResumeUsed = false
+        if (needsLiveEdge && player.currentMediaItem != null) player.seekToDefaultPosition()
+        needsLiveEdge = false
+        trace("explicit-prepare")
+    }
+
+    /** One additional finite episode after an observed outage, never on READY flaps. */
+    fun onConnectivityChanged(available: Boolean) {
+        if (disposed) return
+        val returned = offlineObserved && available
+        offlineObserved = !available
+        if (!available) needsLiveEdge = true
+        if (!returned || !notified || networkResumeUsed || !eligible() || owner != player.currentMediaItem ||
+            player.playbackState == Player.STATE_ENDED || player.playerError?.let {
+                !isTransient(it) || (proxied && httpCode(it) >= 400)
+            } == true) return
+        networkResumeUsed = true
+        attempts = 0
+        notified = false
+        trace("network-return")
+        schedule(true)
     }
 
     override fun onPlayerError(error: PlaybackException) {
         cancelHealthy()
         cancelStall()
-        if (eligible() && isTransient(error)) schedule(error.errorCode == PlaybackException.ERROR_CODE_BEHIND_LIVE_WINDOW)
+        trace("error", error)
+        if (eligible() && isTransient(error) && !(proxied && httpCode(error) >= 400)) {
+            schedule(error.errorCode == PlaybackException.ERROR_CODE_BEHIND_LIVE_WINDOW)
+        }
         else cancelRetry()
     }
 
@@ -52,6 +95,9 @@ internal class LivePlaybackRecovery(
         if (owner != player.currentMediaItem) {
             cancelCallbacks()
             owner = player.currentMediaItem
+            attempts = 0
+            notified = false
+            networkResumeUsed = false
         }
         if (!eligible()) {
             cancelCallbacks()
@@ -70,6 +116,7 @@ internal class LivePlaybackRecovery(
                     if (eligible() && player.isPlaying) {
                         attempts = 0
                         notified = false
+                        networkResumeUsed = false
                     }
                 }.also { handler.postDelayed(it, HEALTHY_MS) }
             }
@@ -103,6 +150,8 @@ internal class LivePlaybackRecovery(
                     return
                 }
                 if (!networkAvailable()) {
+                    offlineObserved = true
+                    needsLiveEdge = true
                     if (SystemClock.uptimeMillis() >= deadline) giveUp()
                     else handler.postDelayed(this, NETWORK_POLL_MS)
                     return
@@ -110,8 +159,10 @@ internal class LivePlaybackRecovery(
                 retry = null
                 attempts++
                 // Retain the configured source, selected tracks, volume and playWhenReady.
-                if (liveEdge) player.seekToDefaultPosition()
+                if (liveEdge || needsLiveEdge) player.seekToDefaultPosition()
+                needsLiveEdge = false
                 if (player.playbackState == Player.STATE_BUFFERING) player.stop()
+                trace("attempt")
                 player.prepare()
             }
         }
@@ -123,6 +174,7 @@ internal class LivePlaybackRecovery(
         cancelCallbacks()
         if (!notified && eligible()) {
             notified = true
+            trace("exhausted")
             exhausted()
         }
     }
@@ -137,6 +189,15 @@ internal class LivePlaybackRecovery(
     private fun cancelHealthy() { healthy?.let(handler::removeCallbacks); healthy = null }
     private fun cancelStall() { stall?.let(handler::removeCallbacks); stall = null }
     private fun cancelCallbacks() { cancelRetry(); cancelHealthy(); cancelStall() }
+
+    private fun trace(event: String, error: PlaybackException? = player.playerError) {
+        if (!BuildConfig.DEBUG) return
+        // Deliberately exclude URLs, headers, tokens and account/channel metadata.
+        Log.d("LiveRecovery", "event=$event attempt=$attempts state=${player.playbackState} " +
+            "play=${player.playWhenReady} playing=${player.isPlaying} error=${error?.errorCode} " +
+            "http=${httpCode(error)} position=${player.currentPosition} offset=${player.currentLiveOffset} " +
+            "duration=${player.duration} online=${networkAvailable()} exhausted=$notified")
+    }
 
     companion object {
         private val DELAYS = longArrayOf(1_000, 2_500, 5_000)
