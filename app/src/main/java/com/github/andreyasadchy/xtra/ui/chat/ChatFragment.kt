@@ -1255,6 +1255,10 @@ class ChatFragment : BaseNetworkFragment(), MessageClickedDialog.OnButtonClickLi
             .show()
     }
 
+    override fun onNetworkLost() {
+        if (requireArguments().getBoolean(KEY_IS_LIVE)) viewModel.onNetworkLost()
+    }
+
     override fun onNetworkRestored() {
         if (isResumed) {
             val args = requireArguments()

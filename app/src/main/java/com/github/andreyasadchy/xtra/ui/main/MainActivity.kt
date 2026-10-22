@@ -142,7 +142,11 @@ class MainActivity : AppCompatActivity() {
             }
         }
         override fun onCapabilitiesChanged(network: Network, networkCapabilities: NetworkCapabilities) {
-            lifecycleScope.launch { updatePlaybackNetworkProfile() }
+            lifecycleScope.launch {
+                // onAvailable can precede validation; chat and other fragments need the later result.
+                viewModel.checkNetworkStatus.value = true
+                updatePlaybackNetworkProfile()
+            }
         }
     }
     private fun updatePlaybackNetworkProfile() {

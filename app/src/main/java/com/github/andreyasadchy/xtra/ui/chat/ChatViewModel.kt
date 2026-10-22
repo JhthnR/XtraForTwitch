@@ -195,6 +195,16 @@ class ChatViewModel @Inject constructor(
         }
     }
 
+    fun onNetworkLost() {
+        // An active retry/connect job is not a working connection. Make restoration
+        // eligible to reconnect without waiting for that job's socket timeout.
+        chatReadJob?.cancel()
+        chatWriteJob?.cancel()
+        pubSubJob?.cancel()
+        stvEventApiJob?.cancel()
+        stopLiveChat()
+    }
+
     fun resumeReplay(channelId: String?, channelLogin: String?, chatUrl: String?, videoId: String?, startTime: Int, getCurrentPosition: () -> Long?, getCurrentSpeed: () -> Float?) {
         if (chatReplayManager?.isActive == false || chatReplayManagerLocal?.isActive == false) {
             startReplayChat(videoId, startTime, chatUrl, getCurrentPosition, getCurrentSpeed, channelId, channelLogin)
@@ -819,42 +829,54 @@ class ChatViewModel @Inject constructor(
     fun stopLiveChat() {
         if (started) {
             started = false
+            // Cleanup runs asynchronously; it must never read a replacement session.
+            val chatReadIRC = this.chatReadIRC
+            val chatReadWebSocket = this.chatReadWebSocket
+            val eventSub = this.eventSub
+            val chatReadJob = this.chatReadJob
+            val chatWriteIRC = this.chatWriteIRC
+            val chatWriteWebSocket = this.chatWriteWebSocket
+            val chatWriteJob = this.chatWriteJob
+            val hermesWebSocket = this.hermesWebSocket
+            val pubSubJob = this.pubSubJob
+            val stvEventApi = this.stvEventApi
+            val stvEventApiJob = this.stvEventApiJob
             if (chatReadIRC != null) {
                 MainScope().launch(Dispatchers.IO) {
-                    chatReadIRC?.disconnect(chatReadJob)
+                    chatReadIRC.disconnect(chatReadJob)
                 }
             } else {
                 if (chatReadWebSocket != null) {
                     MainScope().launch(Dispatchers.IO) {
-                        chatReadWebSocket?.disconnect(chatReadJob)
+                        chatReadWebSocket.disconnect(chatReadJob)
                     }
                 } else {
                     if (eventSub != null) {
                         MainScope().launch(Dispatchers.IO) {
-                            eventSub?.disconnect(chatReadJob)
+                            eventSub.disconnect(chatReadJob)
                         }
                     }
                 }
             }
             if (chatWriteIRC != null) {
                 MainScope().launch(Dispatchers.IO) {
-                    chatWriteIRC?.disconnect(chatWriteJob)
+                    chatWriteIRC.disconnect(chatWriteJob)
                 }
             } else {
                 if (chatWriteWebSocket != null) {
                     MainScope().launch(Dispatchers.IO) {
-                        chatWriteWebSocket?.disconnect(chatWriteJob)
+                        chatWriteWebSocket.disconnect(chatWriteJob)
                     }
                 }
             }
             if (hermesWebSocket != null) {
                 MainScope().launch(Dispatchers.IO) {
-                    hermesWebSocket?.disconnect(pubSubJob)
+                    hermesWebSocket.disconnect(pubSubJob)
                 }
             }
             if (stvEventApi != null) {
                 MainScope().launch(Dispatchers.IO) {
-                    stvEventApi?.disconnect(stvEventApiJob)
+                    stvEventApi.disconnect(stvEventApiJob)
                 }
             }
         }
