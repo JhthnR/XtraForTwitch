@@ -74,3 +74,10 @@ Human QA completed: none.
   register/cache support only on compatible devices, restore explicit 16:9 for
   video-only PiP and clear stale chat follow flags. Focused Android tests passed;
   listener test removes the attached root before dispatching the window observer.
+- Cast: C1/C2/C3/C4 corrected with a stable forwarding player and fresh idle route
+  on explicit source commands. Stop/clear/release the prior route, invalidate old
+  transfer callbacks, report actual service capability, clean existing SDK sessions
+  without initializing default-off Cast, retain receiver controls and local wake
+  policy, reject expanded/mapped loopback literals without hostname resolution.
+  Final 44 focused cases passed, including SDK-unavailable fallback. No physical
+  receiver is available; native single-player and setting changes remain to check.

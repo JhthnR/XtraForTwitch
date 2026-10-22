@@ -15,6 +15,17 @@ Agents should mark **Required** when a human should test an area. Mark **Complet
 
 ## Checklist
 
+### Opus review corrections (required)
+
+- [ ] With a service already running, change Cast off/on, close/reopen playback,
+  connect/disconnect and switch live/VoD sources. Confirm one playing owner,
+  capability-based route UI and receiver volume/speed retained across switches.
+- [ ] Return locally while buffering with keep-screen-on-when-paused enabled.
+  Check video-only PiP shape from wide/sidebar/fold layouts, then portrait chat
+  PiP from a scrolled-up chat and return to normal message following.
+- [ ] Open/close the player repeatedly and check retained fragments with a heap
+  dump; static observer tests do not measure retained heap on actual hardware.
+
 ### TV device-code sign-in (required)
 
 - [ ] Use a disposable account: entering the existing login activity revokes its

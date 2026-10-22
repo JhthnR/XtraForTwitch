@@ -13,11 +13,13 @@ import com.google.android.gms.cast.framework.CastButtonFactory
 internal class PlayerCastUi(stub: ViewStub) {
     private val button = stub.inflate() as MediaRouteButton
     private var dialog: DialogFragment? = null
+    private var available = true
 
     init {
         try {
             CastButtonFactory.setUpMediaRouteButton(button.context, button)
         } catch (_: RuntimeException) {
+            available = false
             button.visibility = View.GONE
         }
         val factory = button.dialogFactory
@@ -30,5 +32,9 @@ internal class PlayerCastUi(stub: ViewStub) {
     }
 
     fun dismissDialog() { dialog?.dismissAllowingStateLoss(); dialog = null }
+    fun setVisible(visible: Boolean) {
+        if (!visible) dismissDialog()
+        button.visibility = if (visible && available) View.VISIBLE else View.GONE
+    }
     fun dispose() { dismissDialog(); button.visibility = View.GONE }
 }

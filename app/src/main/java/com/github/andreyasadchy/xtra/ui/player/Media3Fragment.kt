@@ -25,6 +25,7 @@ import androidx.core.widget.NestedScrollView
 import androidx.lifecycle.lifecycleScope
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.DeviceInfo
+import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.Player
 import androidx.media3.common.Timeline
@@ -64,13 +65,11 @@ class Media3Fragment : PlayerFragment() {
         get() = controllerFuture?.let { if (it.isDone && !it.isCancelled) it.get() else null }
     private var playerListener: Player.Listener? = null
     private var castUi: PlayerCastUi? = null
+    private var castUiRequest = 0
     private val updateProgressAction = Runnable { if (view != null) updateProgress() }
 
     override fun onStart() {
         super.onStart()
-        if (castUi == null && videoType != OFFLINE_VIDEO && requireContext().prefs().getBoolean(C.PLAYER_CAST, false)) {
-            castUi = PlayerCastUi(binding.playerControls.castButtonStub)
-        }
         controllerFuture = MediaController.Builder(
             requireContext(),
             SessionToken(
@@ -80,10 +79,15 @@ class Media3Fragment : PlayerFragment() {
         ).buildAsync()
         controllerFuture?.addListener({
             val controller = controllerFuture?.get()
+            controller?.let(::refreshCastUi)
             if (controller?.isCommandAvailable(Player.COMMAND_SET_VIDEO_SURFACE) == true) {
                 controller.setVideoSurfaceView(binding.playerSurface)
             }
             val listener = object : Player.Listener {
+
+                override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
+                    controller?.let(::refreshCastUi)
+                }
 
                 override fun onDeviceInfoChanged(deviceInfo: DeviceInfo) {
                     updatePlaybackRouteUi()
@@ -94,7 +98,7 @@ class Media3Fragment : PlayerFragment() {
                             .setAutoEnterEnabled(!isRemotePlayback() && canEnterPictureInPicture() &&
                                 requireContext().prefs().getBoolean(C.PLAYER_PICTURE_IN_PICTURE, true)).build())
                     }
-                    requireView().keepScreenOn = !isRemotePlayback() && player?.isPlaying == true
+                    updateKeepScreenOn()
                 }
 
                 override fun onPlaybackStateChanged(playbackState: Int) {
@@ -184,11 +188,7 @@ class Media3Fragment : PlayerFragment() {
 
                 override fun onIsPlayingChanged(isPlaying: Boolean) {
                     updateProgress()
-                    if (isRemotePlayback()) {
-                        requireView().keepScreenOn = false
-                    } else if (!requireContext().prefs().getBoolean(C.PLAYER_KEEP_SCREEN_ON_WHEN_PAUSED, false) && canEnterPictureInPicture()) {
-                        requireView().keepScreenOn = isPlaying
-                    }
+                    updateKeepScreenOn()
                 }
 
                 override fun onTracksChanged(tracks: Tracks) {
@@ -469,9 +469,7 @@ class Media3Fragment : PlayerFragment() {
                     markLiveRewindReady()
                     chatFragment?.startReplayChatLoad()
                 }
-                if (!requireContext().prefs().getBoolean(C.PLAYER_KEEP_SCREEN_ON_WHEN_PAUSED, false) && canEnterPictureInPicture()) {
-                    requireView().keepScreenOn = player.isPlaying
-                }
+                updateKeepScreenOn()
                 updateProgress()
                 if (Util.shouldShowPlayButton(player)) {
                     binding.playerControls.playPause.setImageResource(R.drawable.baseline_play_arrow_black_48)
@@ -606,6 +604,25 @@ class Media3Fragment : PlayerFragment() {
                 ), Bundle.EMPTY
             )
         }
+    }
+
+    private fun refreshCastUi(controller: MediaController) {
+        val request = ++castUiRequest
+        val result = controller.sendCustomCommand(SessionCommand(PlaybackService.GET_CAST_AVAILABLE, Bundle.EMPTY), Bundle.EMPTY)
+        result.addListener({
+            if (!isAdded || view == null || player !== controller || request != castUiRequest) return@addListener
+            val response = runCatching { result.get() }.getOrNull()
+            val visible = videoType != OFFLINE_VIDEO && response?.resultCode == SessionResult.RESULT_SUCCESS &&
+                response.extras.getBoolean(PlaybackService.RESULT)
+            if (visible && castUi == null) castUi = PlayerCastUi(binding.playerControls.castButtonStub)
+            castUi?.setVisible(visible)
+        }, ContextCompat.getMainExecutor(requireContext()))
+    }
+
+    private fun updateKeepScreenOn() {
+        view?.keepScreenOn = !isRemotePlayback() &&
+            (requireContext().prefs().getBoolean(C.PLAYER_KEEP_SCREEN_ON_WHEN_PAUSED, false) ||
+                (canEnterPictureInPicture() && player?.isPlaying == true))
     }
 
     override fun getCurrentPosition() = player?.currentPosition

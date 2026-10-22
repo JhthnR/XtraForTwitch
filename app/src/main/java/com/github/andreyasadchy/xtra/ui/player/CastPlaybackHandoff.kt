@@ -11,6 +11,8 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.MediaSource
 import java.net.URI
 import java.net.URISyntaxException
+import java.net.InetAddress
+import java.net.UnknownHostException
 
 /** Retains only this session's current source, including its parser/HTTP configuration. */
 @OptIn(UnstableApi::class)
@@ -92,8 +94,14 @@ internal class CastPlaybackHandoff(
             val uri = item?.localConfiguration?.uri ?: return false
             // Older Android Uri implementations split IPv6 hosts at the first colon.
             val host = try { URI(uri.toString()).host?.lowercase() } catch (_: URISyntaxException) { null } ?: return false
-            return uri.scheme?.lowercase() in listOf("https", "http") && host.isNotBlank() &&
-                host !in setOf("localhost", "0.0.0.0", "::1", "[::1]") && !host.startsWith("127.")
+            if (uri.scheme?.lowercase() !in listOf("https", "http") || host.isBlank() || host == "localhost") return false
+            val literal = host.removeSurrounding("[", "]")
+            // Parse numeric literals only: never resolve a hostname while building route UI.
+            if (':' in literal || literal.all { it.isDigit() || it == '.' }) {
+                val address = try { InetAddress.getByName(literal) } catch (_: UnknownHostException) { return false }
+                return !address.isLoopbackAddress && !address.isAnyLocalAddress
+            }
+            return true
         }
     }
 }

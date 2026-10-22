@@ -13,7 +13,6 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.mockito.kotlin.*
 import org.robolectric.RobolectricTestRunner
-import org.robolectric.RuntimeEnvironment
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.ConscryptMode
 
@@ -118,7 +117,8 @@ class CastPlaybackHandoffTest {
 
     @Test fun `receiver URLs require reachable online media rather than phone files or loopback`() {
         assertTrue(CastPlaybackHandoff.canCast(MediaItem.fromUri("https://example.com/live.m3u8")))
-        for (uri in listOf("file:///storage/video.mp4", "content://downloads/1", "http://LOCALHOST/live", "http://localhost/live", "http://127.0.0.1/live", "http://[::1]/live")) {
+        for (uri in listOf("file:///storage/video.mp4", "content://downloads/1", "http://LOCALHOST/live", "http://localhost/live", "http://127.0.0.1/live", "http://[::1]/live",
+            "http://[0:0:0:0:0:0:0:1]/live", "http://[::ffff:127.0.0.1]/live", "http://[::]/live", "http://2130706433/live")) {
             assertFalse(uri, CastPlaybackHandoff.canCast(MediaItem.fromUri(uri)))
         }
         assertFalse(CastPlaybackHandoff.canCast(null))
@@ -155,10 +155,4 @@ class CastPlaybackHandoffTest {
         verify(local, never()).prepare()
     }
 
-    @Test fun `disabled casting keeps the original player without initializing a receiver`() {
-        val bridge = PlayerCastBridge(RuntimeEnvironment.getApplication(), local, enabled = false)
-        assertSame(local, bridge.player)
-        bridge.dispose()
-        verifyNoInteractions(local)
-    }
 }

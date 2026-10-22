@@ -131,23 +131,24 @@ class PlaybackService : MediaSessionService() {
 
     override fun onCreate() {
         super.onCreate()
-        val localPlayer = ExoPlayer.Builder(this).apply {
-            setLoadControl(
-                DefaultLoadControl.Builder().apply {
-                    setBufferDurationsMs(
-                        prefs().getString(C.PLAYER_BUFFER_MIN, "15000")?.toIntOrNull() ?: 15000,
-                        prefs().getString(C.PLAYER_BUFFER_MAX, "50000")?.toIntOrNull() ?: 50000,
-                        prefs().getString(C.PLAYER_BUFFER_PLAYBACK, "2000")?.toIntOrNull() ?: 2000,
-                        prefs().getString(C.PLAYER_BUFFER_REBUFFER, "2000")?.toIntOrNull() ?: 2000
-                    )
-                }.build()
-            )
-            setAudioAttributes(AudioAttributes.DEFAULT, prefs().getBoolean(C.PLAYER_AUDIO_FOCUS, false))
-            setHandleAudioBecomingNoisy(prefs().getBoolean(C.PLAYER_HANDLE_AUDIO_BECOMING_NOISY, true))
-            setSeekBackIncrementMs(prefs().getString(C.PLAYER_REWIND, "10000")?.toLongOrNull() ?: 10000)
-            setSeekForwardIncrementMs(prefs().getString(C.PLAYER_FORWARD, "10000")?.toLongOrNull() ?: 10000)
-        }.build()
-        val bridge = PlayerCastBridge(this, localPlayer, prefs().getBoolean(C.PLAYER_CAST, false))
+        val bridge = PlayerCastBridge(this, enabled = prefs().getBoolean(C.PLAYER_CAST, false), createLocal = {
+            ExoPlayer.Builder(this).apply {
+                setLoadControl(
+                    DefaultLoadControl.Builder().apply {
+                        setBufferDurationsMs(
+                            prefs().getString(C.PLAYER_BUFFER_MIN, "15000")?.toIntOrNull() ?: 15000,
+                            prefs().getString(C.PLAYER_BUFFER_MAX, "50000")?.toIntOrNull() ?: 50000,
+                            prefs().getString(C.PLAYER_BUFFER_PLAYBACK, "2000")?.toIntOrNull() ?: 2000,
+                            prefs().getString(C.PLAYER_BUFFER_REBUFFER, "2000")?.toIntOrNull() ?: 2000
+                        )
+                    }.build()
+                )
+                setAudioAttributes(AudioAttributes.DEFAULT, prefs().getBoolean(C.PLAYER_AUDIO_FOCUS, false))
+                setHandleAudioBecomingNoisy(prefs().getBoolean(C.PLAYER_HANDLE_AUDIO_BECOMING_NOISY, true))
+                setSeekBackIncrementMs(prefs().getString(C.PLAYER_REWIND, "10000")?.toLongOrNull() ?: 10000)
+                setSeekForwardIncrementMs(prefs().getString(C.PLAYER_FORWARD, "10000")?.toLongOrNull() ?: 10000)
+            }.build()
+        })
         castBridge = bridge
         val player = bridge.player
         liveRecovery = LivePlaybackRecovery(player, Handler(Looper.getMainLooper()), {
@@ -252,6 +253,7 @@ class PlaybackService : MediaSessionService() {
                                 Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
                             }
                             START_STREAM -> {
+                                bridge.configure(prefs().getBoolean(C.PLAYER_CAST, false))
                                 liveRecovery?.startSource(true)
                                 val uri = customCommand.customExtras.getString(URI)
                                 val title = customCommand.customExtras.getString(TITLE)
@@ -375,13 +377,13 @@ class PlaybackService : MediaSessionService() {
                                         )
                                     }.build()
                                 )
-                                session.player.volume = prefs().getInt(C.PLAYER_VOLUME, 100) / 100f
-                                session.player.setPlaybackSpeed(1f)
+                                session.player.applyLocalPlaybackDefaults(prefs().getInt(C.PLAYER_VOLUME, 100) / 100f, 1f)
                                 session.player.prepare()
                                 session.player.playWhenReady = true
                                 Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
                             }
                             START_VIDEO -> {
+                                bridge.configure(prefs().getBoolean(C.PLAYER_CAST, false))
                                 liveRecovery?.startSource(false)
                                 val uri = customCommand.customExtras.getString(URI)
                                 val title = customCommand.customExtras.getString(TITLE)
@@ -438,14 +440,14 @@ class PlaybackService : MediaSessionService() {
                                         )
                                     }.build()
                                 )
-                                session.player.volume = prefs().getInt(C.PLAYER_VOLUME, 100) / 100f
-                                session.player.setPlaybackSpeed(prefs().getFloat(C.PLAYER_SPEED, 1f))
+                                session.player.applyLocalPlaybackDefaults(prefs().getInt(C.PLAYER_VOLUME, 100) / 100f, prefs().getFloat(C.PLAYER_SPEED, 1f))
                                 session.player.prepare()
                                 session.player.playWhenReady = true
                                 session.player.seekTo(position)
                                 Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
                             }
                             START_CLIP -> {
+                                bridge.configure(prefs().getBoolean(C.PLAYER_CAST, false))
                                 liveRecovery?.startSource(false)
                                 val uri = customCommand.customExtras.getString(URI)
                                 val title = customCommand.customExtras.getString(TITLE)
@@ -493,13 +495,13 @@ class PlaybackService : MediaSessionService() {
                                         )
                                     }.build()
                                 )
-                                session.player.volume = prefs().getInt(C.PLAYER_VOLUME, 100) / 100f
-                                session.player.setPlaybackSpeed(prefs().getFloat(C.PLAYER_SPEED, 1f))
+                                session.player.applyLocalPlaybackDefaults(prefs().getInt(C.PLAYER_VOLUME, 100) / 100f, prefs().getFloat(C.PLAYER_SPEED, 1f))
                                 session.player.prepare()
                                 session.player.playWhenReady = true
                                 Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
                             }
                             START_OFFLINE_VIDEO -> {
+                                bridge.configure(prefs().getBoolean(C.PLAYER_CAST, false))
                                 if (player.deviceInfo.playbackType == androidx.media3.common.DeviceInfo.PLAYBACK_TYPE_REMOTE) {
                                     return Futures.immediateFuture(SessionResult(androidx.media3.session.SessionError.ERROR_NOT_SUPPORTED))
                                 }
@@ -539,8 +541,7 @@ class PlaybackService : MediaSessionService() {
                                         )
                                     }.build()
                                 )
-                                session.player.volume = prefs().getInt(C.PLAYER_VOLUME, 100) / 100f
-                                session.player.setPlaybackSpeed(prefs().getFloat(C.PLAYER_SPEED, 1f))
+                                session.player.applyLocalPlaybackDefaults(prefs().getInt(C.PLAYER_VOLUME, 100) / 100f, prefs().getFloat(C.PLAYER_SPEED, 1f))
                                 session.player.prepare()
                                 session.player.playWhenReady = true
                                 session.player.seekTo(position)
@@ -636,6 +637,8 @@ class PlaybackService : MediaSessionService() {
                                     putBoolean(RECOVERING, liveRecovery?.isErrorHandled == true)
                                 }))
                             }
+                            GET_CAST_AVAILABLE -> Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS,
+                                Bundle().apply { putBoolean(RESULT, bridge.castAvailable) }))
                             GET_MEDIA_PLAYLIST -> {
                                 Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS, Bundle().apply {
                                     putStringArray(RESULT, (session.player.currentManifest as? HlsManifest)?.mediaPlaylist?.tags?.toTypedArray())
@@ -763,13 +766,13 @@ class PlaybackService : MediaSessionService() {
     override fun onDestroy() {
         liveRecovery?.dispose()
         liveRecovery = null
+        castBridge?.dispose()
         mediaSession?.run {
             player.stop()
             player.release()
             release()
             mediaSession = null
         }
-        castBridge?.dispose()
         castBridge = null
         super.onDestroy()
     }
@@ -790,6 +793,7 @@ class PlaybackService : MediaSessionService() {
         const val START_CLIP = "startClip"
         const val START_OFFLINE_VIDEO = "startOfflineVideo"
         const val END_CAST_SESSION = "endCastSession"
+        const val GET_CAST_AVAILABLE = "getCastAvailable"
         const val TOGGLE_DYNAMICS_PROCESSING = "toggleDynamicsProcessing"
         const val TOGGLE_PROXY = "toggleProxy"
         const val SET_SLEEP_TIMER = "setSleepTimer"

@@ -323,7 +323,13 @@ For release-risk player work, also verify:
 ## Optional Google Cast (default Media3 backend)
 
 Enable Google Cast in Player settings, then reopen playback. The route button is
-inflated only when enabled; devices without Google Play services keep local
+inflated only when the service reports actual Cast capability. Setting changes apply at the next
+explicit source start, including after closing/reopening; the MediaSession stays
+stable while the old stopped route is released. Default-off playback does not
+initialize the SDK. Disabling Cast ends an existing session on that next start.
+Receiver volume/speed remain receiver-owned across source switches. Returning
+locally honors the keep-screen-on-when-paused setting even while buffering.
+Devices without Google Play services keep local
 playback. Custom ExoPlayer and platform MediaPlayer backends are unchanged.
 
 Media3 CastPlayer owns the local/receiver switch and stops the inactive player.

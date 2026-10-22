@@ -53,12 +53,18 @@ both font sizes. Tests explicitly resolve layout direction for detached preview 
 These check Android layout/rendering, not real player playback, device window placement,
 or animation smoothness. Human checks below remain required.
 
-### Startup profile generation
-
 PiP correction coverage includes wide/sidebar/tall video-only 16:9 policy,
 actual window-listener detachment before fragment view destruction, and restored
 chat auto-follow flags with composer/reply drafts preserved. Focused cases use
 the production observer-registration path and actual Android layout containers.
+
+Cast correction tests exercise stable session forwarding across setting changes,
+old route release, stale transfer callbacks, unavailable SDK capability, expanded
+loopback literals, receiver-owned volume/speed and screen-on after local return.
+They use real local ExoPlayers with injected receiver creation; physical receiver
+network/volume/codec behavior remains human QA.
+
+### Startup profile generation
 
 See [profile tooling](../baselineprofile/README.md) for reproducible capture and physical cold-start
 benchmarks. Normal builds consume committed profiles without starting a device.
