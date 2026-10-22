@@ -76,6 +76,9 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import java.util.concurrent.TimeUnit
 
+internal fun channelHeaderExtraSpacingPx(fontScale: Float, density: Float): Int =
+    (48f * (fontScale - 1f).coerceAtLeast(0f) * density).toInt()
+
 @AndroidEntryPoint
 class ChannelPagerFragment : BaseNetworkFragment(), Scrollable, FragmentHost, IntegrityDialog.CallbackListener {
 
@@ -463,7 +466,7 @@ class ChannelPagerFragment : BaseNetworkFragment(), Scrollable, FragmentHost, In
                             if (fragment is Sortable) {
                                 fragment.setupSortBar(sortBar)
                                 sortBar.root.doOnLayout {
-                                    toolbarContainer.layoutParams = (toolbarContainer.layoutParams as CollapsingToolbarLayout.LayoutParams).apply { bottomMargin = toolbarContainer2.height }
+                                    toolbarContainer.layoutParams = (toolbarContainer.layoutParams as CollapsingToolbarLayout.LayoutParams).apply { bottomMargin = toolbarContainer2.height + largeTextHeaderSpacing() }
                                     val toolbarHeight = toolbarContainer.marginTop + toolbarContainer.marginBottom
                                     toolbar.layoutParams = toolbar.layoutParams.apply { height = toolbarHeight }
                                     collapsingToolbar.scrimVisibleHeightTrigger = toolbarHeight + 1
@@ -471,7 +474,7 @@ class ChannelPagerFragment : BaseNetworkFragment(), Scrollable, FragmentHost, In
                             } else {
                                 sortBar.root.visibility = View.GONE
                                 toolbarContainer2.doOnLayout {
-                                    toolbarContainer.layoutParams = (toolbarContainer.layoutParams as CollapsingToolbarLayout.LayoutParams).apply { bottomMargin = toolbarContainer2.height }
+                                    toolbarContainer.layoutParams = (toolbarContainer.layoutParams as CollapsingToolbarLayout.LayoutParams).apply { bottomMargin = toolbarContainer2.height + largeTextHeaderSpacing() }
                                     val toolbarHeight = toolbarContainer.marginTop + toolbarContainer.marginBottom
                                     toolbar.layoutParams = toolbar.layoutParams.apply { height = toolbarHeight }
                                     collapsingToolbar.scrimVisibleHeightTrigger = toolbarHeight + 1
@@ -509,6 +512,12 @@ class ChannelPagerFragment : BaseNetworkFragment(), Scrollable, FragmentHost, In
                 windowInsets
             }
         }
+    }
+
+    private fun largeTextHeaderSpacing(): Int {
+        // The pinned tabs need additional separation from the expanded Watch live action
+        // when large accessibility text makes the channel summary several lines taller.
+        return channelHeaderExtraSpacingPx(resources.configuration.fontScale, resources.displayMetrics.density)
     }
 
     internal fun updateTabHeader(isChat: Boolean, originalScrollFlags: Int) {

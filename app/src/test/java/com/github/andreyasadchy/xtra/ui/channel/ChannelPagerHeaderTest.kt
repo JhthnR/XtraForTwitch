@@ -52,6 +52,13 @@ class ChannelPagerHeaderTest {
         activity.pause().stop().destroy()
     }
 
+    @Test fun `expanded channel header adds separation only for enlarged text`() {
+        assertEquals(0, channelHeaderExtraSpacingPx(1f, 2.625f))
+        assertEquals(0, channelHeaderExtraSpacingPx(0.85f, 2.625f))
+        assertEquals(63, channelHeaderExtraSpacingPx(1.5f, 2.625f))
+        assertEquals(126, channelHeaderExtraSpacingPx(2f, 2.625f))
+    }
+
     @Test fun `TV channel tabs stay focused above usable content through Chat and Clips transitions`() {
         val (fragment, binding) = fixture(television = true)
         val params = binding.collapsingToolbar.layoutParams as AppBarLayout.LayoutParams

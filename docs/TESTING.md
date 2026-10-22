@@ -40,6 +40,22 @@ For release-related work also run:
 
 For UI/resources/player work, also run `./gradlew lintDebug`.
 
+### Large-font and emulator regression coverage
+
+On a phone emulator, set Android font scaling to 200% and verify the Saved
+Bookmarks / Downloads / Filters tabs and the Search Videos / Streams /
+Channels / Games tabs. Labels must remain single-line, the Search tab strip
+must scroll horizontally to reach offscreen tabs, and switching tabs must
+still work. Restore 100% scaling afterward. On television-sized layouts,
+check D-pad focus between the header controls and tab strip; avoid changing
+the Saved tab mode to forced scrollable solely to address phone text clipping.
+Also open a live channel profile at 200% and verify that its Watch live action
+clears the pinned tab row; check the profile again after returning to 100%.
+
+The October 22–23, 2026 signed-out Android emulator matrix, including 200%
+font scaling, landscape chat cycling, known gaps and evidence locations, is
+in [EMULATOR_QA_2026_10_22.md](EMULATOR_QA_2026_10_22.md).
+
 Android resource/layout regression tests use Robolectric with Android resources enabled.
 They run on API 28 with Conscrypt disabled (these tests do not perform networking; its
 JNI provider is unavailable on the Windows test host). `PlayerPopupContentTest` checks

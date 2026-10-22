@@ -26,7 +26,7 @@
             app:layout_scrollFlags="scroll|enterAlways"
             app:tabGravity="fill"
             app:tabMaxWidth="0dp"
-            app:tabMode="fixed" />
+            app:tabMode="auto" />
 
         <include
             android:id="@+id/sortBar"
