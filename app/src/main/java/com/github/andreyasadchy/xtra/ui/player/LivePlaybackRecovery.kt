@@ -52,9 +52,10 @@ internal class LivePlaybackRecovery(
         networkResumeUsed = false
     }
 
-    /** A controller Prepare is explicit intent; automatic attempts bypass this hook. */
+    /** Rearm a failed player; routine quality/track Prepare calls must not reset the budget. */
     fun onExplicitPrepare() {
         if (disposed || !live || player.deviceInfo.playbackType == DeviceInfo.PLAYBACK_TYPE_REMOTE) return
+        if (!notified && !(player.playbackState == Player.STATE_IDLE && player.playerError != null)) return
         cancelCallbacks()
         attempts = 0
         notified = false

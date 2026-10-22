@@ -213,6 +213,23 @@ class LivePlaybackRecoveryTest {
         verify(h.player, times(4)).prepare()
     }
 
+    @Test fun `routine controller prepare during buffering or ready cannot reset failed attempts`() {
+        val h = Harness()
+        for (delay in listOf(1000L, 2500L, 5000L)) {
+            h.fail()
+            h.advance(delay)
+            h.error = null
+            h.state = Player.STATE_BUFFERING
+            h.recovery.onExplicitPrepare()
+            h.ready()
+            h.recovery.onExplicitPrepare()
+            h.advance(29_000)
+        }
+        h.fail()
+        assertTrue(h.recovery.isExhausted)
+        verify(h.player, times(3)).prepare()
+    }
+
     @Test fun `a long offline wait gets one finite network-return episode and network flaps cannot rearm it`() {
         val h = Harness()
         h.network = false

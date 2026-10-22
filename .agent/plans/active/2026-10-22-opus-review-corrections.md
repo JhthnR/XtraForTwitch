@@ -88,3 +88,11 @@ Human QA completed: none.
   Debug and 32 coordinator cases passed, then 40 coordinator/fragment integration
   cases passed. A fixture compile error was corrected without weakening checks.
   Task emulator restarted on dedicated port 5568 / ADB 5038 for native R1 work.
+- Native Robb576 live playback resumed after a 33.9s outage, with one automatic
+  attempt and live-edge seek. Trace exposed redundant quality/track Prepare calls
+  resetting the budget while already buffering. Tightened the rearm guard to
+  failed/exhausted states and added a no-reset regression; rerun before claiming
+  final reconnection success. Original Rubius channel was offline at test time.
+- Tightened rearm guard and controller Play hook passed debug assembly and all
+  42 coordinator/fragment cases, including buffering/READY Prepare flaps. Save
+  this candidate and rerun short/long outages before finalizing R1 evidence.

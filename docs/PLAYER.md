@@ -15,7 +15,8 @@ Live recovery in the default Media3 service is bounded: three retries at
 behind-live-window errors. Continuous buffering is checked after 15s. A retry
 waits at most 60s for validated connectivity, without repeatedly fetching while
 offline. Thirty seconds of continuous actual playback, an explicit controller
-Prepare (manual retry) or a new source resets the budget. Brief ready/error flaps
+Prepare on a failed/exhausted player (manual retry) or a new source resets the
+budget. Routine Prepare calls from quality callbacks and brief ready/error flaps
 do not. After exhaustion, an observed offline-to-validated transition permits one
 additional three-attempt episode; further network flaps cannot rearm it until
 healthy playback or explicit user intent. The service observes connectivity even

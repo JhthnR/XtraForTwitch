@@ -209,6 +209,11 @@ class PlaybackService : MediaSessionService() {
                     return super.handlePrepare()
                 }
 
+                override fun handleSetPlayWhenReady(playWhenReady: Boolean): ListenableFuture<*> {
+                    if (playWhenReady && liveRecovery?.isExhausted == true) liveRecovery?.onExplicitPrepare()
+                    return super.handleSetPlayWhenReady(playWhenReady)
+                }
+
                 override fun getState(): State {
                     val state = super.getState()
                     return state
