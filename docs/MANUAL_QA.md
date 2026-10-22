@@ -17,6 +17,10 @@ Agents should mark **Required** when a human should test an area. Mark **Complet
 
 ### Opus review corrections (required)
 
+The [correction handoff](OPUS_REVIEW_FIXES.md) records automated checks and the
+API 36.1 emulator's short/long outage and wide PiP observations. These do not mark
+the physical-device checklist below completed.
+
 - [ ] With a service already running, change Cast off/on, close/reopen playback,
   connect/disconnect and switch live/VoD sources. Confirm one playing owner,
   capability-based route UI and receiver volume/speed retained across switches.
@@ -51,6 +55,10 @@ Agents should mark **Required** when a human should test an area. Mark **Complet
 - [ ] Pause during the wait, then restore the network: no automatic playback.
   Repeat close/reopen, switching, live/VoD transitions and sleep-timer expiry.
   No old player may reopen or produce double audio.
+- [ ] Confirm live chat reconnects with new messages after short/long outages,
+  including signed-in read/write, notices and third-party emotes. Repeat rapid
+  loss/return, PiP/background and manual chat disconnect; old cleanup must not
+  close the new connection, and manual disconnect must stay disconnected.
 - [ ] Test ended/404, unauthorized and custom-proxy failures, including the
   one-way fallback. Transfer to a Cast receiver during a pending wait.
 - [ ] Repeat live/VoD, minimize/restore, PiP/background, speed/quality, gestures

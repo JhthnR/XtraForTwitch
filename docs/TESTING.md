@@ -60,7 +60,8 @@ the production observer-registration path and actual Android layout containers.
 
 Cast correction tests exercise stable session forwarding across setting changes,
 old route release, stale transfer callbacks, unavailable SDK capability, expanded
-loopback literals, receiver-owned volume/speed and screen-on after local return.
+loopback literals, receiver-owned volume/speed, video-output rebinding/clearing
+and screen-on after local return.
 They use real local ExoPlayers with injected receiver creation; physical receiver
 network/volume/codec behavior remains human QA.
 
@@ -104,12 +105,13 @@ interval. No codes/tokens were printed or stored and no account was authorized.
 Camera scan, authenticated grant and physical TV/OEM remote behavior remain
 required human QA in `MANUAL_QA.md`.
 
-October 22 final debug assembly, full suite (952 tests / 119 suites, no failures,
-errors or skips) and lint (0 errors / 331 warnings) passed after browser sizing
-and retained-view resize corrections. Strict startup/Stats profile capture passed
-both journeys (two timing-only tests filtered out), and unsigned release assembly
-passed with nonempty packaged baseline/startup metadata. App ID, version and
-minSdk remain unchanged. See [the feature review guide](FORK_FEATURE_STACK_REVIEW.md)
+The October 22 post-review correction source (`a0acbb2de`) passed debug and
+unsigned release assembly, the full suite (1,005 tests / 127 suites, no failures,
+errors or skips) and lint (0 errors / 331 existing warnings). Existing committed
+profiles were consumed and packaged nonempty. The original feature stack's
+strict startup/Stats capture passed both journeys (two timing-only tests filtered
+out); corrections did not change dependencies or those journeys. App ID, version
+and minSdk remain unchanged. See [the correction handoff](OPUS_REVIEW_FIXES.md)
 for exact profile/APK metadata and the remaining hardware gaps.
 
 ### Bounded live recovery
@@ -119,20 +121,32 @@ recovery, 404 visibility after exhaustion, explicit Prepare rearming, one finite
 offline-return episode, and rejection of paused/remote/replaced/disposed/permanent
 sources. Integration tests feed production recovery flags into the fragment's
 actual error callback and assert the one-way proxy restart, pause preservation,
-ended-stream UI and accurate non-retrying feedback. Forty focused API 23/28 cases
-and debug assembly passed; these do not establish native reconnection success.
+ended-stream UI and accurate non-retrying feedback. Metadata refreshes and routine
+quality Prepare calls cannot reset recovery limits. `PlaybackConnectivityTest`
+checks API 23 VPN inclusion, validated active-network sampling during handover
+and queued/late callback rejection after teardown on API 23/28.
 
-`LivePlaybackRecoveryTest` runs 24 cases on API 23/28 using the production
+`MainNetworkValidationTest` drives the real activity callback through availability,
+later validation and destruction. `ChatNetworkRestorationTest` drives actual live
+fragment loss/restoration through job cancellation and reconnection; active
+connections, manual disconnect and replay remain excluded. These six API 23/28
+cases passed without a real account or chat messages being sent.
+
+`LivePlaybackRecoveryTest` runs on API 23/28 using the production
 listener and virtual main-looper time: backoff/exhaustion, continuous-health
 reset versus flapping, finite offline wait, pause/stop/switch/close/Cast/disposal,
 non-live exclusion, behind-live-window ordering, buffering watchdog and nested
 HTTP classification. It checks that recovery neither replaces media nor changes
-play intent. October 22 debug assembly and the full suite passed 939 tests with
-no failures/errors/skips; final lint passed (0 errors / 331 warnings). API 36.1
-rendered real live video, retained a frame during a 33s connectivity interruption,
-and attempted recovery after connectivity returned. Repeated behind-live-window
-errors exhausted the budget; clean sustained reconnection was not demonstrated.
-Physical recovery and frame retention require the matrix in `MANUAL_QA.md`.
+play intent. The original API 36.1 run retained video during a 33s interruption,
+then failed with repeated behind-live-window errors; that evidence is preserved.
+After corrections, the exact final debug APK resumed actual video and new chat
+messages after 33.5s and 95.6s outages. The longer run exhausted the first offline
+wait before one bounded network-return episode resumed playback. Both reached
+over 30s continuous healthy playback; raw traces, actual frames and timings are
+retained in ignored artifacts. Earlier runs where video recovered but chat did
+not, and the final build's startup-buffering interruption, remain separate evidence.
+See [the correction handoff](OPUS_REVIEW_FIXES.md). Physical recovery and frame
+retention still require the matrix in `MANUAL_QA.md`.
 
 ### Optional PiP chat
 

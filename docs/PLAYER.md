@@ -36,6 +36,15 @@ timing/state/error/offset values and exclude URLs, headers and account metadata.
 Exhaustion asks the viewer to retry or reopen. The optional legacy backend and
 ordinary VoD recovery are unchanged.
 
+Visible live chat cancels its current connection jobs on confirmed network loss;
+validated return reconnects through the existing automatic-reconnect preference.
+Manual disconnect remains respected. The activity also checks validation changes
+after initial network availability, following Android's
+[network callback ordering](https://developer.android.com/develop/connectivity/network-ops/reading-network-state).
+Asynchronous chat cleanup captures the old connections and jobs before dispatch,
+so a delayed close cannot cancel a newly created session. Background/PiP and
+authenticated read/write/emote transports still need the manual device matrix.
+
 Manual quality and audio-only MediaItem changes now use the current configured
 source factory too, preserving its HLS parser, HTTP headers and load-error policy.
 Replacing the source changes the delegate; offline/download playback clears it

@@ -1,7 +1,8 @@
 # Local fork feature stack review
 
-Prepared for the user's later Claude Opus 5.5 review. No reviewer has been
-launched. These changes are local, unreleased and unsigned for production.
+This describes the original candidate reviewed by Claude Opus 5.5 at `cf2127566`.
+See [Opus review corrections](OPUS_REVIEW_FIXES.md) for the subsequent local fixes
+and current validation. These changes are local, unreleased and unsigned for production.
 No push, PR, publication, version bump or signing change is part of this work.
 
 ## Checkout and boundaries
