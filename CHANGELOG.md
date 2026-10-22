@@ -7,6 +7,10 @@ All notable changes to ThystTV should be documented here.
 ### Added
 - Finished online VoDs can show storyboard thumbnails and timestamps while dragging the seek bar.
 - The live-rewind button is available in the maximized portrait player too, with stream stats below the action row.
+- Optional Google Cast (Player settings, off by default) hands online video to a receiver on the same network. Downloads stay on the phone, and the receiver fetches video directly without the phone's proxy or custom headers.
+- Optional Chat in picture-in-picture (off by default) keeps read-only live chat beneath the video when PiP starts from the portrait player.
+- Live streams reconnect on their own after short network drops or stalls: up to three retries, waiting at most a minute for the connection to return, then a message asks you to press Play.
+- Android TV can sign in from your phone: scan the on-screen QR code or enter the code at twitch.tv/activate, then choose Check sign-in. Browser sign-in stays available.
 
 ### Changed
 - Update Media3 to 1.11.1, adapting session connection permissions and Twitch HLS metadata while preserving the default playback service.
