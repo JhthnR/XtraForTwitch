@@ -77,6 +77,11 @@ outputs private and never report emulator timing as device performance evidence.
 
 ### TV device-code sign-in
 
+Opus correction coverage adds provider denial/invalidity/expiry classification,
+matching-client device-token validation, held-Helix completion, and rejected-state
+QR/action cleanup. All 19 focused controller/approval/native-layout cases passed;
+no real account or authenticated grant was used.
+
 `DeviceCodeLoginControllerTest` covers provider metadata, explicit interval-bound
 checks, duplicate requests, expiry while hidden, stale noncancellable completions,
 disposal, invalid responses, network errors and provider rejection. UI state never

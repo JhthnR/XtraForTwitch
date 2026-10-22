@@ -938,7 +938,7 @@
     <string name="channel_rewards_text_input" tools:ignore="MissingTranslation">Message for this reward (required)</string>
     <string name="channel_rewards_check_twitch" tools:ignore="MissingTranslation">Check the previous redemption on Twitch.</string>
     <string name="device_code_phone" tools:ignore="MissingTranslation">Sign in with your phone</string>
-    <string name="device_code_instructions" tools:ignore="MissingTranslation">Scan the QR code with your phone, or visit twitch.tv/activate and enter this code. Authorize the device, then choose Check sign-in.</string>
+    <string name="device_code_instructions" tools:ignore="MissingTranslation">Scan this code with another device, or open twitch.tv/activate in a browser and enter the code. Authorize the device, then choose Check sign-in.</string>
     <string name="device_code_qr" tools:ignore="MissingTranslation">QR code for Twitch device activation. You can also enter the displayed code at twitch.tv/activate.</string>
     <string name="device_code_check" tools:ignore="MissingTranslation">Check sign-in</string>
     <string name="device_code_checking" tools:ignore="MissingTranslation">Checking…</string>
@@ -947,6 +947,9 @@
     <string name="device_code_pending" tools:ignore="MissingTranslation">Approval is still pending. Finish authorizing on your phone, then check again.</string>
     <string name="device_code_failed" tools:ignore="MissingTranslation">Couldn’t get a sign-in code. Check your connection and try again.</string>
     <string name="device_code_expired" tools:ignore="MissingTranslation">Code expired. Get a new code to continue.</string>
+    <string name="device_code_denied" tools:ignore="MissingTranslation">Sign-in was denied. Get a new code to try again.</string>
+    <string name="device_code_invalid" tools:ignore="MissingTranslation">Code is no longer valid. Get a new code to continue.</string>
+    <string name="device_code_validation_failed" tools:ignore="MissingTranslation">Couldn’t validate sign-in. Use browser sign-in or get a new code.</string>
     <string name="device_code_expiry" tools:ignore="MissingTranslation">Code expires in %1$d:%2$02d</string>
     <string name="device_code_limitations" tools:ignore="MissingTranslation">Authorize this TV using your phone. Some account features also need browser sign-in, which remains available.</string>
     <string name="live_recovery_exhausted" tools:ignore="MissingTranslation">Couldn’t reconnect. Press Play to retry or reopen the stream.</string>

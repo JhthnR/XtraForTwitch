@@ -614,24 +614,12 @@ class LoginActivity : AppCompatActivity() {
                 authRepository.getDeviceCode(networkLibrary,
                     "client_id=${URLEncoder.encode(clientId, "UTF-8")}&scopes=channel_read+chat%3Aread+user_blocks_edit+user_blocks_read+user_follows_edit+user_read")
             },
-            check = { code ->
-                val response = authRepository.getToken(networkLibrary,
-                    "client_id=${URLEncoder.encode(clientId, "UTF-8")}&device_code=${URLEncoder.encode(code, "UTF-8")}&grant_type=urn%3Aietf%3Aparams%3Aoauth%3Agrant-type%3Adevice_code")
-                val token = response.token
-                when {
-                    !token.isNullOrBlank() -> {
-                        if (validateGQLToken(networkLibrary, clientId, token)) token
-                        else throw DeviceCodeLoginController.Rejected()
-                    }
-                    response.message == "authorization_pending" -> null
-                    response.message in setOf("invalid device code", "expired_token", "access_denied") ->
-                        throw DeviceCodeLoginController.Rejected()
-                    else -> throw java.io.IOException("Device approval failed")
-                }
-            },
+            check = { code -> checkDeviceApproval(networkLibrary, clientId, code) },
             authorized = { token ->
-                gqlClientId = clientId
-                gqlToken = token
+                if (token != null) {
+                    gqlClientId = clientId
+                    gqlToken = token
+                }
                 done()
             },
             changed = ::renderDeviceCode)
@@ -642,13 +630,33 @@ class LoginActivity : AppCompatActivity() {
         controller.requestCode()
     }
 
+    internal suspend fun checkDeviceApproval(networkLibrary: String?, clientId: String?, code: String): DeviceCodeLoginController.Approval {
+        val response = authRepository.getToken(networkLibrary,
+            "client_id=${URLEncoder.encode(clientId, "UTF-8")}&device_code=${URLEncoder.encode(code, "UTF-8")}&grant_type=urn%3Aietf%3Aparams%3Aoauth%3Agrant-type%3Adevice_code")
+        val token = response.token
+        if (!token.isNullOrBlank()) {
+            if (validateGQLToken(networkLibrary, clientId, token)) return DeviceCodeLoginController.Approval.Token(token)
+            // The optional device grant must not discard the Helix account already validated above.
+            if (!helixToken.isNullOrBlank()) return DeviceCodeLoginController.Approval.ExistingAccount
+            throw DeviceCodeLoginController.Rejected(DeviceCodeLoginController.Failure.VALIDATION_FAILED)
+        }
+        return when (response.message) {
+            "authorization_pending" -> DeviceCodeLoginController.Approval.Pending
+            "access_denied" -> throw DeviceCodeLoginController.Rejected(DeviceCodeLoginController.Failure.DENIED)
+            "expired_token" -> throw DeviceCodeLoginController.CodeExpired()
+            "invalid device code", "invalid_device_code" -> throw DeviceCodeLoginController.Rejected(DeviceCodeLoginController.Failure.INVALID_CODE)
+            else -> throw java.io.IOException("Device approval failed")
+        }
+    }
+
     private fun renderDeviceCode(state: DeviceCodeLoginController.State) {
         val panel = binding.deviceCodePane
         val ready = state as? DeviceCodeLoginController.State.Ready
         panel.next.isEnabled = ready?.canCheck == true
         panel.copyCode.isEnabled = ready != null
         panel.openUrl.isEnabled = ready != null
-        panel.retryCode.isVisible = state == DeviceCodeLoginController.State.Error || state == DeviceCodeLoginController.State.Expired
+        panel.retryCode.isVisible = state == DeviceCodeLoginController.State.Error || state == DeviceCodeLoginController.State.Expired ||
+            state is DeviceCodeLoginController.State.Rejected
         panel.codeExpiry.isVisible = ready != null
         panel.next.setText(if (ready?.checking == true) R.string.device_code_checking else R.string.device_code_check)
         if (ready != null) {
@@ -691,6 +699,11 @@ class LoginActivity : AppCompatActivity() {
             panel.codeStatus.setText(when (state) {
                 DeviceCodeLoginController.State.Error -> R.string.device_code_failed
                 DeviceCodeLoginController.State.Expired -> R.string.device_code_expired
+                is DeviceCodeLoginController.State.Rejected -> when (state.reason) {
+                    DeviceCodeLoginController.Failure.DENIED -> R.string.device_code_denied
+                    DeviceCodeLoginController.Failure.INVALID_CODE -> R.string.device_code_invalid
+                    DeviceCodeLoginController.Failure.VALIDATION_FAILED -> R.string.device_code_validation_failed
+                }
                 else -> R.string.loading
             })
             if (panel.retryCode.isVisible) panel.retryCode.requestFocus()

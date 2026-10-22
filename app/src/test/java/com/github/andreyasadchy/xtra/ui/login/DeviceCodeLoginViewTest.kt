@@ -31,6 +31,23 @@ import java.io.File
 @ConscryptMode(ConscryptMode.Mode.OFF)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 class DeviceCodeLoginViewTest {
+    @Test fun `denied invalid and failed sign-ins remove stale QR actions and show accurate feedback`() {
+        for ((reason, message) in listOf(
+            DeviceCodeLoginController.Failure.DENIED to R.string.device_code_denied,
+            DeviceCodeLoginController.Failure.INVALID_CODE to R.string.device_code_invalid,
+            DeviceCodeLoginController.Failure.VALIDATION_FAILED to R.string.device_code_validation_failed)) {
+            val h = Harness()
+            h.render(ready())
+            h.render(DeviceCodeLoginController.State.Rejected(reason))
+            assertNull(h.panel.codeQr.drawable)
+            assertFalse(h.panel.next.isEnabled)
+            assertFalse(h.panel.copyCode.isEnabled)
+            assertFalse(h.panel.openUrl.isEnabled)
+            assertEquals(View.VISIBLE, h.panel.retryCode.visibility)
+            assertEquals(h.context.getString(message), h.panel.codeStatus.text.toString())
+        }
+    }
+
     @Test fun `browser login retains its viewport with the TV entry visible or gone`() {
         val h = Harness()
         h.panel.root.visibility = View.GONE

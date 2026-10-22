@@ -61,8 +61,8 @@ Human QA completed: none.
 
 - Retain the reviewed SHA and raw report; record corrected/qualified findings.
 - Source-factory behavior predates the feature stack; change it only if a
-  reproducible recovery issue demonstrates that it is necessary, in a separate
-  scoped correction.
+  separate scoped correction if its direct impact on quality-switch recovery is
+  confirmed. User authorization includes the issues identified by the review.
 - A 30s healthy budget reset protects against retry loops. Any new recovery
   episode must have a bounded trigger and preserve explicit pause/source identity.
 
@@ -96,3 +96,9 @@ Human QA completed: none.
 - Tightened rearm guard and controller Play hook passed debug assembly and all
   42 coordinator/fragment cases, including buffering/READY Prepare flaps. Save
   this candidate and rerun short/long outages before finalizing R1 evidence.
+- Login: T1/T2 corrected with distinct denial/invalidity/expiry/validation states,
+  held-Helix completion and accurate cross-device instructions. Nineteen focused
+  controller/production-approval/native-view cases passed without real accounts.
+- Native Robb576 broadcast ended during the rebuilt-candidate checks (profile now
+  shows a 33:54 past broadcast). Select another live source; do not conflate this
+  external stream ending with a player recovery failure.

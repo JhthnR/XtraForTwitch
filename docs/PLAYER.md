@@ -104,6 +104,10 @@ The countdown suspends while hidden and uses elapsed time when resumed. New code
 expiry and teardown invalidate stale results. Browser sign-in retains its original
 Helix/GQL routing. The controller does not persist codes/tokens or send them to
 a QR service. Validation/storage and device scopes use the existing auth flow.
+Denied, invalid-code, expired and token-validation failures have distinct feedback
+and remove stale QR actions. If the optional device token fails validation after
+Helix was already validated, sign-in can finish with that held account. Instructions
+also describe activation from a phone browser or a second device accurately.
 
 Television UI mode enables remote focus routing; phone/tablet input is unchanged.
 The empty activity player container is not a focus target. On browsing roots,

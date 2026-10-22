@@ -13,19 +13,27 @@ internal class DeviceCodeLoginController(
     private val scope: CoroutineScope,
     private val now: () -> Long,
     private val request: suspend () -> DeviceCodeResponse,
-    private val check: suspend (String) -> String?,
-    private val authorized: (String) -> Unit,
+    private val check: suspend (String) -> Approval,
+    private val authorized: (String?) -> Unit,
     private val changed: (State) -> Unit,
 ) {
     sealed interface State {
         data object Loading : State
         data object Error : State
         data object Expired : State
+        data class Rejected(val reason: Failure) : State
         data class Ready(val userCode: String, val url: String, val seconds: Long,
                          val checking: Boolean, val canCheck: Boolean, val status: Status) : State
     }
     enum class Status { APPROVE, PENDING, CONNECTION_ERROR }
-    class Rejected : Exception()
+    enum class Failure { DENIED, INVALID_CODE, VALIDATION_FAILED }
+    class Rejected(val reason: Failure = Failure.INVALID_CODE) : Exception()
+    class CodeExpired : Exception()
+    sealed interface Approval {
+        data object Pending : Approval
+        data class Token(val value: String) : Approval
+        data object ExistingAccount : Approval
+    }
     private class Session(val deviceCode: String, val userCode: String, val url: String,
                           val expiresAt: Long, val intervalMs: Long)
     private var session: Session? = null
@@ -78,18 +86,22 @@ internal class DeviceCodeLoginController(
         render()
         work = scope.launch {
             try {
-                val token = check(current.deviceCode)
+                val approval = check(current.deviceCode)
                 if (disposed || generation != requestGeneration || session !== current) return@launch
                 if (now() >= current.expiresAt) return@launch expire()
-                if (!token.isNullOrBlank()) {
+                if (approval != Approval.Pending) {
+                    val token = (approval as? Approval.Token)?.value
+                    if (token != null && token.isBlank()) throw Rejected(Failure.VALIDATION_FAILED)
                     session = null
                     clock?.cancel()
                     authorized(token)
                 } else status = Status.PENDING
             } catch (cancelled: CancellationException) {
                 throw cancelled
-            } catch (_: Rejected) {
+            } catch (_: CodeExpired) {
                 if (session === current) expire()
+            } catch (rejected: Rejected) {
+                if (session === current) clearSession(State.Rejected(rejected.reason))
             } catch (_: Exception) {
                 if (session === current) status = Status.CONNECTION_ERROR
             } finally {
@@ -126,12 +138,14 @@ internal class DeviceCodeLoginController(
             checking, !checking && now() >= nextCheckAt, status))
     }
 
-    private fun expire() {
+    private fun expire() = clearSession(State.Expired)
+
+    private fun clearSession(state: State) {
         session = null
         work?.cancel()
         clock?.cancel()
         checking = false
-        changed(State.Expired)
+        changed(state)
     }
 
     companion object {

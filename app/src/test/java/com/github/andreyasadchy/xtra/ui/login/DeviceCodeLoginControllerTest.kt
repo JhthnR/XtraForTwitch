@@ -1,6 +1,7 @@
 package com.github.andreyasadchy.xtra.ui.login
 
 import com.github.andreyasadchy.xtra.model.id.DeviceCodeResponse
+import com.github.andreyasadchy.xtra.ui.login.DeviceCodeLoginController.Approval
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.test.TestScope
@@ -48,7 +49,7 @@ class DeviceCodeLoginControllerTest {
     }
 
     @Test fun `duplicate checks stay single and authorize once`() = runTest {
-        val result = CompletableDeferred<String?>()
+        val result = CompletableDeferred<Approval>()
         val h = Harness(this)
         h.check = { result.await() }
         h.start()
@@ -57,7 +58,7 @@ class DeviceCodeLoginControllerTest {
         h.controller.checkApproval()
         assertTrue(h.ready().checking)
         assertEquals(1, h.checks)
-        result.complete("synthetic-token")
+        result.complete(Approval.Token("synthetic-token"))
         runCurrent()
         h.controller.checkApproval()
         assertEquals(listOf("synthetic-token"), h.authorized)
@@ -80,7 +81,7 @@ class DeviceCodeLoginControllerTest {
     }
 
     @Test fun `new request rejects old noncancellable authorization completion`() = runTest {
-        val result = CompletableDeferred<String?>()
+        val result = CompletableDeferred<Approval>()
         val h = Harness(this)
         h.check = { withContext(NonCancellable) { result.await() } }
         h.start()
@@ -89,7 +90,7 @@ class DeviceCodeLoginControllerTest {
         h.response = DeviceCodeResponse("new-private", "NEWCODE1")
         h.controller.requestCode()
         runCurrent()
-        result.complete("old-token")
+        result.complete(Approval.Token("old-token"))
         runCurrent()
         assertTrue(h.authorized.isEmpty())
         assertEquals("NEWCODE1", h.ready().userCode)
@@ -97,7 +98,7 @@ class DeviceCodeLoginControllerTest {
 
     @Test fun `expiry and disposal reject late completions and stop future requests`() = runTest {
         for (dispose in listOf(false, true)) {
-            val result = CompletableDeferred<String?>()
+            val result = CompletableDeferred<Approval>()
             val h = Harness(this)
             h.response = DeviceCodeResponse("private", "TEST1234", expiresIn = 1)
             h.check = { withContext(NonCancellable) { result.await() } }
@@ -106,7 +107,7 @@ class DeviceCodeLoginControllerTest {
             runCurrent()
             if (dispose) h.controller.dispose() else { advanceTimeBy(1000); runCurrent() }
             val count = h.states.size
-            result.complete("late-token")
+            result.complete(Approval.Token("late-token"))
             runCurrent()
             assertTrue(h.authorized.isEmpty())
             assertEquals(count, h.states.size)
@@ -153,19 +154,50 @@ class DeviceCodeLoginControllerTest {
         h.start()
         h.controller.checkApproval()
         runCurrent()
-        assertEquals(DeviceCodeLoginController.State.Expired, h.states.last())
+        assertEquals(DeviceCodeLoginController.State.Rejected(DeviceCodeLoginController.Failure.INVALID_CODE), h.states.last())
         assertTrue(h.authorized.isEmpty())
         h.controller.requestCode()
         runCurrent()
         assertTrue(h.states.last() is DeviceCodeLoginController.State.Ready)
     }
 
+    @Test fun `denial validation failure and expiry stay distinct and clear the current code`() = runTest {
+        for (reason in DeviceCodeLoginController.Failure.entries) {
+            val h = Harness(this)
+            h.check = { throw DeviceCodeLoginController.Rejected(reason) }
+            h.start()
+            h.controller.checkApproval()
+            runCurrent()
+            assertEquals(DeviceCodeLoginController.State.Rejected(reason), h.states.last())
+            assertTrue(h.authorized.isEmpty())
+            h.controller.dispose()
+        }
+        val expired = Harness(this)
+        expired.check = { throw DeviceCodeLoginController.CodeExpired() }
+        expired.start()
+        expired.controller.checkApproval()
+        runCurrent()
+        assertEquals(DeviceCodeLoginController.State.Expired, expired.states.last())
+    }
+
+    @Test fun `a held validated account can finish once without inventing a device token`() = runTest {
+        val h = Harness(this)
+        h.check = { Approval.ExistingAccount }
+        h.start()
+        h.controller.checkApproval()
+        runCurrent()
+        h.controller.checkApproval()
+        runCurrent()
+        assertEquals(listOf<String?>(null), h.authorized)
+        assertFalse(h.states.toString().contains("private"))
+    }
+
     private class Harness(private val scope: TestScope) {
         val states = mutableListOf<DeviceCodeLoginController.State>()
-        val authorized = mutableListOf<String>()
+        val authorized = mutableListOf<String?>()
         var response = DeviceCodeResponse("private", "TEST1234")
         var requestFailure = false
-        var check: suspend (String) -> String? = { null }
+        var check: suspend (String) -> Approval = { Approval.Pending }
         var checks = 0
         val controller = DeviceCodeLoginController(scope.backgroundScope, { scope.testScheduler.currentTime },
             { if (requestFailure) throw IOException() else response },
