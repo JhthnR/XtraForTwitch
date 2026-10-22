@@ -34,7 +34,14 @@ handled-error flag; later 404/auth failures stay visible. Feedback promises a
 retry only while one is actually scheduled. Debug-only recovery traces contain
 timing/state/error/offset values and exclude URLs, headers and account metadata.
 Exhaustion asks the viewer to retry or reopen. The optional legacy backend and
-ordinary VoD recovery are unchanged.
+ordinary foreground VoD recovery are unchanged.
+
+Background VoD/clip playback (the app is stopped and the service keeps playing)
+re-prepares only after the same transient errors, at most five times at
+2s/5s/10s/20s/30s, and only while the same source is still idle in error.
+Thirty seconds of continuous playback, a new source or returning to the
+foreground restores the budget. Other errors stay visible instead of being
+re-prepared in a loop. Live and Cast playback never use this path.
 
 Visible live chat cancels its current connection jobs on confirmed network loss;
 validated return reconnects through the existing automatic-reconnect preference.

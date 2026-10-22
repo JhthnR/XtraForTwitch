@@ -25,6 +25,7 @@ All notable changes to ThystTV should be documented here.
 - Channel Points use Twitch's current balance query.
 - A late-loading emote can no longer show an older message in a reused chat row.
 - Chat cleared while the app was in the background no longer leaves the list out of sync when you return.
+- A VoD or clip playing in the background no longer retries a broken video forever. It retries network errors up to five times over about a minute, then stops.
 
 ## [1.4.0] - 2026-10-13
 
