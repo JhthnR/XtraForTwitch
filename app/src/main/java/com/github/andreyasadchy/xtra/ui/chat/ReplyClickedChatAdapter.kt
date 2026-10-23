@@ -16,7 +16,6 @@ import android.view.ViewGroup
 import android.widget.TextView
 import androidx.appcompat.widget.TooltipCompat
 import androidx.core.text.getSpans
-import androidx.fragment.app.Fragment
 import androidx.recyclerview.widget.RecyclerView
 import com.github.andreyasadchy.xtra.R
 import com.github.andreyasadchy.xtra.model.chat.ChatMessage
@@ -34,14 +33,14 @@ import java.util.Random
 class ReplyClickedChatAdapter(
     messages: List<ChatMessage>,
     private val localTwitchEmotes: List<TwitchEmote>,
-    private val thirdPartyEmotes: List<Emote>,
+    private val thirdPartyEmotes: EmoteNameIndex,
     private val globalBadges: List<TwitchBadge>,
     private val channelBadges: List<TwitchBadge>,
     private val cheerEmotes: List<CheerEmote>,
     private val namePaints: List<NamePaint>,
     private val stvBadges: List<StvBadge>,
     private val personalEmoteSets: Map<String, List<Emote>>,
-    private val stvUsers: List<StvUser>,
+    private val stvUsers: Map<String, StvUser>,
     private val enableTimestamps: Boolean,
     private val timestampFormat: String?,
     private val firstMsgVisibility: Int,
@@ -62,9 +61,7 @@ class ReplyClickedChatAdapter(
     private val showSystemMessageEmotes: Boolean,
     private val chatUrl: String?,
     private val getEmoteBytes: ((String, Pair<Long, Int>) -> ByteArray?)?,
-    private val fragment: Fragment,
     private val backgroundColor: Int,
-    private val imageLibrary: String?,
     private val messageTextSize: Float,
     private val emoteSize: Int,
     private val badgeSize: Int,
@@ -115,12 +112,18 @@ class ReplyClickedChatAdapter(
         if (chatMessage == selectedMessage) {
             holder.textView.setBackgroundResource(R.color.chatMessageSelected)
         }
-        holder.bind(chatMessage, result.builder)
-        ChatAdapterUtils.loadImages(
-            fragment, holder.textView, { holder.bind(chatMessage, it) }, result.images, result.imagePaint, result.userName, result.userNameStartIndex,
-            backgroundColor, imageLibrary, result.builder, result.translated, emoteSize, badgeSize, emoteQuality, animateGifs, enableOverlayEmotes,
-            chatMessage, savedColors, useReadableColors, isLightTheme, showLanguageDownloadDialog, false
-        )
+        holder.imageBinder.bind({ holder.bind(chatMessage, result.builder) }) { onImageLoaded ->
+            ChatAdapterUtils.loadImages(
+                holder.textView, { onImageLoaded() }, result.images, result.imagePaint, result.userName, result.userNameStartIndex,
+                backgroundColor, result.builder, result.translated, emoteSize, badgeSize, emoteQuality, animateGifs, enableOverlayEmotes,
+                chatMessage, savedColors, useReadableColors, isLightTheme, showLanguageDownloadDialog, false
+            )
+        }
+    }
+
+    override fun onViewRecycled(holder: ViewHolder) {
+        super.onViewRecycled(holder)
+        holder.imageBinder.cancel()
     }
 
     fun updateBackground(chatMessage: ChatMessage, item: TextView) {
@@ -240,6 +243,7 @@ class ReplyClickedChatAdapter(
     inner class ViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
 
         val textView = itemView as TextView
+        val imageBinder = ChatRowImageBinder(textView::postOnAnimation, textView::removeCallbacks)
 
         fun bind(chatMessage: ChatMessage, formattedMessage: SpannableStringBuilder) {
             textView.apply {

@@ -396,10 +396,6 @@
     <string name="remove_bookmark">Rimuovi segnalibro</string>
     <string name="saved">Salvato</string>
     <string name="refresh">Aggiorna</string>
-    <string name="image_library">Libreria immagini</string>
-    <string name="imageLibraryEntries1">Coil</string>
-    <string name="imageLibraryEntries2">Coil + Glide WebP</string>
-    <string name="imageLibraryEntries3">Glide</string>
     <string name="disabled">Disabilitato</string>
     <string name="live_target_offset">Offset live target</string>
     <string name="buffer_for_playback">Buffer per la riproduzione</string>

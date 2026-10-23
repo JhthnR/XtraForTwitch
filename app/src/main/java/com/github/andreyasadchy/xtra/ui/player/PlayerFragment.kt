@@ -8,10 +8,12 @@ import android.app.PictureInPictureParams
 import android.app.RemoteAction
 import android.content.Context
 import android.content.Intent
+import android.content.SharedPreferences
 import android.content.pm.ActivityInfo
 import android.content.pm.PackageManager
 import android.content.res.Configuration
 import android.graphics.Color
+import android.graphics.Rect
 import android.graphics.drawable.Icon
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
@@ -38,6 +40,7 @@ import android.view.View
 import android.view.ViewConfiguration
 import android.view.ViewGroup
 import android.view.ViewPropertyAnimator
+import android.view.ViewTreeObserver
 import android.view.inputmethod.InputMethodManager
 import android.view.animation.DecelerateInterpolator
 import android.widget.Button
@@ -45,7 +48,6 @@ import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
-import androidx.activity.trackPipAnimationHintView
 import androidx.annotation.OptIn
 import androidx.core.content.edit
 import androidx.core.graphics.ColorUtils
@@ -155,6 +157,11 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
     override var isPortrait = false
     override var isMaximized = true
     private var isChatOpen = true
+    private var pipChatRequested = false
+    private var pipPresentation: PlayerPipPolicy.Presentation? = null
+    private var pipSupported = false
+    private var pipPreferenceListener: SharedPreferences.OnSharedPreferenceChangeListener? = null
+    private val pipLayoutListener = ViewTreeObserver.OnGlobalLayoutListener { refreshPipPresentation() }
     private var isKeyboardShown = false
     protected var displayMode = PlayerDisplayMode.FIT
     /** Fit-relative pinch zoom kept with Fit; 1 is plain Fit. See [PinchZoomController]. */
@@ -193,6 +200,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
     private var controllerIsAnimating = false
     private var controllerAnimation: ViewPropertyAnimator? = null
     private var tvRevealKeyCode: Int? = null
+    private var seekPreview: SeekPreview? = null
     private var backgroundColor: Int? = null
     private var backgroundVisible = false
     private val brightnessState = PlayerBrightnessState()
@@ -294,9 +302,14 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
     open fun toggleSubtitles(enabled: Boolean) {}
     open fun showPlaylistTags(mediaPlaylist: Boolean) {}
     open fun changeQuality(selectedQuality: VideoQuality?) {}
+    open fun isRemotePlayback(): Boolean = false
     open fun startAudioOnly() {}
     open fun downloadVideo() {}
     open fun close() {}
+    open fun closeSession() { close() }
+
+    /** Called when the activity finishes; [keepCasting] leaves active receiver playback running. */
+    open fun closeOnExit(keepCasting: Boolean) { closeSession() }
 
     private var liveRewindDiscovery: Job? = null
     private var liveRewindStartup: Job? = null
@@ -307,6 +320,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
     }
 
     internal fun showLiveRewindOptions() {
+        if (isRemotePlayback()) return
         if (videoType != STREAM || liveRewindDiscovery?.isActive == true || liveRewindDialog != null) return
         liveRewindDialog = requireContext().getAlertDialogBuilder()
             .setTitle(R.string.live_rewind)
@@ -442,15 +456,8 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
     }
 
     private fun updateFullscreenLiveRewind() {
-        val show = LiveRewind.shouldShowFullscreenLiveRewind(videoType, liveRewindOrigin() != null, isMaximized, isPortrait)
-        with(binding.playerControls) {
-            liveRewind.isVisible = show
-            if (show) {
-                liveRewind.setOnClickListener { showLiveRewindOptions() }
-            } else {
-                liveRewind.setOnClickListener(null)
-            }
-        }
+        val show = !isRemotePlayback() && LiveRewind.shouldShowFullscreenLiveRewind(videoType, liveRewindOrigin() != null, isMaximized)
+        binding.playerControls.bindLiveRewindButton(show, isPortrait) { showLiveRewindOptions() }
     }
 
     protected open fun isLiveRewindPlaybackReady(): Boolean = false
@@ -614,6 +621,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
     }
 
     private fun currentQualityLabel(): String? {
+        if (isRemotePlayback()) return getString(R.string.cast_auto_quality)
         return getQualityMap()?.entries?.find { it.value == viewModel.quality }?.key
     }
 
@@ -737,6 +745,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
     @SuppressLint("ClickableViewAccessibility")
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
+        watchPipPresentation(view)
         watchLiveRewindCatchUp()
         watchFoldPosture()
         with(binding) {
@@ -792,13 +801,6 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                 // Capture system gesture insets for edge detection
                 gestureInsets = windowInsets.getInsets(WindowInsetsCompat.Type.systemGestures())
                 WindowInsetsCompat.CONSUMED
-            }
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && requireActivity().packageManager.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE)) {
-                viewLifecycleOwner.lifecycleScope.launch {
-                    repeatOnLifecycle(Lifecycle.State.STARTED) {
-                        requireActivity().trackPipAnimationHintView(playerLayout)
-                    }
-                }
             }
             if (requireContext().prefs().getBoolean(C.PLAYER_KEEP_SCREEN_ON_WHEN_PAUSED, false)) {
                 view.keepScreenOn = true
@@ -1238,6 +1240,20 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                 true
             }
             with(playerControls) {
+                if (videoType == VIDEO && liveRewindOrigin() == null &&
+                    !requireContext().prefs().getBoolean(C.PLAYER_SPOILER_FREE_VODS, false)
+                ) {
+                    seekPreview = SeekPreview(seekPreviewLayout, seekPreviewFrame, seekPreviewTime)
+                    viewModel.loadVideoStoryboard(
+                        requireContext().prefs().getString(C.NETWORK_LIBRARY, "OkHttp"),
+                        requireArguments().getString(KEY_VIDEO_ANIMATED_PREVIEW),
+                    )
+                    viewLifecycleOwner.lifecycleScope.launch {
+                        repeatOnLifecycle(Lifecycle.State.STARTED) {
+                            viewModel.videoStoryboard.collectLatest { seekPreview?.storyboard = it }
+                        }
+                    }
+                }
                 root.setOnTouchListener { _, event ->
                     controllerTapDetector?.onTouchEvent(event) == true
                 }
@@ -1251,13 +1267,16 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                         override fun onScrubStart(timeBar: TimeBar, position: Long) {
                             binding.playerControls.position.text = DateUtils.formatElapsedTime(position / 1000)
                             binding.playerControls.root.removeCallbacks(controllerHideAction)
+                            if (useController && isMaximized) seekPreview?.show(progressBar, position, getDuration())
                         }
 
                         override fun onScrubMove(timeBar: TimeBar, position: Long) {
                             binding.playerControls.position.text = DateUtils.formatElapsedTime(position / 1000)
+                            if (useController && isMaximized) seekPreview?.show(progressBar, position, getDuration())
                         }
 
                         override fun onScrubStop(timeBar: TimeBar, position: Long, canceled: Boolean) {
+                            seekPreview?.hide()
                             if (!canceled) {
                                 seek(position)
                             } else {
@@ -1946,6 +1965,10 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
     }
 
     fun showQualityDialog() {
+        if (isRemotePlayback()) {
+            Toast.makeText(requireContext(), R.string.cast_quality_managed, Toast.LENGTH_LONG).show()
+            return
+        }
         if (!isMaximized) return
         val qualities = viewModel.qualities?.takeIf { it.isNotEmpty() } ?: return
         val panelWidth = PlayerPopupPolicy.panelWidthPx(
@@ -2692,6 +2715,19 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
         }
     }
 
+    protected fun updatePlaybackRouteUi() {
+        val remote = isRemotePlayback()
+        with(binding.playerControls) {
+            audioOnly.isVisible = !remote && prefs.getBoolean(C.PLAYER_MODE, false)
+            audioCompressor.isVisible = !remote && Build.VERSION.SDK_INT >= Build.VERSION_CODES.P &&
+                prefs.getBoolean(C.PLAYER_AUDIO_COMPRESSOR_BUTTON, true)
+            subtitles.isVisible = !remote && subtitles.isVisible
+        }
+        setQualityText()
+        updateFullscreenLiveRewind()
+        changePlayerMode()
+    }
+
     fun updateViewerCount(viewerCount: Int?) {
         with(binding.playerControls) {
             if (viewerCount != null) {
@@ -2896,7 +2932,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                 controllerHideOnTouch = false
                 showController(true)
                 updateProgress()
-                requireView().keepScreenOn = true
+                requireView().keepScreenOn = !isRemotePlayback()
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
                     requireActivity().packageManager.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE)
                 ) {
@@ -2904,6 +2940,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                 }
             }
         }
+        refreshPipPresentation()
     }
 
     protected fun showController(force: Boolean = false) {
@@ -2965,6 +3002,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
     }
 
     private fun hideController(force: Boolean = false, immediate: Boolean = false) {
+        seekPreview?.hide()
         if (!force) {
             maybeShowPinchHint()
         }
@@ -3007,17 +3045,21 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
     }
 
     private fun showStatusBar() {
-        WindowCompat.getInsetsController(
-            requireActivity().window,
-            requireActivity().window.decorView
-        ).show(WindowInsetsCompat.Type.systemBars())
+        if (isAdded) {
+            WindowCompat.getInsetsController(
+                requireActivity().window,
+                requireActivity().window.decorView
+            ).show(WindowInsetsCompat.Type.systemBars())
+        }
     }
 
     private fun hideStatusBar() {
-        WindowCompat.getInsetsController(
-            requireActivity().window,
-            requireActivity().window.decorView
-        ).hide(WindowInsetsCompat.Type.systemBars())
+        if (isAdded) {
+            WindowCompat.getInsetsController(
+                requireActivity().window,
+                requireActivity().window.decorView
+            ).hide(WindowInsetsCompat.Type.systemBars())
+        }
     }
 
     private fun enableBackground() {
@@ -3086,12 +3128,67 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
     fun secondViewIsHidden() = !binding.chatLayout.isVisible && isMaximized
 
     fun canEnterPictureInPicture(): Boolean {
+        if (isRemotePlayback()) return false
         val quality = if (viewModel.restoreQuality) {
             viewModel.previousQuality
         } else {
             viewModel.quality
         }
         return quality?.name != AUDIO_ONLY_QUALITY && quality?.name != CHAT_ONLY_QUALITY
+    }
+
+    private fun watchPipPresentation(view: View) {
+        pipSupported = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O &&
+            requireActivity().packageManager.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE)
+        if (!pipSupported) return
+        pipPreferenceListener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+            if (key == C.PLAYER_PIP_CHAT || key == C.PLAYER_PICTURE_IN_PICTURE || key == C.CHAT_DISABLE) {
+                refreshPipPresentation()
+            }
+        }.also { prefs.registerOnSharedPreferenceChangeListener(it) }
+        view.addWindowGlobalLayoutListener(pipLayoutListener)
+    }
+
+    /** Cache requests before auto-enter, then retain that shape until the window exits PiP. */
+    private fun refreshPipPresentation() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O || !pipSupported || !isAdded || _binding == null) return
+        if (!isInPipMode()) {
+            pipChatRequested = PlayerPipPolicy.ChatEligibility(
+                enabled = prefs.getBoolean(C.PLAYER_PIP_CHAT, false) && prefs.getBoolean(C.PLAYER_PICTURE_IN_PICTURE, true),
+                live = videoType == STREAM,
+                portrait = isPortrait,
+                maximized = isMaximized,
+                chatShown = isChatOpen && binding.chatLayout.isVisible && !prefs.getBoolean(C.CHAT_DISABLE, false),
+                chatReady = chatFragment?.supportsPipMode() == true,
+                local = !isRemotePlayback() && canEnterPictureInPicture(),
+                television = requireContext().isTelevision(),
+                floating = isFloatingChatEnabled,
+                splitAtHinge = foldLayout != null,
+            ).canShow()
+        }
+        val video = Rect()
+        val content = Rect()
+        binding.aspectRatioFrameLayout.getGlobalVisibleRect(video)
+        binding.slidingLayout.getGlobalVisibleRect(content)
+        val presentation = PlayerPipPolicy.presentation(video, content, pipChatRequested) ?: return
+        if (pipPresentation == presentation) return
+        pipPresentation = presentation
+        requireActivity().setPictureInPictureParams(PictureInPictureParams.Builder().apply {
+            setAspectRatio(presentation.aspectRatio)
+            setSourceRectHint(presentation.source)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) setSeamlessResizeEnabled(!presentation.chat)
+        }.build())
+    }
+
+    private fun applyPictureInPictureChat() {
+        chatFragment?.setPipMode(pipChatRequested)
+        if (pipChatRequested) {
+            binding.chatLayout.visibility = View.VISIBLE
+        } else if (isPortrait) {
+            binding.chatLayout.visibility = View.GONE
+        } else {
+            hideChatLayout()
+        }
     }
 
     protected fun setPipActions(playing: Boolean) {
@@ -3141,6 +3238,7 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                     ))
                 }.build()
             )
+            refreshPipPresentation()
         }
     }
 
@@ -3156,13 +3254,11 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
             else -> false
         }
         if (isInPIPMode) {
-            if (isPortrait) {
-                binding.chatLayout.visibility = View.GONE
-            } else {
-                hideChatLayout()
-            }
+            applyPictureInPictureChat()
             useController = false
             updateFoldLayout()
+        } else {
+            refreshPipPresentation()
         }
     }
 
@@ -3368,12 +3464,14 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
             if (!isPortrait && isMaximized) {
                 maybeShowGestureGuide()
             }
+            refreshPipPresentation()
         }
     }
 
     override fun onPictureInPictureModeChanged(isInPictureInPictureMode: Boolean) {
         with(binding) {
             if (isInPictureInPictureMode) {
+                seekPreview?.hide()
                 liveRewindDiscovery?.cancel()
                 liveRewindDialog?.dismiss()
                 restoreBrightness()
@@ -3389,11 +3487,9 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                     slidingLayout.scaleX = 1f
                     slidingLayout.scaleY = 1f
                 }
-                if (isPortrait) {
-                    chatLayout.visibility = View.GONE
-                } else {
-                    hideChatLayout()
-                }
+                (requireContext().getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager)
+                    .hideSoftInputFromWindow(chatLayout.windowToken, 0)
+                applyPictureInPictureChat()
                 useController = false
                 controllerAnimation?.cancel()
                 binding.playerControls.root.alpha = 0f
@@ -3405,14 +3501,18 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
                 (chatFragment?.childFragmentManager?.findFragmentByTag("replyDialog") as? BottomSheetDialogFragment)?.dismiss()
                 (chatFragment?.childFragmentManager?.findFragmentByTag("imageDialog") as? BottomSheetDialogFragment)?.dismiss()
             } else {
+                chatFragment?.setPipMode(false)
                 useController = true
+                initLayout()
             }
         }
         updateFoldLayout()
         refreshDisplayZoom()
+        refreshPipPresentation()
     }
 
     override fun onStop() {
+        seekPreview?.hide()
         liveRewindDiscovery?.cancel()
         liveRewindStartup?.cancel()
         liveRewindStartup = null
@@ -3875,6 +3975,15 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
     }
 
     override fun onDestroyView() {
+        pipPreferenceListener?.let { context?.prefs()?.unregisterOnSharedPreferenceChangeListener(it) }
+        pipPreferenceListener = null
+        // The attached-window listener removes itself before Fragment destroys the view.
+        pipSupported = false
+        chatFragment?.setPipMode(false)
+        pipPresentation = null
+        pipChatRequested = false
+        seekPreview?.release()
+        seekPreview = null
         foldImeVisible = false
         liveRewindDiscovery?.cancel()
         liveRewindStartup?.cancel()

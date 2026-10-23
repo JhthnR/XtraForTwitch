@@ -2,6 +2,10 @@ package com.github.andreyasadchy.xtra.ui.player
 
 import android.app.PendingIntent
 import android.content.Intent
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
+import android.net.Network
+import android.net.NetworkRequest
 import android.media.audiofx.DynamicsProcessing
 import android.net.http.HttpEngine
 import android.os.Build
@@ -9,6 +13,7 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.os.ext.SdkExtensions
+import android.widget.Toast
 import androidx.annotation.OptIn
 import androidx.core.content.edit
 import androidx.core.net.toUri
@@ -21,7 +26,6 @@ import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DefaultDataSource
-import androidx.media3.datasource.HttpDataSource
 import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.hls.HlsManifest
@@ -31,6 +35,7 @@ import androidx.media3.exoplayer.hls.playlist.HlsMultivariantPlaylist
 import androidx.media3.exoplayer.hls.playlist.HlsPlaylist
 import androidx.media3.exoplayer.hls.playlist.HlsPlaylistParserFactory
 import androidx.media3.exoplayer.source.ProgressiveMediaSource
+import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.exoplayer.upstream.DefaultLoadErrorHandlingPolicy
 import androidx.media3.exoplayer.upstream.ParsingLoadable
 import androidx.media3.session.MediaSession
@@ -38,6 +43,7 @@ import androidx.media3.session.MediaSessionService
 import androidx.media3.session.SessionCommand
 import androidx.media3.session.SessionResult
 import com.github.andreyasadchy.xtra.ui.stats.StatsRepository
+import com.github.andreyasadchy.xtra.R
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -114,6 +120,11 @@ class PlaybackService : MediaSessionService() {
     private var lastStatsTime: Long = 0L
 
     private var mediaSession: MediaSession? = null
+    private var castBridge: PlayerCastBridge? = null
+    private var liveRecovery: LivePlaybackRecovery? = null
+    private var backgroundRetry: BackgroundPlaybackRetry? = null
+    private val networkHandler = Handler(Looper.getMainLooper())
+    private var networkCallback: ConnectivityManager.NetworkCallback? = null
     private var dynamicsProcessing: DynamicsProcessing? = null
     private var background = false
     private var proxyMediaPlaylist = false
@@ -126,22 +137,34 @@ class PlaybackService : MediaSessionService() {
 
     override fun onCreate() {
         super.onCreate()
-        val player = ExoPlayer.Builder(this).apply {
-            setLoadControl(
-                DefaultLoadControl.Builder().apply {
-                    setBufferDurationsMs(
-                        prefs().getString(C.PLAYER_BUFFER_MIN, "15000")?.toIntOrNull() ?: 15000,
-                        prefs().getString(C.PLAYER_BUFFER_MAX, "50000")?.toIntOrNull() ?: 50000,
-                        prefs().getString(C.PLAYER_BUFFER_PLAYBACK, "2000")?.toIntOrNull() ?: 2000,
-                        prefs().getString(C.PLAYER_BUFFER_REBUFFER, "2000")?.toIntOrNull() ?: 2000
-                    )
-                }.build()
-            )
-            setAudioAttributes(AudioAttributes.DEFAULT, prefs().getBoolean(C.PLAYER_AUDIO_FOCUS, false))
-            setHandleAudioBecomingNoisy(prefs().getBoolean(C.PLAYER_HANDLE_AUDIO_BECOMING_NOISY, true))
-            setSeekBackIncrementMs(prefs().getString(C.PLAYER_REWIND, "10000")?.toLongOrNull() ?: 10000)
-            setSeekForwardIncrementMs(prefs().getString(C.PLAYER_FORWARD, "10000")?.toLongOrNull() ?: 10000)
-        }.build()
+        val sourceFactory = ConfiguredMediaSourceFactory(DefaultMediaSourceFactory(this))
+        val bridge = PlayerCastBridge(this, enabled = prefs().getBoolean(C.PLAYER_CAST, false),
+            sourceFactoryChanged = sourceFactory::configure, createLocal = {
+            ExoPlayer.Builder(this).apply {
+                setMediaSourceFactory(sourceFactory)
+                setLoadControl(
+                    DefaultLoadControl.Builder().apply {
+                        setBufferDurationsMs(
+                            prefs().getString(C.PLAYER_BUFFER_MIN, "15000")?.toIntOrNull() ?: 15000,
+                            prefs().getString(C.PLAYER_BUFFER_MAX, "50000")?.toIntOrNull() ?: 50000,
+                            prefs().getString(C.PLAYER_BUFFER_PLAYBACK, "2000")?.toIntOrNull() ?: 2000,
+                            prefs().getString(C.PLAYER_BUFFER_REBUFFER, "2000")?.toIntOrNull() ?: 2000
+                        )
+                    }.build()
+                )
+                setAudioAttributes(AudioAttributes.DEFAULT, prefs().getBoolean(C.PLAYER_AUDIO_FOCUS, false))
+                setHandleAudioBecomingNoisy(prefs().getBoolean(C.PLAYER_HANDLE_AUDIO_BECOMING_NOISY, true))
+                setSeekBackIncrementMs(prefs().getString(C.PLAYER_REWIND, "10000")?.toLongOrNull() ?: 10000)
+                setSeekForwardIncrementMs(prefs().getString(C.PLAYER_FORWARD, "10000")?.toLongOrNull() ?: 10000)
+            }.build()
+        })
+        castBridge = bridge
+        val player = bridge.player
+        liveRecovery = LivePlaybackRecovery(player, Handler(Looper.getMainLooper()), ::isNetworkAvailable, {
+            Toast.makeText(this, R.string.live_recovery_exhausted, Toast.LENGTH_LONG).show()
+        })
+        watchRecoveryConnectivity()
+        backgroundRetry = BackgroundPlaybackRetry(player, Handler(Looper.getMainLooper())).also(player::addListener)
         player.addListener(
             object : Player.Listener {
                 override fun onIsPlayingChanged(isPlaying: Boolean) {
@@ -167,9 +190,8 @@ class PlaybackService : MediaSessionService() {
                 }
 
                 override fun onPlayerError(error: PlaybackException) {
-                    if (background) {
-                        player.prepare()
-                    }
+                    backgroundRetry?.onError(error, background && liveRecovery?.isLiveSource != true &&
+                        player.deviceInfo.playbackType != androidx.media3.common.DeviceInfo.PLAYBACK_TYPE_REMOTE)
                 }
 
                 override fun onAudioSessionIdChanged(audioSessionId: Int) {
@@ -186,6 +208,16 @@ class PlaybackService : MediaSessionService() {
         mediaSession = MediaSession.Builder(
             this,
             object : ForwardingSimpleBasePlayer(player) {
+                override fun handlePrepare(): ListenableFuture<*> {
+                    liveRecovery?.onExplicitPrepare()
+                    return super.handlePrepare()
+                }
+
+                override fun handleSetPlayWhenReady(playWhenReady: Boolean): ListenableFuture<*> {
+                    if (playWhenReady && liveRecovery?.isExhausted == true) liveRecovery?.onExplicitPrepare()
+                    return super.handleSetPlayWhenReady(playWhenReady)
+                }
+
                 override fun getState(): State {
                     val state = super.getState()
                     return state
@@ -226,30 +258,16 @@ class PlaybackService : MediaSessionService() {
                 )
             )
             setCallback(
-                object : MediaSession.Callback {
-                    override fun onConnect(session: MediaSession, controller: MediaSession.ControllerInfo): MediaSession.ConnectionResult {
-                        val connectionResult = super.onConnect(session, controller)
-                        val sessionCommands = connectionResult.availableSessionCommands.buildUpon().apply {
-                            add(SessionCommand(START_STREAM, Bundle.EMPTY))
-                            add(SessionCommand(START_VIDEO, Bundle.EMPTY))
-                            add(SessionCommand(START_CLIP, Bundle.EMPTY))
-                            add(SessionCommand(START_OFFLINE_VIDEO, Bundle.EMPTY))
-                            add(SessionCommand(TOGGLE_DYNAMICS_PROCESSING, Bundle.EMPTY))
-                            add(SessionCommand(TOGGLE_PROXY, Bundle.EMPTY))
-                            add(SessionCommand(SET_SLEEP_TIMER, Bundle.EMPTY))
-                            add(SessionCommand(CHECK_ADS, Bundle.EMPTY))
-                            add(SessionCommand(GET_QUALITIES, Bundle.EMPTY))
-                            add(SessionCommand(GET_DURATION, Bundle.EMPTY))
-                            add(SessionCommand(GET_ERROR_CODE, Bundle.EMPTY))
-                            add(SessionCommand(GET_MEDIA_PLAYLIST, Bundle.EMPTY))
-                            add(SessionCommand(GET_MULTIVARIANT_PLAYLIST, Bundle.EMPTY))
-                        }.build()
-                        return MediaSession.ConnectionResult.accept(sessionCommands, connectionResult.availablePlayerCommands)
-                    }
-
+                object : PlaybackSessionCallback() {
                     override fun onCustomCommand(session: MediaSession, controller: MediaSession.ControllerInfo, customCommand: SessionCommand, args: Bundle): ListenableFuture<SessionResult> {
                         return when (customCommand.customAction) {
+                            END_CAST_SESSION -> {
+                                bridge.endSession()
+                                Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
+                            }
                             START_STREAM -> {
+                                bridge.configure(prefs().getBoolean(C.PLAYER_CAST, false))
+                                liveRecovery?.startSource(true, customCommand.customExtras.getBoolean(CUSTOM_PROXY))
                                 val uri = customCommand.customExtras.getString(URI)
                                 val title = customCommand.customExtras.getString(TITLE)
                                 val channelId = customCommand.customExtras.getString(CHANNEL_ID)
@@ -320,7 +338,7 @@ class PlaybackService : MediaSessionService() {
                                     }.build()
                                 } else null
                                 val networkLibrary = prefs().getString(C.NETWORK_LIBRARY, "OkHttp")
-                                player.setMediaSource(
+                                bridge.handoff.setSource(player,
                                     HlsMediaSource.Factory(
                                         DefaultDataSource.Factory(
                                             this@PlaybackService,
@@ -354,32 +372,32 @@ class PlaybackService : MediaSessionService() {
                                     ).apply {
                                         setPlaylistParserFactory(CustomHlsPlaylistParserFactory())
                                         setLoadErrorHandlingPolicy(DefaultLoadErrorHandlingPolicy(6))
-                                    }.createMediaSource(
-                                        MediaItem.Builder().apply {
-                                            setUri(uri?.toUri())
-                                            setMimeType(MimeTypes.APPLICATION_M3U8)
-                                            setLiveConfiguration(MediaItem.LiveConfiguration.Builder().apply {
-                                                prefs().getString(C.PLAYER_LIVE_MIN_SPEED, "")?.toFloatOrNull()?.let { setMinPlaybackSpeed(it) }
-                                                prefs().getString(C.PLAYER_LIVE_MAX_SPEED, "")?.toFloatOrNull()?.let { setMaxPlaybackSpeed(it) }
-                                                prefs().getString(C.PLAYER_LIVE_TARGET_OFFSET, "2000")?.toLongOrNull()?.let { setTargetOffsetMs(it) }
-                                            }.build())
-                                            setMediaMetadata(
-                                                MediaMetadata.Builder().apply {
-                                                    setTitle(title)
-                                                    setArtist(channelName)
-                                                    setArtworkUri(channelLogo?.toUri())
-                                                }.build()
-                                            )
-                                        }.build()
-                                    )
+                                    },
+                                    MediaItem.Builder().apply {
+                                        setUri(uri?.toUri())
+                                        setMimeType(MimeTypes.APPLICATION_M3U8)
+                                        setLiveConfiguration(MediaItem.LiveConfiguration.Builder().apply {
+                                            prefs().getString(C.PLAYER_LIVE_MIN_SPEED, "")?.toFloatOrNull()?.let { setMinPlaybackSpeed(it) }
+                                            prefs().getString(C.PLAYER_LIVE_MAX_SPEED, "")?.toFloatOrNull()?.let { setMaxPlaybackSpeed(it) }
+                                            prefs().getString(C.PLAYER_LIVE_TARGET_OFFSET, "2000")?.toLongOrNull()?.let { setTargetOffsetMs(it) }
+                                        }.build())
+                                        setMediaMetadata(
+                                            MediaMetadata.Builder().apply {
+                                                setTitle(title)
+                                                setArtist(channelName)
+                                                setArtworkUri(channelLogo?.toUri())
+                                            }.build()
+                                        )
+                                    }.build()
                                 )
-                                session.player.volume = prefs().getInt(C.PLAYER_VOLUME, 100) / 100f
-                                session.player.setPlaybackSpeed(1f)
+                                session.player.applyLocalPlaybackDefaults(prefs().getInt(C.PLAYER_VOLUME, 100) / 100f, 1f)
                                 session.player.prepare()
                                 session.player.playWhenReady = true
                                 Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
                             }
                             START_VIDEO -> {
+                                bridge.configure(prefs().getBoolean(C.PLAYER_CAST, false))
+                                liveRecovery?.startSource(false)
                                 val uri = customCommand.customExtras.getString(URI)
                                 val title = customCommand.customExtras.getString(TITLE)
                                 val channelId = customCommand.customExtras.getString(CHANNEL_ID)
@@ -403,7 +421,7 @@ class PlaybackService : MediaSessionService() {
                                 videoId = newId
                                 offlineVideoId = null
                                 val networkLibrary = prefs().getString(C.NETWORK_LIBRARY, "OkHttp")
-                                player.setMediaSource(
+                                bridge.handoff.setSource(player,
                                     HlsMediaSource.Factory(
                                         DefaultDataSource.Factory(
                                             this@PlaybackService,
@@ -421,28 +439,29 @@ class PlaybackService : MediaSessionService() {
                                         )
                                     ).apply {
                                         setPlaylistParserFactory(CustomHlsPlaylistParserFactory())
-                                    }.createMediaSource(
-                                        MediaItem.Builder().apply {
-                                            setMediaId("video:$newId")
-                                            setUri(uri?.toUri())
-                                            setMediaMetadata(
-                                                MediaMetadata.Builder().apply {
-                                                    setTitle(title)
-                                                    setArtist(channelName)
-                                                    setArtworkUri(channelLogo?.toUri())
-                                                }.build()
-                                            )
-                                        }.build()
-                                    )
+                                    },
+                                    MediaItem.Builder().apply {
+                                        setMediaId("video:$newId")
+                                        setUri(uri?.toUri())
+                                        setMimeType(MimeTypes.APPLICATION_M3U8)
+                                        setMediaMetadata(
+                                            MediaMetadata.Builder().apply {
+                                                setTitle(title)
+                                                setArtist(channelName)
+                                                setArtworkUri(channelLogo?.toUri())
+                                            }.build()
+                                        )
+                                    }.build()
                                 )
-                                session.player.volume = prefs().getInt(C.PLAYER_VOLUME, 100) / 100f
-                                session.player.setPlaybackSpeed(prefs().getFloat(C.PLAYER_SPEED, 1f))
+                                session.player.applyLocalPlaybackDefaults(prefs().getInt(C.PLAYER_VOLUME, 100) / 100f, prefs().getFloat(C.PLAYER_SPEED, 1f))
                                 session.player.prepare()
                                 session.player.playWhenReady = true
                                 session.player.seekTo(position)
                                 Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
                             }
                             START_CLIP -> {
+                                bridge.configure(prefs().getBoolean(C.PLAYER_CAST, false))
+                                liveRecovery?.startSource(false)
                                 val uri = customCommand.customExtras.getString(URI)
                                 val title = customCommand.customExtras.getString(TITLE)
                                 val channelId = customCommand.customExtras.getString(CHANNEL_ID)
@@ -460,7 +479,7 @@ class PlaybackService : MediaSessionService() {
                                 videoId = null
                                 offlineVideoId = null
                                 val networkLibrary = prefs().getString(C.NETWORK_LIBRARY, "OkHttp")
-                                player.setMediaSource(
+                                bridge.handoff.setSource(player,
                                     ProgressiveMediaSource.Factory(
                                         DefaultDataSource.Factory(
                                             this@PlaybackService,
@@ -476,26 +495,31 @@ class PlaybackService : MediaSessionService() {
                                                 }
                                             }
                                         )
-                                    ).createMediaSource(
-                                        MediaItem.Builder().apply {
-                                            setUri(uri?.toUri())
-                                            setMediaMetadata(
-                                                MediaMetadata.Builder().apply {
-                                                    setTitle(title)
-                                                    setArtist(channelName)
-                                                    setArtworkUri(channelLogo?.toUri())
-                                                }.build()
-                                            )
-                                        }.build()
-                                    )
+                                    ),
+                                    MediaItem.Builder().apply {
+                                        setUri(uri?.toUri())
+                                        setMimeType(MimeTypes.VIDEO_MP4)
+                                        setMediaMetadata(
+                                            MediaMetadata.Builder().apply {
+                                                setTitle(title)
+                                                setArtist(channelName)
+                                                setArtworkUri(channelLogo?.toUri())
+                                            }.build()
+                                        )
+                                    }.build()
                                 )
-                                session.player.volume = prefs().getInt(C.PLAYER_VOLUME, 100) / 100f
-                                session.player.setPlaybackSpeed(prefs().getFloat(C.PLAYER_SPEED, 1f))
+                                session.player.applyLocalPlaybackDefaults(prefs().getInt(C.PLAYER_VOLUME, 100) / 100f, prefs().getFloat(C.PLAYER_SPEED, 1f))
                                 session.player.prepare()
                                 session.player.playWhenReady = true
                                 Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
                             }
                             START_OFFLINE_VIDEO -> {
+                                bridge.configure(prefs().getBoolean(C.PLAYER_CAST, false))
+                                if (player.deviceInfo.playbackType == androidx.media3.common.DeviceInfo.PLAYBACK_TYPE_REMOTE) {
+                                    return Futures.immediateFuture(SessionResult(androidx.media3.session.SessionError.ERROR_NOT_SUPPORTED))
+                                }
+                                bridge.handoff.clear()
+                                liveRecovery?.startSource(false)
                                 val uri = customCommand.customExtras.getString(URI)
                                 val title = customCommand.customExtras.getString(TITLE)
                                 val channelId = customCommand.customExtras.getString(CHANNEL_ID)
@@ -530,8 +554,7 @@ class PlaybackService : MediaSessionService() {
                                         )
                                     }.build()
                                 )
-                                session.player.volume = prefs().getInt(C.PLAYER_VOLUME, 100) / 100f
-                                session.player.setPlaybackSpeed(prefs().getFloat(C.PLAYER_SPEED, 1f))
+                                session.player.applyLocalPlaybackDefaults(prefs().getInt(C.PLAYER_VOLUME, 100) / 100f, prefs().getFloat(C.PLAYER_SPEED, 1f))
                                 session.player.prepare()
                                 session.player.playWhenReady = true
                                 session.player.seekTo(position)
@@ -560,6 +583,7 @@ class PlaybackService : MediaSessionService() {
                             SET_SLEEP_TIMER -> {
                                 val duration = customCommand.customExtras.getLong(DURATION)
                                 background = duration != -1L
+                                if (!background) backgroundRetry?.reset()
                                 val endTime = sleepTimerEndTime
                                 sleepTimer?.cancel()
                                 sleepTimerEndTime = 0L
@@ -623,9 +647,13 @@ class PlaybackService : MediaSessionService() {
                             }
                             GET_ERROR_CODE -> {
                                 Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS, Bundle().apply {
-                                    putInt(RESULT, (session.player.playerError?.cause as? HttpDataSource.InvalidResponseCodeException)?.responseCode ?: 0)
+                                    putInt(RESULT, LivePlaybackRecovery.httpCode(session.player.playerError))
+                                    putBoolean(RECOVERING, liveRecovery?.isErrorHandled == true)
+                                    putBoolean(RECOVERY_EXHAUSTED, liveRecovery?.isExhausted == true)
                                 }))
                             }
+                            GET_CAST_AVAILABLE -> Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS,
+                                Bundle().apply { putBoolean(RESULT, bridge.castAvailable) }))
                             GET_MEDIA_PLAYLIST -> {
                                 Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS, Bundle().apply {
                                     putStringArray(RESULT, (session.player.currentManifest as? HlsManifest)?.mediaPlaylist?.tags?.toTypedArray())
@@ -744,18 +772,65 @@ class PlaybackService : MediaSessionService() {
 
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? = mediaSession
 
+    private fun isNetworkAvailable(): Boolean {
+        val connectivity = getSystemService(CONNECTIVITY_SERVICE) as ConnectivityManager
+        return connectivity.getNetworkCapabilities(connectivity.activeNetwork)?.let {
+            it.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) &&
+                it.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
+        } == true
+    }
+
+    private fun watchRecoveryConnectivity() {
+        val connectivity = getSystemService(CONNECTIVITY_SERVICE) as ConnectivityManager
+        val callback = object : ConnectivityManager.NetworkCallback() {
+            private fun update() {
+                if (networkCallback !== this) return
+                networkHandler.post {
+                    if (networkCallback === this) liveRecovery?.onConnectivityChanged(isNetworkAvailable())
+                }
+            }
+            override fun onAvailable(network: Network) = update()
+            override fun onLost(network: Network) = update()
+            override fun onCapabilitiesChanged(network: Network, capabilities: NetworkCapabilities) = update()
+        }
+        networkCallback = callback
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) connectivity.registerDefaultNetworkCallback(callback)
+        else connectivity.registerNetworkCallback(NetworkRequest.Builder()
+            .addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+            .removeCapability(NetworkCapabilities.NET_CAPABILITY_NOT_VPN).build(), callback)
+    }
+
+    private fun stopRecoveryConnectivity() {
+        networkCallback?.let {
+            (getSystemService(CONNECTIVITY_SERVICE) as ConnectivityManager).unregisterNetworkCallback(it)
+        }
+        networkCallback = null
+        networkHandler.removeCallbacksAndMessages(null)
+    }
+
     override fun onTaskRemoved(rootIntent: Intent?) {
+        mediaSession?.player?.let {
+            if (keepsCastingAfterExit(prefs().getBoolean(C.PLAYER_CAST_KEEP_ON_EXIT, false), it)) return
+        }
         savePosition()
         mediaSession?.player?.clearMediaItems()
         pauseAllPlayersAndStopSelf()
     }
 
     override fun onDestroy() {
+        stopRecoveryConnectivity()
+        liveRecovery?.dispose()
+        liveRecovery = null
+        backgroundRetry?.reset()
+        backgroundRetry = null
+        castBridge?.dispose()
         mediaSession?.run {
+            player.stop()
             player.release()
             release()
             mediaSession = null
         }
+        castBridge = null
         super.onDestroy()
     }
 
@@ -770,10 +845,17 @@ class PlaybackService : MediaSessionService() {
     }
 
     companion object {
+        /** Receiver playback survives closing the app only when the user opted in and media is actually on the receiver. */
+        fun keepsCastingAfterExit(keepCasting: Boolean, player: Player) = keepCasting &&
+            player.deviceInfo.playbackType == androidx.media3.common.DeviceInfo.PLAYBACK_TYPE_REMOTE &&
+            player.currentMediaItem != null
+
         const val START_STREAM = "startStream"
         const val START_VIDEO = "startVideo"
         const val START_CLIP = "startClip"
         const val START_OFFLINE_VIDEO = "startOfflineVideo"
+        const val END_CAST_SESSION = "endCastSession"
+        const val GET_CAST_AVAILABLE = "getCastAvailable"
         const val TOGGLE_DYNAMICS_PROCESSING = "toggleDynamicsProcessing"
         const val TOGGLE_PROXY = "toggleProxy"
         const val SET_SLEEP_TIMER = "setSleepTimer"
@@ -781,6 +863,9 @@ class PlaybackService : MediaSessionService() {
         const val GET_QUALITIES = "getQualities"
         const val GET_DURATION = "getDuration"
         const val GET_ERROR_CODE = "getErrorCode"
+        const val RECOVERING = "recovering"
+        const val RECOVERY_EXHAUSTED = "recoveryExhausted"
+        const val CUSTOM_PROXY = "customProxy"
         const val GET_MEDIA_PLAYLIST = "getMediaPlaylist"
         const val GET_MULTIVARIANT_PLAYLIST = "getMultivariantPlaylist"
 

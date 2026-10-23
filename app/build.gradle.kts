@@ -1,5 +1,6 @@
 plugins {
     alias(libs.plugins.android.application)
+    alias(libs.plugins.baselineprofile)
     alias(libs.plugins.kotlin.parcelize)
     alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.ksp)
@@ -46,8 +47,8 @@ android {
         applicationId = "com.tzii.thysttv"
         minSdk = 23
         targetSdk = 36
-        versionCode = 14
-        versionName = "1.4.0"
+        versionCode = 15
+        versionName = "1.5.0"
     }
 
     buildTypes {
@@ -92,6 +93,7 @@ dependencies {
     implementation("com.google.mlkit:translate:17.0.3")
 
     implementation(libs.material)
+    implementation(libs.zxing.core)
     implementation(libs.markwon.core)
     implementation(libs.markwon.linkify)
 
@@ -127,17 +129,13 @@ dependencies {
 
     implementation(libs.media3.exoplayer)
     implementation(libs.media3.exoplayer.hls)
+    implementation(libs.media3.cast)
     implementation(libs.media3.ui)
     implementation(libs.media3.session)
 
     implementation(libs.coil)
     implementation(libs.coil.gif)
     implementation(libs.coil.okhttp)
-
-    implementation(libs.glide)
-    ksp(libs.glide.ksp)
-    implementation(libs.glide.okhttp)
-    implementation(libs.glide.webpdecoder)
 
     implementation(libs.hilt)
     ksp(libs.hilt.compiler)
@@ -147,7 +145,8 @@ dependencies {
     implementation(libs.coroutines)
 
     // Baseline Profile installer for faster app startup
-    implementation("androidx.profileinstaller:profileinstaller:1.3.1")
+    implementation(libs.profileinstaller)
+    baselineProfile(project(":baselineprofile"))
 
     // Debug tools - LeakCanary for memory leak detection
     debugImplementation("com.squareup.leakcanary:leakcanary-android:2.14")
@@ -160,6 +159,23 @@ dependencies {
     testImplementation("org.mockito:mockito-core:5.10.0")
     testImplementation("org.mockito:mockito-inline:5.2.0")
     testImplementation("androidx.arch.core:core-testing:2.2.0")
+}
+
+baselineProfile {
+    automaticGenerationDuringBuild = false
+    saveInSrc = true
+    mergeIntoMain = true
+}
+
+// Profile tooling installs only these disposable variants, with the local debug key.
+// Keep the ordinary release package and conditional release signing unchanged.
+androidComponents.finalizeDsl { extension ->
+    extension.buildTypes.filter {
+        it.name.startsWith("nonMinified") || it.name.startsWith("benchmark")
+    }.forEach {
+        it.applicationIdSuffix = ".benchmark"
+        it.signingConfig = extension.signingConfigs.getByName("debug")
+    }
 }
 
 apollo {

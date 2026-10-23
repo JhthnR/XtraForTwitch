@@ -40,6 +40,22 @@ For release-related work also run:
 
 For UI/resources/player work, also run `./gradlew lintDebug`.
 
+### Large-font and emulator regression coverage
+
+On a phone emulator, set Android font scaling to 200% and verify the Saved
+Bookmarks / Downloads / Filters tabs and the Search Videos / Streams /
+Channels / Games tabs. Labels must remain single-line, the Search tab strip
+must scroll horizontally to reach offscreen tabs, and switching tabs must
+still work. Restore 100% scaling afterward. On television-sized layouts,
+check D-pad focus between the header controls and tab strip; avoid changing
+the Saved tab mode to forced scrollable solely to address phone text clipping.
+Also open a live channel profile at 200% and verify that its Watch live action
+clears the pinned tab row; check the profile again after returning to 100%.
+
+The October 22–23, 2026 signed-out Android emulator matrix, including 200%
+font scaling, landscape chat cycling, known gaps and evidence locations, is
+in [EMULATOR_QA_2026_10_22.md](EMULATOR_QA_2026_10_22.md).
+
 Android resource/layout regression tests use Robolectric with Android resources enabled.
 They run on API 28 with Conscrypt disabled (these tests do not perform networking; its
 JNI provider is unavailable on the Windows test host). `PlayerPopupContentTest` checks
@@ -53,7 +69,159 @@ both font sizes. Tests explicitly resolve layout direction for detached preview 
 These check Android layout/rendering, not real player playback, device window placement,
 or animation smoothness. Human checks below remain required.
 
+PiP correction coverage includes wide/sidebar/tall video-only 16:9 policy,
+actual window-listener detachment before fragment view destruction, and restored
+chat auto-follow flags with composer/reply drafts preserved. Focused cases use
+the production observer-registration path and actual Android layout containers.
+
+Cast correction tests exercise stable session forwarding across setting changes,
+old route release, stale transfer callbacks, unavailable SDK capability, expanded
+loopback literals, receiver-owned volume/speed, video-output rebinding/clearing
+and screen-on after local return.
+They use real local ExoPlayers with injected receiver creation; physical receiver
+network/volume/codec behavior remains human QA.
+
+ConfiguredMediaSourceFactoryTest drives real ExoPlayer.setMediaItem calls through
+master/quality/audio URI changes, source replacement and download fallback. It
+verifies the exact configured factory is retained and the previous stream factory
+cannot leak into the next source. These cover the pre-existing factory gap flagged
+by Opus, including default-off Cast playback.
+
+### Startup profile generation
+
+See [profile tooling](../baselineprofile/README.md) for reproducible capture and physical cold-start
+benchmarks. Normal builds consume committed profiles without starting a device.
+Profile generation checks startup and local Stats navigation; it does not certify
+network scrolling, chat performance or decoding. Verify the release APK contains
+nonempty `assets/dexopt/baseline.prof` and `baseline.profm`. Keep raw timing/trace
+outputs private and never report emulator timing as device performance evidence.
+
 ## Manual regression checklist
+
+### TV device-code sign-in
+
+Opus correction coverage adds provider denial/invalidity/expiry classification,
+matching-client device-token validation, held-Helix completion, and rejected-state
+QR/action cleanup. All 19 focused controller/approval/native-layout cases passed;
+no real account or authenticated grant was used.
+
+`DeviceCodeLoginControllerTest` covers provider metadata, explicit interval-bound
+checks, duplicate requests, expiry while hidden, stale noncancellable completions,
+disposal, invalid responses, network errors and provider rejection. UI state never
+contains the private device code. `DeviceCodeLoginViewTest` decodes actual QR
+pixels, checks cache/expiry actions and browser constraints, renders normal/200%
+text, and resizes retained views through compact/wide/compact geometry. Its
+browser constraint fixture uses an ordinary viewport because the detached
+Robolectric WebView reports zero height; actual WebView sizing was checked natively.
+
+On API 36.1, signed-out phone browser login rendered Twitch's login page with a
+full-height WebView after its viewport constraint correction. A disposable
+unauthenticated device-code request returned valid fields, 1800s expiry and 5s
+interval. No codes/tokens were printed or stored and no account was authorized.
+Camera scan, authenticated grant and physical TV/OEM remote behavior remain
+required human QA in `MANUAL_QA.md`.
+
+The October 22 post-review correction source (`a0acbb2de`) passed debug and
+unsigned release assembly, the full suite (1,005 tests / 127 suites, no failures,
+errors or skips) and lint (0 errors / 331 existing warnings). Existing committed
+profiles were consumed and packaged nonempty. The original feature stack's
+strict startup/Stats capture passed both journeys (two timing-only tests filtered
+out); corrections did not change dependencies or those journeys. App ID, version
+and minSdk remain unchanged. See [the correction handoff](OPUS_REVIEW_FIXES.md)
+for exact profile/APK metadata and the remaining hardware gaps.
+
+### Bounded live recovery
+
+The Opus correction cases cover custom-proxy transient HTTP failures bypassing
+recovery, 404 visibility after exhaustion, explicit Prepare rearming, one finite
+offline-return episode, and rejection of paused/remote/replaced/disposed/permanent
+sources. Integration tests feed production recovery flags into the fragment's
+actual error callback and assert the one-way proxy restart, pause preservation,
+ended-stream UI and accurate non-retrying feedback. Metadata refreshes and routine
+quality Prepare calls cannot reset recovery limits. `PlaybackConnectivityTest`
+checks API 23 VPN inclusion, validated active-network sampling during handover
+and queued/late callback rejection after teardown on API 23/28.
+
+`MainNetworkValidationTest` drives the real activity callback through availability,
+later validation and destruction. `ChatNetworkRestorationTest` drives actual live
+fragment loss/restoration through job cancellation and reconnection; active
+connections, manual disconnect and replay remain excluded. These six API 23/28
+cases passed without a real account or chat messages being sent.
+
+`LivePlaybackRecoveryTest` runs on API 23/28 using the production
+listener and virtual main-looper time: backoff/exhaustion, continuous-health
+reset versus flapping, finite offline wait, pause/stop/switch/close/Cast/disposal,
+non-live exclusion, behind-live-window ordering, buffering watchdog and nested
+HTTP classification. It checks that recovery neither replaces media nor changes
+play intent. The original API 36.1 run retained video during a 33s interruption,
+then failed with repeated behind-live-window errors; that evidence is preserved.
+After corrections, the exact final debug APK resumed actual video and new chat
+messages after 33.5s and 95.6s outages. The longer run exhausted the first offline
+wait before one bounded network-return episode resumed playback. Both reached
+over 30s continuous healthy playback; raw traces, actual frames and timings are
+retained in ignored artifacts. Earlier runs where video recovered but chat did
+not, and the final build's startup-buffering interruption, remain separate evidence.
+See [the correction handoff](OPUS_REVIEW_FIXES.md). Physical recovery and frame
+retention still require the matrix in `MANUAL_QA.md`.
+
+### Optional PiP chat
+
+`PlayerPipPolicyTest` covers eligibility and bounded video/composite source hints
+on API 23/28. `PlayerPipRequestTest` checks actual platform requests, remote/unready
+fallback and preference changes across PiP entry/exit. `PipChatLayoutTest` measures
+and renders the real chat layout through compact/wide/compact sizes, preserving
+drafts and suppressing asynchronous overlays, input and inaccessible actions.
+
+October 22 local validation: full suite passed 913 tests before the final input
+dispatch change and two request tests; final debug assembly and 16 focused PiP
+cases passed. Final lint passed with 0 errors / 331 warnings. API 36.1 showed real
+live video and updating chat in portrait PiP, resizing and repeated restoration.
+VoD and the disabled option used video-only landscape PiP; restored live playback
+could minimize and restore. These are emulator observations, not physical-device
+or authenticated composer QA. Follow `MANUAL_QA.md` for the remaining matrix.
+
+### Optional Google Cast
+
+`CastPlaybackHandoffTest` exercises local/remote source ownership, configured
+HTTP/parser source restoration, selected-quality return, VoD position/pause/speed,
+live-edge return, unsupported downloads/loopback URLs and stale receiver content
+on API 23/28. `CastCloseSessionTest` checks that explicit Close disconnects while
+stream replacement keeps the receiver route. Trusted custom commands remain
+covered by `PlaybackSessionCallbackTest`.
+
+October 21 local validation: the full suite passed 898 tests before the final
+close/switch distinction; its final focused pass passed 32 cases with no
+failures/errors/skips. Debug and unsigned release assembly and final lint passed
+(0 errors / 331 warnings). The API 36.1
+emulator rendered actual VoD video with Cast enabled and opened the native device
+chooser. No receiver was available: remote decoding, transfer, disconnect and
+network-loss behavior still require the hardware matrix in `MANUAL_QA.md`.
+
+Startup and local Stats profile generation passed on the task emulator after
+stopping the debug app (two capture journeys passed; the two physical timing
+benchmarks were intentionally excluded by the BaselineProfile rule filter).
+Generated rules contain `ThystTVApp` and no stale `AmethytwApp` references.
+This is profile correctness evidence, not a physical-device speed measurement.
+The rebuilt unsigned production APK retains code 14 and includes nonempty
+`baseline.prof` (6,299 bytes) and `baseline.profm` (460 bytes).
+
+### October 21 performance stack / Media3
+
+- HLS fixtures run on API 23/28: Twitch live prefetch timing, VoD muted segments
+  and offsets, initialization maps across ordinary/part-only delta refreshes,
+  portrait exclusion, stable variant/rendition identity and missing frame rates.
+- `PlaybackSessionCallbackTest` checks that trusted controller defaults retain
+  surface, track and playback commands plus ThystTV custom commands. Untrusted
+  controllers retain Media3's read permissions. The test does not decode media.
+- An API 36.1 emulator comparison preserved a 1.9.3 control and reproduced black
+  VoD video on 1.11.1 before the callback migration. Logs rejected surface commands
+  while playback position advanced. After migration, actual public live and VoD
+  video rendered; live quality changed to 480p with readable labels, and live
+  minimize/restore retained video. Actual VoD dragging showed a downloaded
+  storyboard frame/time, hid it on release and sought/resumed successfully.
+- These are emulator smoke observations, not physical-device or long-playback
+  certification. Audio overlap is unverified (the emulator ran without audio).
+  Keep the full player/backend and startup-device QA matrix below.
 
 ### September 27 TV remote navigation
 

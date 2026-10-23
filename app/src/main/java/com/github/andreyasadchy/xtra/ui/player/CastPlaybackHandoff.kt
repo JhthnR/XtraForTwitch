@@ -1,0 +1,112 @@
+package com.github.andreyasadchy.xtra.ui.player
+
+import androidx.annotation.OptIn
+import androidx.media3.common.C
+import androidx.media3.common.MediaItem
+import androidx.media3.common.PlaybackParameters
+import androidx.media3.common.Player
+import androidx.media3.cast.CastPlayer
+import androidx.media3.common.util.UnstableApi
+import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.source.MediaSource
+import java.net.URI
+import java.net.URISyntaxException
+import java.net.InetAddress
+import java.net.UnknownHostException
+
+/** Retains only this session's current source, including its parser/HTTP configuration. */
+@OptIn(UnstableApi::class)
+internal class CastPlaybackHandoff(
+    private val local: ExoPlayer,
+    private val sourceFactoryChanged: (MediaSource.Factory?) -> Unit = {},
+    private val transferOnline: (Player, Player) -> Unit = CastPlayer.TransferCallback.DEFAULT::transferState,
+) {
+    private var source: MediaSource? = null
+    private var factory: MediaSource.Factory? = null
+    private var ownedItem: MediaItem? = null
+    private data class LocalSnapshot(val item: MediaItem, val position: Long, val play: Boolean, val speed: PlaybackParameters)
+    private var rejected: LocalSnapshot? = null
+
+    fun transfer(from: Player, to: Player, reject: () -> Unit) {
+        if (to === local) {
+            val snapshot = rejected
+            rejected = null
+            if (snapshot != null) {
+                val prepared = configuredSource(snapshot.item)
+                if (prepared != null) local.setMediaSource(prepared, snapshot.position)
+                else local.setMediaItem(snapshot.item, snapshot.position)
+                local.playbackParameters = snapshot.speed
+                local.prepare()
+                local.playWhenReady = snapshot.play
+            } else if (!restoreFrom(from)) {
+                // Never adopt unrelated receiver content into a Twitch player/chat.
+                local.clearMediaItems()
+            }
+        } else if (from.currentMediaItem == null) {
+            to.clearMediaItems()
+        } else if (!canCast(from.currentMediaItem)) {
+            from.currentMediaItem?.let {
+                rejected = LocalSnapshot(it, from.currentPosition.coerceAtLeast(0), from.playWhenReady, from.playbackParameters)
+            }
+            to.clearMediaItems()
+            reject()
+        } else {
+            ownedItem = from.currentMediaItem
+            transferOnline(from, to)
+        }
+    }
+
+    fun setSource(active: Player, factory: MediaSource.Factory, item: MediaItem) {
+        this.factory = factory
+        sourceFactoryChanged(factory)
+        setSource(active, factory.createMediaSource(item))
+    }
+
+    internal fun setSource(active: Player, prepared: MediaSource) {
+        source = prepared
+        ownedItem = prepared.mediaItem
+        if (active.deviceInfo.playbackType == androidx.media3.common.DeviceInfo.PLAYBACK_TYPE_REMOTE) {
+            active.setMediaItem(prepared.mediaItem)
+        } else {
+            local.setMediaSource(prepared)
+        }
+    }
+
+    /** Return false for a receiver item that this ThystTV session does not own. */
+    fun restoreFrom(remote: Player): Boolean {
+        val item = ownedItem ?: return false
+        if (remote.currentMediaItem?.localConfiguration?.uri != item.localConfiguration?.uri) return false
+        val prepared = configuredSource(item) ?: return false
+        val isLive = prepared.mediaItem.liveConfiguration != MediaItem.LiveConfiguration.UNSET
+        local.setMediaSource(prepared, if (isLive) C.TIME_UNSET else remote.currentPosition.coerceAtLeast(0))
+        local.playbackParameters = remote.playbackParameters
+        local.prepare()
+        local.playWhenReady = remote.playWhenReady
+        return true
+    }
+
+    private fun configuredSource(item: MediaItem): MediaSource? =
+        source?.takeIf { it.mediaItem.localConfiguration?.uri == item.localConfiguration?.uri }
+            ?: factory?.createMediaSource(item)?.also { source = it }
+
+    fun clear() {
+        source = null; factory = null; ownedItem = null; rejected = null
+        sourceFactoryChanged(null)
+    }
+
+    companion object {
+        fun canCast(item: MediaItem?): Boolean {
+            val uri = item?.localConfiguration?.uri ?: return false
+            // Older Android Uri implementations split IPv6 hosts at the first colon.
+            val host = try { URI(uri.toString()).host?.lowercase() } catch (_: URISyntaxException) { null } ?: return false
+            if (uri.scheme?.lowercase() !in listOf("https", "http") || host.isBlank() || host == "localhost") return false
+            val literal = host.removeSurrounding("[", "]")
+            // Parse numeric literals only: never resolve a hostname while building route UI.
+            if (':' in literal || literal.all { it.isDigit() || it == '.' }) {
+                val address = try { InetAddress.getByName(literal) } catch (_: UnknownHostException) { return false }
+                return !address.isLoopbackAddress && !address.isAnyLocalAddress
+            }
+            return true
+        }
+    }
+}

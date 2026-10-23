@@ -8,6 +8,57 @@ The player is ThystTV's most important UX surface. Small lifecycle changes can c
 
 The paths below are a map, not a guarantee. If code has moved, search for the current file/function and update this doc when useful.
 
+## Bounded live recovery
+
+Live recovery in the default Media3 service is bounded: three retries at
+1s/2.5s/5s for transient connection/timeouts, direct HTTP 408/429/5xx and
+behind-live-window errors. Continuous buffering is checked after 15s. A retry
+waits at most 60s for validated connectivity, without repeatedly fetching while
+offline. Thirty seconds of continuous actual playback, an explicit controller
+Prepare on a failed/exhausted player (manual retry) or a new source resets the
+budget. Routine Prepare calls from quality callbacks and brief ready/error flaps
+do not. After exhaustion, an observed offline-to-validated transition permits one
+additional three-attempt episode; further network flaps cannot rearm it until
+healthy playback or explicit user intent. The service observes connectivity even
+without a foreground player fragment, and rejects paused/remote/stale/ended or
+permanently failed sources on return. A retry after confirmed loss seeks live.
+
+Recovery retains the configured source, selected tracks, volume and play intent.
+It avoids clearing media/surface; last-frame retention still needs device QA.
+Behind-live-window failures seek to live. Pause, stop, source replacement, close,
+Cast and service destruction cancel callbacks. Live network restoration no longer
+rebuilds a paused player. Permanent/auth/404 errors remain visible; the existing
+one-way custom-proxy HTTP fallback runs before automatic retries and is guarded
+against stale or paused players. Exhaustion is a separate state, not a blanket
+handled-error flag; later 404/auth failures stay visible. Feedback promises a
+retry only while one is actually scheduled. Debug-only recovery traces contain
+timing/state/error/offset values and exclude URLs, headers and account metadata.
+Exhaustion asks the viewer to retry or reopen. The optional legacy backend and
+ordinary foreground VoD recovery are unchanged.
+
+Background VoD/clip playback (the app is stopped and the service keeps playing)
+re-prepares only after the same transient errors, at most five times at
+2s/5s/10s/20s/30s, and only while the same local source is still idle in a
+transient error with playback requested. Pausing, receiver handoff and a later
+permanent/ineligible error cancel any queued retry.
+Thirty seconds of continuous playback, a new source or returning to the
+foreground restores the budget. Other errors stay visible instead of being
+re-prepared in a loop. Live and Cast playback never use this path.
+
+Visible live chat cancels its current connection jobs on confirmed network loss;
+validated return reconnects through the existing automatic-reconnect preference.
+Manual disconnect remains respected. The activity also checks validation changes
+after initial network availability, following Android's
+[network callback ordering](https://developer.android.com/develop/connectivity/network-ops/reading-network-state).
+Asynchronous chat cleanup captures the old connections and jobs before dispatch,
+so a delayed close cannot cancel a newly created session. Background/PiP and
+authenticated read/write/emote transports still need the manual device matrix.
+
+Manual quality and audio-only MediaItem changes now use the current configured
+source factory too, preserving its HLS parser, HTTP headers and load-error policy.
+Replacing the source changes the delegate; offline/download playback clears it
+and uses the normal default factory. This also covers local playback with Cast off.
+
 ## Core Invariants
 
 - Only one active player session should exist.
@@ -68,6 +119,19 @@ Hinge timing and real postures still need the device matrix in `MANUAL_QA.md`.
 
 ## Android TV remote input
 
+TV login exposes “Sign in with your phone”, explaining that some account features
+still need browser sign-in. The existing device grant now has a locally generated
+QR, readable code/instructions, provider expiry and an explicit “Check sign-in”
+action. Checks respect the provider interval and do not poll in the background.
+The countdown suspends while hidden and uses elapsed time when resumed. New code,
+expiry and teardown invalidate stale results. Browser sign-in retains its original
+Helix/GQL routing. The controller does not persist codes/tokens or send them to
+a QR service. Validation/storage and device scopes use the existing auth flow.
+Denied, invalid-code, expired and token-validation failures have distinct feedback
+and remove stale QR actions. If the optional device token fails validation after
+Helix was already validated, sign-in can finish with that held account. Instructions
+also describe activation from a phone browser or a second device accurately.
+
 Television UI mode enables remote focus routing; phone/tablet input is unchanged.
 The empty activity player container is not a focus target. On browsing roots,
 Back returns to the selected bottom-navigation item; UP returns to the current
@@ -109,6 +173,13 @@ Update this list as the code evolves.
 
 ## Recent Lessons From ThystTV Fixes
 
+- Media3 1.11's old `Callback.onConnect` default is a placeholder. The default
+  session service negotiates through `PlaybackSessionCallback.onConnectAsync`
+  with controller-aware defaults; copying the old default loses surface, tracks
+  and playback permissions even while the service itself continues playing.
+  Keep existing custom commands for trusted controllers and Media3's read access
+  for untrusted controllers. A dependency update must test visible live/VoD video
+  and usable quality controls, not merely an advancing playback position.
 - For issue #5, logs did not show a clean app `FATAL EXCEPTION`; the safer fix was the narrow Media3/ExoPlayer rollback and HLS parser compatibility change, not broad WIP player sync.
 - Quality menu labels can regress to HLS variant indices after chat-only -> auto transitions. Preserve readable labels derived from labels, format height/frame rate, or URL path.
 - Mixed-codec Quality choices keep resolution as the primary label and show a standardized
@@ -235,6 +306,36 @@ progress/accessibility updates, very short players and compact restoration, and
 renders phone/tablet feedback previews. Device gesture timing, playback and actual
 window insets still require the human player matrix below.
 
+## Live rewind controls
+
+The live-rewind button is available for maximized live streams in portrait and
+landscape. Portrait uses a separate stats row below the actions so uptime/viewer
+count do not overlap optional volume/audio controls. The center play/pause shifts
+up only as needed to clear that row. Rotation restores the original landscape
+rules; minimized players and recording replays do not get a live-rewind button.
+`PlayerLiveRewindControlsTest` renders compact/RTL/200% text and landscape controls.
+
+## VoD seek previews
+
+`SeekPreview` draws a frame from a Twitch storyboard sprite sheet while the seek
+bar is dragged; it never seeks the decoder during the drag. `VideoStoryboard`
+derives the optional index from the existing animated-preview URL and validates
+the grid before mapping positions to cells. Missing or processing storyboards
+silently leave normal seeking available. Online finished VoDs with preview
+metadata are supported; clips, downloads, live rewind and spoiler-free mode do
+not request previews.
+
+The preview belongs to the player view. Hiding controls, minimizing, stopping,
+PiP and destroying the view cancel its sheet request and drop bitmap references.
+Request generations reject late callbacks, including a second drag on the same
+sheet. Drawing uses a source rectangle rather than creating a bitmap per frame;
+Coil owns cached sheet bitmaps, so they must not be recycled by the view.
+
+`VideoStoryboardTest` checks index parsing and sheet boundaries. `SeekPreviewTest`
+checks real Android controls, source-cell rendering, placement, cancellation and
+late callbacks. Native renders are under `app/build/ui-previews/seek-preview-*`.
+They do not establish actual Twitch availability, touch timing or playback.
+
 ## Required Checks For Player Work
 
 Run:
@@ -255,6 +356,56 @@ For release-risk player work, also verify:
 ```bash
 ./gradlew assembleRelease
 ```
+
+## Optional Google Cast (default Media3 backend)
+
+Google Cast is experimental and off by default; receiver playback remains
+unverified on hardware. Enable it in Player settings, then reopen playback. The route button is
+inflated only when the service reports actual Cast capability. Setting changes apply at the next
+explicit source start, including after closing/reopening; the MediaSession stays
+stable while the old stopped route is released. Default-off playback does not
+initialize the SDK. Disabling Cast ends an existing session on that next start.
+Receiver volume/speed remain receiver-owned across source switches. Returning
+locally honors the keep-screen-on-when-paused setting even while buffering.
+Devices without Google Play services keep local
+playback. Custom ExoPlayer and platform MediaPlayer backends are unchanged.
+
+Media3 CastPlayer owns the local/receiver switch and stops the inactive player.
+ThystTV retains only the current configured MediaSource for a return to local:
+VoDs preserve receiver position, speed and pause; live returns to the live edge.
+Downloads remain local, including a service-side rejection while casting. Close
+stops playback and ends the Cast session. Backgrounding the phone leaves receiver
+playback alone. Finishing the app (back out or remove the task) also ends the
+session unless **Keep casting after closing the app** is on: then, while media is
+on the receiver, the fragment only releases its controller and `onTaskRemoved`
+leaves the service running, so the media notification keeps control. Reopening
+the app does not restore the player UI for that session; starting playback
+replaces the receiver media through the same service. Receiver quality is automatic; phone-only audio processing,
+track controls, live rewind discovery and system PiP are unavailable remotely.
+
+The receiver fetches the media URL directly. Phone HTTP headers/proxies are not
+forwarded. Receiver codec/network compatibility needs physical Cast QA; enabling
+the sender and passing state tests do not establish receiver playback support.
+
+## Optional chat in system PiP
+
+Player settings → Chat in picture-in-picture is off by default. A maximized local
+live stream with visible, ready portrait chat requests a 9:16 system PiP window:
+video above a read-only message list. VoDs/clips, landscape, minimized, floating
+or hinge-split chat, TV and Cast keep the normal video-only behavior. No extra
+player or overlay permission is involved.
+
+The window keeps the shape requested before entry. Layout and preference changes
+refresh the next request, including when Settings covers a running player. Chat
+containers measure/draw only the message path during PiP, so async polls, status,
+scroll buttons, emotes and composer cannot cover messages. Normal visibility and
+draft text remain intact on return; new messages follow the newest item in PiP.
+Video-only requests explicitly restore 16:9 in wide/side-chat/fold layouts and
+use the video frame for the animation hint. PiP layout observation ends on view
+detachment. Returning from PiP chat clears stale scroll-up/touch flags so normal
+message following resumes.
+The composite source hint replaces the video-only hint tracker, retains system
+play/pause actions and disables seamless resize for non-video chat content.
 
 ## Human QA Handoff
 

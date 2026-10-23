@@ -420,10 +420,6 @@
     <string name="saved">Saved</string>
     <string name="stats" translatable="false">Stats</string>
     <string name="refresh">Refresh</string>
-    <string name="image_library">Image library</string>
-    <string name="imageLibraryEntries1">Coil</string>
-    <string name="imageLibraryEntries2">Coil + Glide WebP</string>
-    <string name="imageLibraryEntries3">Glide</string>
     <string name="disabled">Disabled</string>
     <string name="live_target_offset">Live target offset</string>
     <string name="buffer_for_playback">Buffer for playback</string>
@@ -941,4 +937,32 @@
     <string name="channel_rewards_option" tools:ignore="MissingTranslation">%1$s · %2$s points</string>
     <string name="channel_rewards_text_input" tools:ignore="MissingTranslation">Message for this reward (required)</string>
     <string name="channel_rewards_check_twitch" tools:ignore="MissingTranslation">Check the previous redemption on Twitch.</string>
+    <string name="device_code_phone" tools:ignore="MissingTranslation">Sign in with your phone</string>
+    <string name="device_code_instructions" tools:ignore="MissingTranslation">Scan this code with another device, or open twitch.tv/activate in a browser and enter the code. Authorize the device, then choose Check sign-in.</string>
+    <string name="device_code_qr" tools:ignore="MissingTranslation">QR code for Twitch device activation. You can also enter the displayed code at twitch.tv/activate.</string>
+    <string name="device_code_check" tools:ignore="MissingTranslation">Check sign-in</string>
+    <string name="device_code_checking" tools:ignore="MissingTranslation">Checking…</string>
+    <string name="device_code_retry" tools:ignore="MissingTranslation">Get a new code</string>
+    <string name="device_code_browser" tools:ignore="MissingTranslation">Use browser sign-in</string>
+    <string name="device_code_pending" tools:ignore="MissingTranslation">Approval is still pending. Finish authorizing on your phone, then check again.</string>
+    <string name="device_code_failed" tools:ignore="MissingTranslation">Couldn’t get a sign-in code. Check your connection and try again.</string>
+    <string name="device_code_expired" tools:ignore="MissingTranslation">Code expired. Get a new code to continue.</string>
+    <string name="device_code_denied" tools:ignore="MissingTranslation">Sign-in was denied. Get a new code to try again.</string>
+    <string name="device_code_invalid" tools:ignore="MissingTranslation">Code is no longer valid. Get a new code to continue.</string>
+    <string name="device_code_validation_failed" tools:ignore="MissingTranslation">Couldn’t validate sign-in. Use browser sign-in or get a new code.</string>
+    <string name="device_code_expiry" tools:ignore="MissingTranslation">Code expires in %1$d:%2$02d</string>
+    <string name="device_code_limitations" tools:ignore="MissingTranslation">Authorize this TV using your phone. Some account features also need browser sign-in, which remains available.</string>
+    <string name="live_recovery_exhausted" tools:ignore="MissingTranslation">Couldn’t reconnect. Press Play to retry or reopen the stream.</string>
+    <string name="player_error_stopped" tools:ignore="MissingTranslation">Playback failed. Press Play to retry or reopen the stream.</string>
+    <string name="pip_chat" tools:ignore="MissingTranslation">Chat in picture-in-picture</string>
+    <string name="pip_chat_summary" tools:ignore="MissingTranslation">Show live chat beneath the video when entering picture-in-picture from portrait. Chat is read-only; other layouts keep video only.</string>
+    <string name="cast_enabled" tools:ignore="MissingTranslation">Google Cast (experimental)</string>
+    <string name="cast_enabled_summary" tools:ignore="MissingTranslation">Cast online video with the default player. Receiver playback has not been verified on hardware. Reopen playback after changing this setting. Requires Google Play services and a receiver on the same network.</string>
+    <string name="cast_keep_on_exit" tools:ignore="MissingTranslation">Keep casting after closing the app</string>
+    <string name="cast_keep_on_exit_summary" tools:ignore="MissingTranslation">Closing ThystTV while casting leaves the video playing on the receiver. Control or stop it from the media notification. When off, closing the app stops casting.</string>
+    <string name="cast_local_only" tools:ignore="MissingTranslation">This video can only play on this device.</string>
+    <string name="cast_disconnect_download" tools:ignore="MissingTranslation">Stop casting before opening a download.</string>
+    <string name="cast_quality_managed" tools:ignore="MissingTranslation">Video quality is managed by your Cast device.</string>
+    <string name="cast_auto_quality" tools:ignore="MissingTranslation">Auto (Cast)</string>
+    <string name="cast_playing_remotely" tools:ignore="MissingTranslation">Playing on your Cast device</string>
 </resources>

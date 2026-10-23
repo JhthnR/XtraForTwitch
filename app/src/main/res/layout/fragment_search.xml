@@ -37,9 +37,9 @@
             android:layout_width="match_parent"
             android:layout_height="?attr/tabLayoutHeight"
             app:layout_scrollFlags="scroll|enterAlways"
-            app:tabGravity="fill"
+            app:tabGravity="start"
             app:tabMaxWidth="0dp"
-            app:tabMode="fixed" />
+            app:tabMode="scrollable" />
 
         <include
             android:id="@+id/sortBar"

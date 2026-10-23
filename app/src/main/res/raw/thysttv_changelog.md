@@ -1,3 +1,66 @@
+# ThystTV 1.5.0
+
+ThystTV 1.5.0 adds VoD seek previews, optional chat in picture-in-picture,
+bounded playback recovery and experimental Google Cast. It also improves busy
+chat handling and enlarged-text navigation.
+
+## Player
+
+- Drag the seek bar on a finished online VoD to see storyboard thumbnails and
+  timestamps when Twitch provides them.
+- The live-rewind button is also available in the maximized portrait player.
+- Live streams automatically retry short network drops or stalls, up to three
+  attempts with at most a minute waiting for connectivity. Recovery eventually
+  stops and asks for Play instead of retrying forever.
+- Background VoDs and clips retry transient network failures at most five times
+  with increasing delays, then stop. Permanent media errors stay visible.
+- Chat in picture-in-picture is optional and off by default. Enter PiP from a
+  portrait live stream with visible chat to keep read-only messages below video.
+  Other layouts and VoDs retain video-only PiP.
+- Media3 is updated to 1.11.1. VoD replay chat resumes with ready playback.
+
+## Experimental Cast
+
+Enable Google Cast in Player settings and reopen playback to send online video
+to a receiver on the same network. Cast is off by default and requires Google
+Play services. Downloads stay local; the receiver fetches video directly without
+the phone's proxy or custom HTTP headers. Receiver compatibility and playback
+have not been verified on physical hardware.
+
+Keep casting after closing the app is a separate option, also off by default.
+Normally app exit stops casting. With this option enabled and receiver media
+loaded, backing out or removing the task leaves receiver playback and its media
+notification active. Reopening the app does not restore that session's player
+screen; starting another stream replaces the receiver media. Android service
+retention and notification control still need a real-receiver check.
+
+## Chat, sign-in and navigation
+
+- Busy chats batch list changes and use direct emote and 7TV user lookups. Late
+  emote results cannot replace a newer message in a reused row.
+- Android TV offers phone sign-in using a QR or activation code; browser sign-in
+  remains available. Authenticated sign-in and physical TV behavior remain
+  unverified for this release.
+- Saved and Search tabs and channel-profile actions remain readable at 200%
+  text size. Closing players no longer races system-bar updates, and Channel
+  Points uses the current balance query.
+
+## Performance and upgrading
+
+Release builds include generated startup/navigation profiles. The unused Glide
+dependency and its image-library preference are removed. Real-device startup
+gains have not been measured.
+
+Version 1.5.0 uses version code 15 and database version 36, unchanged from 1.4.0.
+Install the official signed APK over official 1.4.0 to retain local data; debug
+builds use a separate application ID.
+
+Updater downloads require a fresh attempt after Android kills the app process.
+New settings and messages are in English for now.
+
+See the [APK verification guide](https://github.com/tzii/ThystTV/blob/master/docs/APK_VERIFICATION.md)
+for checksum and official signing-certificate verification.
+
 # ThystTV 1.4.0
 
 ThystTV 1.4.0 adds live rewind, free pinch zoom, Channel Points rewards, a

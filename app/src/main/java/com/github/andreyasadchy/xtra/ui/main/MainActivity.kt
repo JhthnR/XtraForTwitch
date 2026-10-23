@@ -142,7 +142,11 @@ class MainActivity : AppCompatActivity() {
             }
         }
         override fun onCapabilitiesChanged(network: Network, networkCapabilities: NetworkCapabilities) {
-            lifecycleScope.launch { updatePlaybackNetworkProfile() }
+            lifecycleScope.launch {
+                // onAvailable can precede validation; chat and other fragments need the later result.
+                viewModel.checkNetworkStatus.value = true
+                updatePlaybackNetworkProfile()
+            }
         }
     }
     private fun updatePlaybackNetworkProfile() {
@@ -536,7 +540,7 @@ class MainActivity : AppCompatActivity() {
         connectivityManager.unregisterNetworkCallback(networkCallback)
         unregisterReceiver(pipActionReceiver)
         if (isFinishing) {
-            playerFragment?.close()
+            playerFragment?.closeOnExit(prefs().getBoolean(C.PLAYER_CAST_KEEP_ON_EXIT, false))
         }
         super.onDestroy()
     }
@@ -854,6 +858,10 @@ class MainActivity : AppCompatActivity() {
     }
 
     fun startOfflineVideo(video: OfflineVideo) {
+        if (playerFragment?.isRemotePlayback() == true) {
+            Toast.makeText(this, R.string.cast_disconnect_download, Toast.LENGTH_LONG).show()
+            return
+        }
         val fragment = when (prefs.getString(C.PLAYER, "ExoPlayer")) {
             "MediaPlayer" -> MediaPlayerFragment.newInstance(video)
             else -> {
@@ -889,7 +897,7 @@ class MainActivity : AppCompatActivity() {
             return
         }
         currentFragment?.let {
-            it.close()
+            it.closeSession()
             supportFragmentManager.beginTransaction()
                 .setTransition(FragmentTransaction.TRANSIT_FRAGMENT_FADE)
                 .remove(it)
@@ -1155,7 +1163,6 @@ class MainActivity : AppCompatActivity() {
             prefs.edit {
                 if (Build.VERSION.SDK_INT < Build.VERSION_CODES.P) {
                     putBoolean(C.CHAT_USE_WEBP, false)
-                    putString(C.CHAT_IMAGE_LIBRARY, "1")
                 }
             }
         }

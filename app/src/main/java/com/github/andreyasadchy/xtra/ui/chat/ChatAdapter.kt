@@ -15,7 +15,6 @@ import android.view.ViewGroup
 import android.widget.TextView
 import androidx.appcompat.widget.TooltipCompat
 import androidx.core.text.getSpans
-import androidx.fragment.app.Fragment
 import androidx.recyclerview.widget.RecyclerView
 import com.github.andreyasadchy.xtra.R
 import com.github.andreyasadchy.xtra.model.chat.ChatMessage
@@ -33,14 +32,14 @@ import java.util.Random
 class ChatAdapter(
     private val messages: List<ChatMessage>,
     private val localTwitchEmotes: List<TwitchEmote>,
-    private val thirdPartyEmotes: List<Emote>,
+    private val thirdPartyEmotes: EmoteNameIndex,
     private val globalBadges: List<TwitchBadge>,
     private val channelBadges: List<TwitchBadge>,
     private val cheerEmotes: List<CheerEmote>,
     private val namePaints: List<NamePaint>,
     private val stvBadges: List<StvBadge>,
     private val personalEmoteSets: Map<String, List<Emote>>,
-    private val stvUsers: List<StvUser>,
+    private val stvUsers: Map<String, StvUser>,
     private val enableTimestamps: Boolean,
     private val timestampFormat: String?,
     private val firstMsgVisibility: Int,
@@ -60,10 +59,8 @@ class ChatAdapter(
     private val showSystemMessageEmotes: Boolean,
     private val chatUrl: String?,
     private val getEmoteBytes: ((String, Pair<Long, Int>) -> ByteArray?)?,
-    private val fragment: Fragment,
     private val backgroundColor: Int,
     private val dialogBackgroundColor: Int,
-    private val imageLibrary: String?,
     private val messageTextSize: Float,
     private val emoteSize: Int,
     private val badgeSize: Int,
@@ -107,12 +104,18 @@ class ChatAdapter(
             true, localTwitchEmotes, thirdPartyEmotes, globalBadges, channelBadges, cheerEmotes, savedLocalTwitchEmotes, savedLocalBadges,
             savedLocalCheerEmotes, savedLocalEmotes
         )
-        holder.bind(chatMessage, result.builder)
-        ChatAdapterUtils.loadImages(
-            fragment, holder.textView, { holder.bind(chatMessage, it) }, result.images, result.imagePaint, result.userName, result.userNameStartIndex,
-            backgroundColor, imageLibrary, result.builder, result.translated, emoteSize, badgeSize, emoteQuality, animateGifs, enableOverlayEmotes,
-            chatMessage, savedColors, useReadableColors, effectiveIsLightTheme(), showLanguageDownloadDialog, true
-        )
+        holder.imageBinder.bind({ holder.bind(chatMessage, result.builder) }) { onImageLoaded ->
+            ChatAdapterUtils.loadImages(
+                holder.textView, { onImageLoaded() }, result.images, result.imagePaint, result.userName, result.userNameStartIndex,
+                backgroundColor, result.builder, result.translated, emoteSize, badgeSize, emoteQuality, animateGifs, enableOverlayEmotes,
+                chatMessage, savedColors, useReadableColors, effectiveIsLightTheme(), showLanguageDownloadDialog, true
+            )
+        }
+    }
+
+    override fun onViewRecycled(holder: ViewHolder) {
+        super.onViewRecycled(holder)
+        holder.imageBinder.cancel()
     }
 
     fun updateTranslation(chatMessage: ChatMessage, item: TextView, previousTranslation: String?) {
@@ -139,7 +142,7 @@ class ChatAdapter(
             { chatMessage -> selectedMessage = chatMessage; replyClickListener?.invoke() },
             { url, name, format, isAnimated, source, thirdParty, emoteId -> imageClickListener?.invoke(url, name, format, isAnimated, source, thirdParty, emoteId) },
             useRandomColors, useReadableColors, isLightTheme, nameDisplay, useBoldNames, showNamePaints, showStvBadges, showPersonalEmotes,
-            showSystemMessageEmotes, chatUrl, getEmoteBytes, fragment, dialogBackgroundColor, imageLibrary, messageTextSize, emoteSize, badgeSize,
+            showSystemMessageEmotes, chatUrl, getEmoteBytes, dialogBackgroundColor, messageTextSize, emoteSize, badgeSize,
             emoteQuality, animateGifs, enableOverlayEmotes, translateAllMessages, translateMessage, showLanguageDownloadDialog, random, userColors,
             savedColors, savedLocalTwitchEmotes, savedLocalBadges, savedLocalCheerEmotes, savedLocalEmotes, loggedInUser, selectedMessage
         )
@@ -151,7 +154,7 @@ class ChatAdapter(
             stvUsers, enableTimestamps, timestampFormat, firstMsgVisibility, firstChatMsg, redeemedChatMsg, redeemedNoMsg, rewardChatMsg, replyMessage,
             { url, name, format, isAnimated, source, thirdParty, emoteId -> imageClickListener?.invoke(url, name, format, isAnimated, source, thirdParty, emoteId) },
             useRandomColors, useReadableColors, isLightTheme, nameDisplay, useBoldNames, showNamePaints, showStvBadges, showPersonalEmotes,
-            showSystemMessageEmotes, chatUrl, getEmoteBytes, fragment, dialogBackgroundColor, imageLibrary, messageTextSize, emoteSize, badgeSize,
+            showSystemMessageEmotes, chatUrl, getEmoteBytes, dialogBackgroundColor, messageTextSize, emoteSize, badgeSize,
             emoteQuality, animateGifs, enableOverlayEmotes, translateAllMessages, translateMessage, showLanguageDownloadDialog, random, userColors,
             savedColors, savedLocalTwitchEmotes, savedLocalBadges, savedLocalCheerEmotes, savedLocalEmotes, loggedInUser, selectedMessage
         )
@@ -235,6 +238,7 @@ class ChatAdapter(
     inner class ViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
 
         val textView = itemView as TextView
+        val imageBinder = ChatRowImageBinder(textView::postOnAnimation, textView::removeCallbacks)
         private val defaultTextColors = textView.textColors
         private val defaultLinkTextColors = textView.linkTextColors
         private val defaultHighlightColor = textView.highlightColor

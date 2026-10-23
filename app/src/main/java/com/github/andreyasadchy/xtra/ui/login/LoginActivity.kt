@@ -6,6 +6,7 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Intent
 import android.os.Bundle
+import android.os.SystemClock
 import android.util.TypedValue
 import android.view.View
 import android.view.ViewGroup
@@ -23,6 +24,7 @@ import androidx.core.net.toUri
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.updateLayoutParams
+import androidx.core.view.isVisible
 import androidx.lifecycle.lifecycleScope
 import androidx.webkit.WebResourceErrorCompat
 import androidx.webkit.WebSettingsCompat
@@ -38,6 +40,7 @@ import com.github.andreyasadchy.xtra.util.applyTheme
 import com.github.andreyasadchy.xtra.util.getAlertDialogBuilder
 import com.github.andreyasadchy.xtra.util.prefs
 import com.github.andreyasadchy.xtra.util.tokenPrefs
+import com.github.andreyasadchy.xtra.util.isTelevision
 import com.google.android.material.slider.Slider
 import com.google.android.material.textfield.TextInputEditText
 import com.google.android.material.textfield.TextInputLayout
@@ -45,6 +48,7 @@ import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.launch
 import org.json.JSONObject
 import java.util.regex.Pattern
+import java.net.URLEncoder
 import javax.inject.Inject
 import kotlin.math.roundToInt
 
@@ -65,6 +69,8 @@ class LoginActivity : AppCompatActivity() {
     private var readHeaders = false
     private var readHeaders2 = false
     private var checkUrl = false
+    private var deviceCodeController: DeviceCodeLoginController? = null
+    private var renderedDeviceCode: String? = null
 
     private lateinit var binding: ActivityLoginBinding
 
@@ -169,6 +175,21 @@ class LoginActivity : AppCompatActivity() {
             textZoom.visibility = View.VISIBLE
             havingTrouble.visibility = View.VISIBLE
             setupButtons(networkLibrary, helixClientId, helixAuthUrl)
+            if (isTelevision()) {
+                deviceCodeLogin.visibility = View.VISIBLE
+                deviceCodeLogin.setOnClickListener {
+                    getAlertDialogBuilder()
+                        .setMessage(R.string.device_code_limitations)
+                        .setPositiveButton(android.R.string.ok) { _, _ ->
+                            setupExternalCodeLogin(networkLibrary, helixClientId, helixAuthUrl)
+                        }
+                        .setNegativeButton(android.R.string.cancel, null)
+                        .show()
+                }
+                havingTrouble.isFocusable = true
+                havingTrouble.isClickable = true
+                deviceCodeLogin.requestFocus()
+            }
             CookieManager.getInstance().removeAllCookies(null)
             val isLightTheme = obtainStyledAttributes(intArrayOf(androidx.appcompat.R.attr.isLightTheme)).use {
                 it.getBoolean(0, false)
@@ -551,81 +572,141 @@ class LoginActivity : AppCompatActivity() {
     }
 
     private fun setupExternalCodeLogin(networkLibrary: String?, helixClientId: String?, helixAuthUrl: String) {
-        with(binding) {
-            webView.visibility = View.INVISIBLE
-            havingTrouble.visibility = View.INVISIBLE
-            val gqlClientId = prefs().getString(C.GQL_CLIENT_ID2, "kd1unb4b3q4t58fwlpcbzcbnm76a8fp")
-            var deviceCode: String? = null
-            var userCode: String? = null
-            lifecycleScope.launch {
-                try {
-                    val response = authRepository.getDeviceCode(networkLibrary, "client_id=${gqlClientId}&scopes=channel_read+chat%3Aread+user_blocks_edit+user_blocks_read+user_follows_edit+user_read")
-                    deviceCode = response.deviceCode
-                    userCode = response.userCode
-                    codeText.text = userCode
-                } catch (e: Exception) {
+        deviceCodeController?.dispose()
+        renderedDeviceCode = null
+        binding.webView.visibility = View.GONE
+        binding.secondaryWebView.visibility = View.GONE
+        binding.textZoom.visibility = View.GONE
+        binding.havingTrouble.visibility = View.GONE
+        binding.deviceCodeLogin.visibility = View.GONE
+        binding.deviceCodePane.root.visibility = View.VISIBLE
+        binding.webView.stopLoading()
+        binding.secondaryWebView.stopLoading()
+        readHeaders = false
+        readHeaders2 = false
+        checkUrl = false
+        val clientId = prefs().getString(C.GQL_CLIENT_ID2, "ue6666qo983tsx6so1t0vnawi233wa")
+        val panel = binding.deviceCodePane
+        panel.codeText.isFocusable = !isTelevision()
+        panel.copyCode.isVisible = !isTelevision()
+        panel.browserSignIn.setOnClickListener {
+            deviceCodeController?.dispose()
+            deviceCodeController = null
+            renderedDeviceCode = null
+            panel.codeQr.setImageDrawable(null)
+            panel.root.visibility = View.GONE
+            binding.webView.visibility = View.VISIBLE
+            binding.textZoom.visibility = View.VISIBLE
+            binding.havingTrouble.visibility = View.VISIBLE
+            binding.deviceCodeLogin.isVisible = isTelevision()
+            setupButtons(networkLibrary, helixClientId, helixAuthUrl)
+            if (prefs().getString(C.API_LOGIN, "0") == "1" || !helixToken.isNullOrBlank()) {
+                readHeaders = true
+                binding.webView.loadUrl("https://www.twitch.tv/login")
+            } else {
+                checkUrl = true
+                binding.webView.loadUrl(helixAuthUrl)
+            }
+            if (isTelevision()) binding.deviceCodeLogin.requestFocus()
+        }
+        val controller = DeviceCodeLoginController(lifecycleScope, SystemClock::elapsedRealtime,
+            request = {
+                authRepository.getDeviceCode(networkLibrary,
+                    "client_id=${URLEncoder.encode(clientId, "UTF-8")}&scopes=channel_read+chat%3Aread+user_blocks_edit+user_blocks_read+user_follows_edit+user_read")
+            },
+            check = { code -> checkDeviceApproval(networkLibrary, clientId, code) },
+            authorized = { token ->
+                if (token != null) {
+                    gqlClientId = clientId
+                    gqlToken = token
+                }
+                done()
+            },
+            changed = ::renderDeviceCode)
+        deviceCodeController = controller
+        panel.retryCode.setOnClickListener { controller.requestCode() }
+        panel.next.setOnClickListener { controller.checkApproval() }
+        controller.resume()
+        controller.requestCode()
+    }
 
-                }
-            }
-            codeText.visibility = View.VISIBLE
-            copyCode.visibility = View.VISIBLE
-            copyCode.setOnClickListener {
-                if (userCode != null) {
-                    val clipboardManager = getSystemService(CLIPBOARD_SERVICE) as ClipboardManager
-                    clipboardManager.setPrimaryClip(ClipData.newPlainText("code", userCode))
-                }
-            }
-            openUrl.visibility = View.VISIBLE
-            openUrl.setOnClickListener {
-                try {
-                    val intent = Intent(Intent.ACTION_VIEW, "https://www.twitch.tv/activate".toUri()).apply {
-                        addCategory(Intent.CATEGORY_BROWSABLE)
-                    }
-                    startActivity(intent)
-                    webView.reload()
-                } catch (e: ActivityNotFoundException) {
-                    Toast.makeText(this@LoginActivity, R.string.no_browser_found, Toast.LENGTH_LONG).show()
-                }
-            }
-            next.visibility = View.VISIBLE
-            next.setOnClickListener {
-                if (deviceCode != null) {
-                    lifecycleScope.launch {
-                        try {
-                            val response = authRepository.getToken(networkLibrary, "client_id=${gqlClientId}&device_code=${deviceCode}&grant_type=urn%3Aietf%3Aparams%3Aoauth%3Agrant-type%3Adevice_code")
-                            val token = response.token
-                            if (!token.isNullOrBlank()) {
-                                val valid = validateGQLToken(networkLibrary, gqlClientId, token)
-                                if (valid) {
-                                    this@LoginActivity.gqlClientId = gqlClientId
-                                    gqlToken = token
-                                    done()
-                                } else {
-                                    if (!helixToken.isNullOrBlank()) {
-                                        done()
-                                    } else {
-                                        error()
-                                        codeText.visibility = View.GONE
-                                        codeText.text = getString(R.string.loading)
-                                        copyCode.visibility = View.GONE
-                                        openUrl.visibility = View.GONE
-                                        next.visibility = View.GONE
-                                        setupButtons(networkLibrary, helixClientId, helixAuthUrl)
-                                        readHeaders = true
-                                        webView.loadUrl("https://www.twitch.tv/login")
-                                    }
-                                }
-                            } else {
-                                response.message?.let {
-                                    Toast.makeText(this@LoginActivity, it, Toast.LENGTH_SHORT).show()
-                                }
-                            }
-                        } catch (e: Exception) {
+    internal suspend fun checkDeviceApproval(networkLibrary: String?, clientId: String?, code: String): DeviceCodeLoginController.Approval {
+        val response = authRepository.getToken(networkLibrary,
+            "client_id=${URLEncoder.encode(clientId, "UTF-8")}&device_code=${URLEncoder.encode(code, "UTF-8")}&grant_type=urn%3Aietf%3Aparams%3Aoauth%3Agrant-type%3Adevice_code")
+        val token = response.token
+        if (!token.isNullOrBlank()) {
+            if (validateGQLToken(networkLibrary, clientId, token)) return DeviceCodeLoginController.Approval.Token(token)
+            // The optional device grant must not discard the Helix account already validated above.
+            if (!helixToken.isNullOrBlank()) return DeviceCodeLoginController.Approval.ExistingAccount
+            throw DeviceCodeLoginController.Rejected(DeviceCodeLoginController.Failure.VALIDATION_FAILED)
+        }
+        return when (response.message) {
+            "authorization_pending" -> DeviceCodeLoginController.Approval.Pending
+            "access_denied" -> throw DeviceCodeLoginController.Rejected(DeviceCodeLoginController.Failure.DENIED)
+            "expired_token" -> throw DeviceCodeLoginController.CodeExpired()
+            "invalid device code", "invalid_device_code" -> throw DeviceCodeLoginController.Rejected(DeviceCodeLoginController.Failure.INVALID_CODE)
+            else -> throw java.io.IOException("Device approval failed")
+        }
+    }
 
-                        }
-                    }
+    private fun renderDeviceCode(state: DeviceCodeLoginController.State) {
+        val panel = binding.deviceCodePane
+        val ready = state as? DeviceCodeLoginController.State.Ready
+        panel.next.isEnabled = ready?.canCheck == true
+        panel.copyCode.isEnabled = ready != null
+        panel.openUrl.isEnabled = ready != null
+        panel.retryCode.isVisible = state == DeviceCodeLoginController.State.Error || state == DeviceCodeLoginController.State.Expired ||
+            state is DeviceCodeLoginController.State.Rejected
+        panel.codeExpiry.isVisible = ready != null
+        panel.next.setText(if (ready?.checking == true) R.string.device_code_checking else R.string.device_code_check)
+        if (ready != null) {
+            if (renderedDeviceCode != ready.userCode) {
+                renderedDeviceCode = ready.userCode
+                panel.codeText.text = ready.userCode
+                try {
+                    panel.codeQr.setImageBitmap(DeviceCodeQr.create(ready.url))
+                    panel.codeQr.visibility = View.VISIBLE
+                } catch (_: Exception) {
+                    // The visible code and activation address still work if QR encoding fails.
+                    panel.codeQr.visibility = View.GONE
+                }
+                panel.next.requestFocus()
+            }
+            panel.codeExpiry.text = getString(R.string.device_code_expiry, ready.seconds / 60, ready.seconds % 60)
+            panel.codeStatus.text = when (ready.status) {
+                DeviceCodeLoginController.Status.APPROVE -> ""
+                DeviceCodeLoginController.Status.PENDING -> getString(R.string.device_code_pending)
+                DeviceCodeLoginController.Status.CONNECTION_ERROR -> getString(R.string.connection_error)
+            }
+            panel.copyCode.setOnClickListener {
+                (getSystemService(CLIPBOARD_SERVICE) as ClipboardManager)
+                    .setPrimaryClip(ClipData.newPlainText("code", ready.userCode))
+            }
+            panel.openUrl.setOnClickListener {
+                try {
+                    startActivity(Intent(Intent.ACTION_VIEW, ready.url.toUri()).addCategory(Intent.CATEGORY_BROWSABLE))
+                } catch (_: ActivityNotFoundException) {
+                    Toast.makeText(this, R.string.no_browser_found, Toast.LENGTH_LONG).show()
                 }
             }
+        } else {
+            renderedDeviceCode = null
+            panel.copyCode.setOnClickListener(null)
+            panel.openUrl.setOnClickListener(null)
+            panel.codeQr.setImageDrawable(null)
+            panel.codeQr.visibility = View.GONE
+            panel.codeText.setText(if (state == DeviceCodeLoginController.State.Loading) R.string.loading else R.string.device_code_phone)
+            panel.codeStatus.setText(when (state) {
+                DeviceCodeLoginController.State.Error -> R.string.device_code_failed
+                DeviceCodeLoginController.State.Expired -> R.string.device_code_expired
+                is DeviceCodeLoginController.State.Rejected -> when (state.reason) {
+                    DeviceCodeLoginController.Failure.DENIED -> R.string.device_code_denied
+                    DeviceCodeLoginController.Failure.INVALID_CODE -> R.string.device_code_invalid
+                    DeviceCodeLoginController.Failure.VALIDATION_FAILED -> R.string.device_code_validation_failed
+                }
+                else -> R.string.loading
+            })
+            if (panel.retryCode.isVisible) panel.retryCode.requestFocus()
         }
     }
 
@@ -703,7 +784,19 @@ class LoginActivity : AppCompatActivity() {
     }
 
     override fun onDestroy() {
+        deviceCodeController?.dispose()
+        deviceCodeController = null
         binding.webView.loadUrl("about:blank")
         super.onDestroy()
+    }
+
+    override fun onStart() {
+        super.onStart()
+        deviceCodeController?.resume()
+    }
+
+    override fun onStop() {
+        deviceCodeController?.pause()
+        super.onStop()
     }
 }

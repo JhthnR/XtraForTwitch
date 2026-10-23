@@ -1,17 +1,19 @@
 <?xml version="1.0" encoding="utf-8"?>
-<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<com.github.andreyasadchy.xtra.ui.view.PipChatRoot xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent">
 
-    <LinearLayout
+    <com.github.andreyasadchy.xtra.ui.view.PipChatColumn
+        android:id="@+id/chatContentColumn"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:orientation="vertical"
         tools:visibility="visible">
 
-        <FrameLayout
+        <com.github.andreyasadchy.xtra.ui.view.PipChatViewport
+            android:id="@+id/chatViewportFrame"
             android:layout_width="match_parent"
             android:layout_height="0dp"
             android:layout_weight="1"
@@ -36,7 +38,7 @@
                 android:text="@string/scroll_down"
                 android:visibility="gone"
                 tools:visibility="visible" />
-        </FrameLayout>
+        </com.github.andreyasadchy.xtra.ui.view.PipChatViewport>
 
         <LinearLayout
             android:id="@+id/replyView"
@@ -154,7 +156,7 @@
                 android:layout_height="300dp" />
         </LinearLayout>
 
-    </LinearLayout>
+    </com.github.andreyasadchy.xtra.ui.view.PipChatColumn>
 
     <TextView
         android:id="@+id/chatReplayUnavailable"
@@ -439,4 +441,4 @@
             app:tint="?attr/colorControlNormal" />
     </androidx.constraintlayout.widget.ConstraintLayout>
 
-</androidx.constraintlayout.widget.ConstraintLayout>
+</com.github.andreyasadchy.xtra.ui.view.PipChatRoot>

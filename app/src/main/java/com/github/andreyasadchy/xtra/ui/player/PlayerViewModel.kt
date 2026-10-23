@@ -13,6 +13,7 @@ import com.github.andreyasadchy.xtra.model.NotificationUser
 import com.github.andreyasadchy.xtra.model.ShownNotification
 import com.github.andreyasadchy.xtra.model.VideoPosition
 import com.github.andreyasadchy.xtra.model.VideoQuality
+import com.github.andreyasadchy.xtra.model.VideoStoryboard
 import com.github.andreyasadchy.xtra.model.ui.Bookmark
 import com.github.andreyasadchy.xtra.model.ui.Game
 import com.github.andreyasadchy.xtra.model.ui.LocalFollowChannel
@@ -106,6 +107,8 @@ class PlayerViewModel @Inject constructor(
     val savedPosition = MutableStateFlow<Long?>(null)
     val isBookmarked = MutableStateFlow<Boolean?>(null)
     val gamesList = MutableStateFlow<List<Game>?>(null)
+    val videoStoryboard = MutableStateFlow<VideoStoryboard?>(null)
+    private var videoStoryboardJob: Job? = null
     var shouldRetry = true
     /** True only while the initial recording handoff is starting; not restored after process death. */
     internal var liveRewindPending = false
@@ -536,6 +539,20 @@ class PlayerViewModel @Inject constructor(
 
     suspend fun savePosition(id: Long, position: Long) {
         playerRepository.saveVideoPosition(VideoPosition(id, position))
+    }
+
+    fun loadVideoStoryboard(networkLibrary: String?, animatedPreviewUrl: String?) {
+        if (videoStoryboard.value != null || videoStoryboardJob?.isActive == true) return
+        val url = VideoStoryboard.infoUrl(animatedPreviewUrl) ?: return
+        videoStoryboardJob = viewModelScope.launch {
+            try {
+                videoStoryboard.value = playerRepository.loadVideoStoryboard(networkLibrary, url)
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                // Storyboards are optional and unavailable for some processing/private VoDs.
+            }
+        }
     }
 
     fun loadGamesList(videoId: String?, networkLibrary: String?, gqlHeaders: Map<String, String>, enableIntegrity: Boolean) {

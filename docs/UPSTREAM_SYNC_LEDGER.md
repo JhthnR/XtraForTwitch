@@ -6,12 +6,49 @@ decisions lives in [`UPSTREAM_SYNC.md`](UPSTREAM_SYNC.md). The 1.2-cycle ledger
 ([`RELEASE_1_2_UPSTREAM_COMMITS.md`](RELEASE_1_2_UPSTREAM_COMMITS.md)) is frozen history;
 new audits go here.
 
+## October 22, 2026: TV device-code sign-in adaptation
+
+Audited razeNFR/XtraATV at `25b4a606f2768eb4ee2532f3570ce689bdd84d4c`, including
+its `TvLoginScreen.kt` account-method presentation. Kept native views, existing
+scopes, browser flow and storage instead of its Compose/account rewrite. Added a
+TV entry, local QR, expiry/retry and guarded manual checks to the existing grant.
+The canonical activation route and response timing follow
+[Twitch's device-code grant documentation](https://dev.twitch.tv/docs/authentication/getting-tokens-oauth/#device-code-grant-flow).
+QR encoding uses [ZXing core 3.5.4](https://github.com/zxing/zxing/releases/tag/zxing-3.5.4)
+(Apache 2.0); no external QR service. Real account/device authorization remains
+human QA, not an automated test claim.
+
+## October 22, 2026: bounded live recovery adaptation
+
+Audited thiscallnet/Xtra's background recovery and network/frame-preservation
+work ([#469](https://github.com/thiscallnet/Xtra/pull/469), merge
+`2d5302f0f3680b4982720be21a5acde0951b580d`; [#471](https://github.com/thiscallnet/Xtra/pull/471),
+merge `07f7eebbc5936c25fff62d0d9ff0b01155ccf04a`; locally retained donor
+`PlaybackService.kt`). Implemented a
+small service-owned recovery listener rather than its broad service/proxy rewrite.
+Retry count, offline wait and buffering are bounded. Stable playback resets the
+budget; pause/switch/close/Cast cancel work. The implementation follows
+[Media3 player event ordering and retry guidance](https://developer.android.com/media/media3/exoplayer/listening-to-player-events)
+and its [error codes](https://developer.android.com/reference/androidx/media3/common/PlaybackException).
+The optional legacy backend is outside this port.
+
+## October 22, 2026: optional PiP chat adaptation
+
+Adapted the interaction from [thiscallnet/Xtra #520](https://github.com/thiscallnet/Xtra/pull/520),
+merge `daf8eab52a280a2d8aecc6117e5ec7c427940273`. Retained ThystTV's existing
+RecyclerView chat, player surface, controls, fold geometry and draft state;
+did not import the donor's canvas renderer or player rewrite. The option defaults
+off. Portrait local live chat uses system PiP with guarded eligibility, a composite
+source hint and read-only message presentation. [Android PiP guidance](https://developer.android.com/develop/ui/views/picture-in-picture)
+informs the early request updates and non-video resize behavior.
+
 ## Latest audit
 
-- **Date checked:** 2026-10-04; crackededed rechecked 2026-10-10
+- **Date checked:** 2026-10-04; crackededed rechecked 2026-10-10 and 2026-10-20
 - **Branches:** stacked `xtra-ports/1-notifications` → `2-rewards` → `3-quality` → `4-rewind`, based on `e8cbd77cb9f875ed2e4b777684065278bc766060`
 - **crackededed/Xtra:** `9f8043e8bdf45e8a2b2bf4cecfa74dc1de8ae0a3`; rechecked at
   `a3cbb0325f3330573a6738f7d36a2c5b785f4d1c` ([October 10 recheck](#october-10-2026-crackededed-recheck))
+  and `96772030c7712581ad150c9b8b619c77a3527e50` ([October 20 recheck](#october-20-2026-crackededed-recheck))
 - **thiscallnet/Xtra:** `fbffe567381dfca9970860e2976ab0021c2602eb`
 - **Disposition:** bounded manual feature ports, unreleased; the configured local
   Android build/test/lint gates passed. Hosted CI and device QA are separate gates. See [October intake](#october-4-2026-feature-intake-unreleased)
@@ -297,3 +334,51 @@ All ten crackededed commits after the September audit endpoint `cadfb8b7c`, thro
 | `38e4c9b5d` Play Services Cronet provider | Deferred: dependency and network-provider change. |
 | `e3b8244e7` HTTP proxy fixes | Deferred with proxy compatibility work. |
 | `40b701ede` player fixes | Deferred: ad proxy/video-swap timing in upstream's playback service. Delaying the un-hide until ad segments end may be revisited with live ad QA. |
+
+## October 20, 2026 crackededed recheck
+
+All three crackededed commits after `a3cbb0325`, through
+`96772030c7712581ad150c9b8b619c77a3527e50`, were checked against master `ae3b1c6c7`.
+
+| Commit | Disposition |
+| --- | --- |
+| `b24b45c7b85b01d85d284eb51dbb964a8d3eea5d` fix crash on player showStatusBar | Ported: `showStatusBar()`/`hideStatusBar()` skip the window call once the player fragment is detached. |
+| `96772030c7712581ad150c9b8b619c77a3527e50` update channel point query | Ported: `ChannelPointsContext` uses the new persisted-query hash and sends `includeGoalTypes`. On 2026-10-20 Twitch still answered both hashes with the same balance shape, so this is preventive. The build-version hunk is N/A. |
+| `0497f3d2ca9085abd72102b609d3c6ef838bfee6` fix unlisted video qualities | N/A: ThystTV already skips only `FR_CODEC_NOT_REQUESTED`/`FR_DUALFORMAT_INCOMPATIBLE` (`isSkippedUnavailableReason`) and keeps blank variant attributes null. |
+
+Upstream moved Media3 to 1.11.x (`e08e2b3c2`, `61b165e99`, `8814b5bb2`). Its maintainer
+reported in [crackededed/Xtra#1009](https://github.com/crackededed/Xtra/issues/1009)
+that the update broke its old service. Commit
+[`9a919bfa06a2efd32bb4c5d1b72e0ec96d2f9dea`](https://github.com/crackededed/Xtra/commit/9a919bfa06a2efd32bb4c5d1b72e0ec96d2f9dea)
+removed `Media3Fragment`/`PlaybackService` and retained the direct-bound
+`ExoPlayerService`. ThystTV's **default** is the affected Media3 session path;
+`DEBUG_USE_CUSTOM_PLAYBACK_SERVICE=true` selects the direct-bound alternative.
+An isolated upgrade must retest the default first. Do not import the broad service
+removal or change the default based only on upstream's result.
+
+## October 21, 2026 isolated Media3 adaptation
+
+The performance stack evaluates 1.11.1 without importing upstream's service
+removal. Default-service emulator testing reproduced a black VoD surface while
+the service position advanced. Media3 1.11.1's old `Callback.onConnect` default
+is a placeholder; ThystTV had copied its empty player permissions. The narrow
+adaptation uses controller-aware `onConnectAsync` defaults and retains existing
+custom commands for trusted controllers. The same public VoD and current live
+video then rendered, with quality changes and minimize/restore working.
+
+The custom HLS parser adapts the new model signatures, retains stable identities,
+preserves initialization maps across updates, and treats missing/invalid JSON
+frame rates as unknown. Content steering remains outside this port. Parser and
+connection regressions have focused coverage; see [testing evidence](TESTING.md)
+and [required device QA](MANUAL_QA.md). No broad service/lifecycle migration or
+default-backend change is included.
+
+## October 21, 2026 Cast adaptation
+
+Inspected [thiscallnet/Xtra#481](https://github.com/thiscallnet/Xtra/pull/481),
+merged as `c45058ebe80258b90f2dfdc424c19fe95fbba4d1`, and Spider19996/Xtra_Cast at
+`f3d0edc2c2cdbfebe200369f83b9e60f1b0d293b`. Adapted the official Media3 CastPlayer
+approach in the default session backend, with an optional route button, configured
+source retention and local-only download handling. No donor notification/service
+rewrite, ad behavior or retry machinery was imported. See PLAYER.md and
+MANUAL_QA.md for receiver limits and the required hardware matrix.

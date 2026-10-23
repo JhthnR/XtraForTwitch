@@ -67,28 +67,6 @@
         <item>4</item>
     </string-array>
 
-    <string-array name="imageLibraryEntries">
-        <item>@string/imageLibraryEntries1</item>
-        <item>@string/imageLibraryEntries2</item>
-        <item>@string/imageLibraryEntries3</item>
-    </string-array>
-
-    <string-array name="imageLibraryValues">
-        <item>0</item>
-        <item>1</item>
-        <item>2</item>
-    </string-array>
-
-    <string-array name="imageLibraryEntriesNoWebp">
-        <item>@string/imageLibraryEntries2</item>
-        <item>@string/imageLibraryEntries3</item>
-    </string-array>
-
-    <string-array name="imageLibraryValuesNoWebp">
-        <item>1</item>
-        <item>2</item>
-    </string-array>
-
     <string-array name="spinnerStorage">
         <item>@string/shared_storage</item>
         <item>@string/app_storage</item>

@@ -2,6 +2,7 @@ package com.github.andreyasadchy.xtra.ui.chat
 
 import android.content.ContentResolver
 import android.content.Context
+import android.os.SystemClock
 import android.util.Base64
 import android.util.JsonReader
 import android.util.JsonToken
@@ -111,6 +112,7 @@ class ChatViewModel @Inject constructor(
     private var loadedUserEmotes = false
     val localTwitchEmotes = mutableListOf<TwitchEmote>()
     val thirdPartyEmotes = mutableListOf<Emote>()
+    val thirdPartyEmoteIndex = EmoteNameIndex()
     val globalBadges = mutableListOf<TwitchBadge>()
     val channelBadges = mutableListOf<TwitchBadge>()
     val cheerEmotes = mutableListOf<CheerEmote>()
@@ -136,7 +138,7 @@ class ChatViewModel @Inject constructor(
     val namePaints = mutableListOf<NamePaint>()
     val stvBadges = mutableListOf<StvBadge>()
     val personalEmoteSets = mutableMapOf<String, List<Emote>>()
-    val stvUsers = mutableListOf<StvUser>()
+    val stvUsers = HashMap<String, StvUser>()
     var channelStvEmoteSetId: String? = null
     var userStvEmoteSetId: String? = null
     val translateAllMessages = MutableStateFlow<Boolean?>(null)
@@ -146,21 +148,21 @@ class ChatViewModel @Inject constructor(
     val hidePoll = MutableStateFlow(false)
     val hidePrediction = MutableStateFlow(false)
 
-    val newMessage = MutableSharedFlow<Triple<ChatMessage, Int, Int>>()
-    val addMessages = MutableSharedFlow<Pair<List<ChatMessage>, Int>>()
-    val removeMessages = MutableSharedFlow<Int>()
+    /** Set by [ChatFragment] while its view exists. Called on the main thread right after [chatMessages] changes. */
+    var messageListener: ((List<ChatMessageStore.Change>) -> Unit)? = null
     val updateUserMessages = MutableSharedFlow<String>()
     val userEmotesUpdated = MutableSharedFlow<Unit>()
     val thirdPartyEmotesUpdated = MutableSharedFlow<Unit>()
 
-    private var messageLimit = 600
-    val chatMessages = mutableListOf<ChatMessage>()
+    private val messageStore = ChatMessageStore()
+    private var lastMessageDrain = 0L
+    val chatMessages: List<ChatMessage> = messageStore.messages
     val autoCompleteList = mutableListOf<Any?>()
     private val chatters = ConcurrentHashMap<String, Chatter>()
 
     fun startLive(networkLibrary: String?, channelId: String?, channelLogin: String?, channelName: String?, streamId: String?) {
         if (chatReadIRC == null && chatReadWebSocket == null && eventSub == null && channelLogin != null) {
-            messageLimit = applicationContext.prefs().getInt(C.CHAT_LIMIT, 600)
+            messageStore.limit = applicationContext.prefs().getInt(C.CHAT_LIMIT, 600)
             this.streamId = streamId
             startLiveChat(channelId, channelLogin)
             addChatter(channelName)
@@ -179,7 +181,7 @@ class ChatViewModel @Inject constructor(
 
     fun startReplay(channelId: String?, channelLogin: String?, chatUrl: String? = null, videoId: String? = null, startTime: Int = 0, getCurrentPosition: () -> Long?, getCurrentSpeed: () -> Float?) {
         if (chatReplayManager == null && chatReplayManagerLocal == null) {
-            messageLimit = applicationContext.prefs().getInt(C.CHAT_LIMIT, 600)
+            messageStore.limit = applicationContext.prefs().getInt(C.CHAT_LIMIT, 600)
             startReplayChat(videoId, startTime, chatUrl, getCurrentPosition, getCurrentSpeed, channelId, channelLogin)
             if (videoId != null) {
                 loadEmotes(channelId, channelLogin)
@@ -193,9 +195,24 @@ class ChatViewModel @Inject constructor(
         }
     }
 
+    fun onNetworkLost() {
+        // An active retry/connect job is not a working connection. Make restoration
+        // eligible to reconnect without waiting for that job's socket timeout.
+        chatReadJob?.cancel()
+        chatWriteJob?.cancel()
+        pubSubJob?.cancel()
+        stvEventApiJob?.cancel()
+        stopLiveChat()
+    }
+
     fun resumeReplay(channelId: String?, channelLogin: String?, chatUrl: String?, videoId: String?, startTime: Int, getCurrentPosition: () -> Long?, getCurrentSpeed: () -> Float?) {
         if (chatReplayManager?.isActive == false || chatReplayManagerLocal?.isActive == false) {
             startReplayChat(videoId, startTime, chatUrl, getCurrentPosition, getCurrentSpeed, channelId, channelLogin)
+            // Playback can remain READY through PiP/background, without another state event.
+            // Wait for the existing READY hook if the controller's position is not known yet.
+            if (getCurrentPosition() != null) {
+                startReplayChatLoad()
+            }
         }
     }
 
@@ -219,6 +236,7 @@ class ChatViewModel @Inject constructor(
         val enableIntegrity = applicationContext.prefs().getBoolean(C.ENABLE_INTEGRITY, false)
         synchronized(thirdPartyEmotes) {
             thirdPartyEmotes.clear()
+            thirdPartyEmoteIndex.rebuild(thirdPartyEmotes)
         }
         val saved = savedGlobalBadges
         if (!saved.isNullOrEmpty()) {
@@ -256,6 +274,7 @@ class ChatViewModel @Inject constructor(
                 synchronized(thirdPartyEmotes) {
                     thirdPartyEmotes.addAll(saved)
                     thirdPartyEmotes.sortBy { it.source }
+                    thirdPartyEmoteIndex.rebuild(thirdPartyEmotes)
                 }
                 if (!reloadMessages.value) {
                     reloadMessages.value = true
@@ -278,6 +297,7 @@ class ChatViewModel @Inject constructor(
                             synchronized(thirdPartyEmotes) {
                                 thirdPartyEmotes.addAll(emotes)
                                 thirdPartyEmotes.sortBy { it.source }
+                                thirdPartyEmoteIndex.rebuild(thirdPartyEmotes)
                             }
                             if (!reloadMessages.value) {
                                 reloadMessages.value = true
@@ -306,6 +326,7 @@ class ChatViewModel @Inject constructor(
                             synchronized(thirdPartyEmotes) {
                                 thirdPartyEmotes.addAll(emotes)
                                 thirdPartyEmotes.sortBy { it.source }
+                                thirdPartyEmoteIndex.rebuild(thirdPartyEmotes)
                             }
                             if (!reloadMessages.value) {
                                 reloadMessages.value = true
@@ -330,6 +351,7 @@ class ChatViewModel @Inject constructor(
                 synchronized(thirdPartyEmotes) {
                     thirdPartyEmotes.addAll(saved)
                     thirdPartyEmotes.sortBy { it.source }
+                    thirdPartyEmoteIndex.rebuild(thirdPartyEmotes)
                 }
                 if (!reloadMessages.value) {
                     reloadMessages.value = true
@@ -352,6 +374,7 @@ class ChatViewModel @Inject constructor(
                             synchronized(thirdPartyEmotes) {
                                 thirdPartyEmotes.addAll(emotes)
                                 thirdPartyEmotes.sortBy { it.source }
+                                thirdPartyEmoteIndex.rebuild(thirdPartyEmotes)
                             }
                             if (!reloadMessages.value) {
                                 reloadMessages.value = true
@@ -377,6 +400,7 @@ class ChatViewModel @Inject constructor(
                             synchronized(thirdPartyEmotes) {
                                 thirdPartyEmotes.addAll(emotes)
                                 thirdPartyEmotes.sortBy { it.source }
+                                thirdPartyEmoteIndex.rebuild(thirdPartyEmotes)
                             }
                             if (!reloadMessages.value) {
                                 reloadMessages.value = true
@@ -401,6 +425,7 @@ class ChatViewModel @Inject constructor(
                 synchronized(thirdPartyEmotes) {
                     thirdPartyEmotes.addAll(saved)
                     thirdPartyEmotes.sortBy { it.source }
+                    thirdPartyEmoteIndex.rebuild(thirdPartyEmotes)
                 }
                 if (!reloadMessages.value) {
                     reloadMessages.value = true
@@ -423,6 +448,7 @@ class ChatViewModel @Inject constructor(
                             synchronized(thirdPartyEmotes) {
                                 thirdPartyEmotes.addAll(emotes)
                                 thirdPartyEmotes.sortBy { it.source }
+                                thirdPartyEmoteIndex.rebuild(thirdPartyEmotes)
                             }
                             if (!reloadMessages.value) {
                                 reloadMessages.value = true
@@ -448,6 +474,7 @@ class ChatViewModel @Inject constructor(
                             synchronized(thirdPartyEmotes) {
                                 thirdPartyEmotes.addAll(emotes)
                                 thirdPartyEmotes.sortBy { it.source }
+                                thirdPartyEmoteIndex.rebuild(thirdPartyEmotes)
                             }
                             if (!reloadMessages.value) {
                                 reloadMessages.value = true
@@ -619,19 +646,8 @@ class ChatViewModel @Inject constructor(
                         list.add(it)
                     }
                 }
-                if (list.isNotEmpty()) {
-                    synchronized(chatMessages) {
-                        val left = messageLimit - chatMessages.size
-                        if (left > 0) {
-                            val items = list.takeLast(left)
-                            chatMessages.addAll(0, items)
-                            Pair(items, chatMessages.lastIndex)
-                        } else null
-                    }.let {
-                        if (it != null) {
-                            addMessages.emit(it)
-                        }
-                    }
+                if (list.isNotEmpty() && messageStore.prepend(list)) {
+                    scheduleMessageDrain()
                 }
             } catch (e: Exception) {
 
@@ -675,24 +691,30 @@ class ChatViewModel @Inject constructor(
         )
     }
 
-    suspend fun onMessage(message: ChatMessage) {
-        synchronized(chatMessages) {
-            chatMessages.add(message)
-            val removeCount = if (chatMessages.size > messageLimit) {
-                chatMessages.size - messageLimit
-            } else 0
-            if (newMessage.subscriptionCount.value > 0) {
-                Triple(message, chatMessages.lastIndex, removeCount)
-            } else {
-                if (removeCount > 0) {
-                    repeat(removeCount) {
-                        chatMessages.removeAt(0)
-                    }
-                }
-                null
+    fun onMessage(message: ChatMessage) {
+        if (messageStore.append(message)) {
+            scheduleMessageDrain()
+        }
+    }
+
+    private fun clearChatMessages() {
+        if (messageStore.clear()) {
+            scheduleMessageDrain()
+        }
+    }
+
+    /** Applies queued message changes on the main thread, at most once per [MESSAGE_BATCH_MS] while chat is busy. */
+    private fun scheduleMessageDrain() {
+        viewModelScope.launch(Dispatchers.Main) {
+            val wait = lastMessageDrain + MESSAGE_BATCH_MS - SystemClock.uptimeMillis()
+            if (wait > 0) {
+                delay(wait)
             }
-        }?.let {
-            newMessage.emit(it)
+            lastMessageDrain = SystemClock.uptimeMillis()
+            val changes = messageStore.drain()
+            if (changes.isNotEmpty()) {
+                messageListener?.invoke(changes)
+            }
         }
     }
 
@@ -812,42 +834,54 @@ class ChatViewModel @Inject constructor(
     fun stopLiveChat() {
         if (started) {
             started = false
+            // Cleanup runs asynchronously; it must never read a replacement session.
+            val chatReadIRC = this.chatReadIRC
+            val chatReadWebSocket = this.chatReadWebSocket
+            val eventSub = this.eventSub
+            val chatReadJob = this.chatReadJob
+            val chatWriteIRC = this.chatWriteIRC
+            val chatWriteWebSocket = this.chatWriteWebSocket
+            val chatWriteJob = this.chatWriteJob
+            val hermesWebSocket = this.hermesWebSocket
+            val pubSubJob = this.pubSubJob
+            val stvEventApi = this.stvEventApi
+            val stvEventApiJob = this.stvEventApiJob
             if (chatReadIRC != null) {
                 MainScope().launch(Dispatchers.IO) {
-                    chatReadIRC?.disconnect(chatReadJob)
+                    chatReadIRC.disconnect(chatReadJob)
                 }
             } else {
                 if (chatReadWebSocket != null) {
                     MainScope().launch(Dispatchers.IO) {
-                        chatReadWebSocket?.disconnect(chatReadJob)
+                        chatReadWebSocket.disconnect(chatReadJob)
                     }
                 } else {
                     if (eventSub != null) {
                         MainScope().launch(Dispatchers.IO) {
-                            eventSub?.disconnect(chatReadJob)
+                            eventSub.disconnect(chatReadJob)
                         }
                     }
                 }
             }
             if (chatWriteIRC != null) {
                 MainScope().launch(Dispatchers.IO) {
-                    chatWriteIRC?.disconnect(chatWriteJob)
+                    chatWriteIRC.disconnect(chatWriteJob)
                 }
             } else {
                 if (chatWriteWebSocket != null) {
                     MainScope().launch(Dispatchers.IO) {
-                        chatWriteWebSocket?.disconnect(chatWriteJob)
+                        chatWriteWebSocket.disconnect(chatWriteJob)
                     }
                 }
             }
             if (hermesWebSocket != null) {
                 MainScope().launch(Dispatchers.IO) {
-                    hermesWebSocket?.disconnect(pubSubJob)
+                    hermesWebSocket.disconnect(pubSubJob)
                 }
             }
             if (stvEventApi != null) {
                 MainScope().launch(Dispatchers.IO) {
-                    stvEventApi?.disconnect(stvEventApiJob)
+                    stvEventApi.disconnect(stvEventApiJob)
                 }
             }
         }
@@ -869,16 +903,8 @@ class ChatViewModel @Inject constructor(
         predictionClosed = true
         predictionSecondsLeft.value = null
         predictionTimer?.cancel()
-        viewModelScope.launch {
-            synchronized(chatMessages) {
-                val size = chatMessages.size
-                chatMessages.clear()
-                size
-            }.let {
-                removeMessages.emit(it)
-            }
-            onMessage(ChatMessage(systemMsg = ContextCompat.getString(applicationContext, R.string.disconnected)))
-        }
+        clearChatMessages()
+        onMessage(ChatMessage(systemMsg = ContextCompat.getString(applicationContext, R.string.disconnected)))
         if (!hideRaid.value) {
             hideRaid.value = true
         }
@@ -935,9 +961,7 @@ class ChatViewModel @Inject constructor(
                 val chatMessage = result.first
                 val targetId = result.second
                 val deletedMessage = targetId?.let { targetId ->
-                    synchronized(chatMessages) {
-                        chatMessages.find { it.id == targetId }
-                    }
+                    messageStore.find { it.id == targetId }
                 }
                 val clearMessage = getClearMessage(chatMessage, deletedMessage, nameDisplay)
                 onMessage(clearMessage)
@@ -1322,6 +1346,7 @@ class ChatViewModel @Inject constructor(
                         synchronized(thirdPartyEmotes) {
                             thirdPartyEmotes.removeAll { it.name in removedEmotes }
                             thirdPartyEmotes.addAll(newEmotes)
+                            thirdPartyEmoteIndex.rebuild(thirdPartyEmotes)
                         }
                         if (!reloadMessages.value) {
                             reloadMessages.value = true
@@ -1384,14 +1409,14 @@ class ChatViewModel @Inject constructor(
                     is StvEventApiUtils.Entitlement.Paint -> {
                         if (showNamePaints) {
                             synchronized(stvUsers) {
-                                val user = stvUsers.find { it.userId == result.userId }
+                                val user = stvUsers[result.userId]
                                 if (user != null) {
                                     if (user.paintId != result.paintId) {
                                         user.paintId = result.paintId
                                         true
                                     } else false
                                 } else {
-                                    stvUsers.add(StvUser(
+                                    stvUsers.put(result.userId, StvUser(
                                         userId = result.userId,
                                         paintId = result.paintId
                                     ))
@@ -1407,14 +1432,14 @@ class ChatViewModel @Inject constructor(
                     is StvEventApiUtils.Entitlement.Badge -> {
                         if (showStvBadges) {
                             synchronized(stvUsers) {
-                                val user = stvUsers.find { it.userId == result.userId }
+                                val user = stvUsers[result.userId]
                                 if (user != null) {
                                     if (user.badgeId != result.badgeId) {
                                         user.badgeId = result.badgeId
                                         true
                                     } else false
                                 } else {
-                                    stvUsers.add(StvUser(
+                                    stvUsers.put(result.userId, StvUser(
                                         userId = result.userId,
                                         badgeId = result.badgeId
                                     ))
@@ -1430,14 +1455,14 @@ class ChatViewModel @Inject constructor(
                     is StvEventApiUtils.Entitlement.EmoteSet -> {
                         if (showPersonalEmotes) {
                             synchronized(stvUsers) {
-                                val user = stvUsers.find { it.userId == result.userId }
+                                val user = stvUsers[result.userId]
                                 if (user != null) {
                                     if (user.emoteSetId != result.setId) {
                                         user.emoteSetId = result.setId
                                         true
                                     } else false
                                 } else {
-                                    stvUsers.add(StvUser(
+                                    stvUsers.put(result.userId, StvUser(
                                         userId = result.userId,
                                         emoteSetId = result.setId
                                     ))
@@ -2361,13 +2386,7 @@ class ChatViewModel @Inject constructor(
         }
 
         override suspend fun clearMessages() {
-            synchronized(chatMessages) {
-                val size = chatMessages.size
-                chatMessages.clear()
-                size
-            }.let {
-                removeMessages.emit(it)
-            }
+            clearChatMessages()
         }
 
         override suspend fun getIntegrityToken() {
@@ -2782,6 +2801,7 @@ class ChatViewModel @Inject constructor(
                 synchronized(thirdPartyEmotes) {
                     thirdPartyEmotes.clear()
                     thirdPartyEmotes.addAll(emotes)
+                    thirdPartyEmoteIndex.rebuild(thirdPartyEmotes)
                 }
                 if (emotes.isEmpty()) {
                     viewModelScope.launch {
@@ -2843,6 +2863,8 @@ class ChatViewModel @Inject constructor(
     }
 
     companion object {
+        private const val MESSAGE_BATCH_MS = 100L
+
         private var savedEmoteSets: List<String>? = null
         private var savedUserEmotes: List<TwitchEmote>? = null
         private var savedGlobalBadges: List<TwitchBadge>? = null

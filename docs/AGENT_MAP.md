@@ -14,12 +14,17 @@ Read:
 
 - `docs/ROADMAP.md`
 - `docs/release-notes/1.4.0.md`
+- `docs/release-notes/1.5.0.md` (candidate; publication remains gated)
 - `CHANGELOG.md`
 
 The published release is 1.4.0. It adds the October Xtra feature
 ports (notifications, rewards, quality, live rewind), free pinch zoom,
 spoiler-free VoDs and a half-folded layout for foldables. Keep player lifecycle and experimental Twitch sync work
 separate. Follow `RELEASE_PROCESS.md` when preparing the next release.
+
+The 1.5.0/code 15 candidate adds VoD seek previews, chat/performance work, bounded
+recovery, optional PiP chat, TV phone sign-in and experimental, default-off Cast.
+Physical Cast/TV checks and exact signed-candidate approval remain separate gates.
 
 ## Contribution And Style Conventions
 
@@ -33,10 +38,15 @@ If more code-style rules are needed later, add `docs/CONVENTIONS.md` in a separa
 
 ### Android App
 
+- Startup/profile tooling: `baselineprofile/README.md`; generated ART rules under
+  `app/src/main/generated/baselineProfiles/`. Tooling APKs use a separate `.benchmark` ID.
 - App module: `app/`
 - Build config: `app/build.gradle.kts`
 - Main activity / app-level player entry point: `app/src/main/java/com/github/andreyasadchy/xtra/ui/main/MainActivity.kt`
 - TV focus routing: `ui/main/TvNavigationFocus.kt`, `ui/player/PlayerTvFocus.kt` and `util/TvUi.kt` under the app's Kotlin package.
+- Device-code sign-in: `ui/login/LoginActivity.kt`, `DeviceCodeLoginController.kt`,
+  `DeviceCodeContentLayout.kt` and `DeviceCodeQr.kt`; adaptive
+  `view_device_code_login.xml`, existing `AuthRepository` and token validation/storage.
 - Player area: `app/src/main/java/com/github/andreyasadchy/xtra/ui/player/`
 - Chat/floating chat area: `app/src/main/java/com/github/andreyasadchy/xtra/ui/chat/`
 - Stats area: `app/src/main/java/com/github/andreyasadchy/xtra/ui/stats/`

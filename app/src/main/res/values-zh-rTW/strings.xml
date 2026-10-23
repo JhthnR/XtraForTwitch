@@ -396,10 +396,6 @@
     <string name="remove_bookmark">移除書籤</string>
     <string name="saved">已儲存</string>
     <string name="refresh">重新整理</string>
-    <string name="image_library">圖片庫</string>
-    <string name="imageLibraryEntries1">Coil</string>
-    <string name="imageLibraryEntries2">Coil + Glide WebP</string>
-    <string name="imageLibraryEntries3">Glide</string>
     <string name="disabled">已禁用</string>
     <string name="live_target_offset">實況目標偏移量</string>
     <string name="buffer_for_playback">播放緩衝區</string>

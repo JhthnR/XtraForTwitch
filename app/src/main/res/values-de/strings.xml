@@ -396,10 +396,6 @@
     <string name="remove_bookmark">Lesezeichen entfernen</string>
     <string name="saved">Gespeichert</string>
     <string name="refresh">Aktualisieren</string>
-    <string name="image_library">Bildbibliothek</string>
-    <string name="imageLibraryEntries1">Spule</string>
-    <string name="imageLibraryEntries2">Spule + Gleiten WebP</string>
-    <string name="imageLibraryEntries3">Gleiten</string>
     <string name="disabled">Deaktiviert</string>
     <string name="live_target_offset">Offset zur Live-Wiedergabe</string>
     <string name="buffer_for_playback">Buffer für Wiedergabe</string>

@@ -15,6 +15,79 @@ Agents should mark **Required** when a human should test an area. Mark **Complet
 
 ## Checklist
 
+### 1.5.0 release candidate
+
+On October 23 the maintainer reported that mobile testing of the earlier 1.5
+debug candidate works. This is general phone smoke evidence; the report did not
+identify a device, certify every scenario below, or test the final signed APK.
+Cast and physical TV hardware are unavailable. Cast is labelled experimental and
+both Cast and Keep casting after closing the app remain off by default.
+
+Required on the exact signed 1.5.0 candidate:
+
+- [ ] Upgrade official 1.4.0 and preserve accounts, settings, Stats, bookmarks and
+  downloads. Cold-start while signed in and offline: open Saved, Bookmarks and
+  Downloads, then restore networking and retry.
+- [ ] Live/VoD playback, stream switching without old audio, minimize/restore,
+  close/reopen, PiP/background, speed/quality, gestures and floating chat.
+- [ ] Brief network loss and recovery; background VoD/clip recovery gives up
+  after its finite budget. Pause, source changes and foreground return cancel
+  stale retries.
+- [ ] Updater discovery, download, install permission and installer handover.
+- [ ] Real Cast receiver: local/remote handoff, live/VoD, disconnect, app exit
+  with keep-casting off/on, notification control and reopening/switching streams.
+- [ ] Authenticated TV phone/QR sign-in, browser fallback and physical D-pad/codec
+  behavior. The emulator and state tests do not certify hardware compatibility.
+
+### Opus review corrections (required)
+
+The [correction handoff](OPUS_REVIEW_FIXES.md) records automated checks and the
+API 36.1 emulator's short/long outage and wide PiP observations. These do not mark
+the physical-device checklist below completed.
+
+- [ ] With a service already running, change Cast off/on, close/reopen playback,
+  connect/disconnect and switch live/VoD sources. Confirm one playing owner,
+  capability-based route UI and receiver volume/speed retained across switches.
+- [ ] Return locally while buffering with keep-screen-on-when-paused enabled.
+  Check video-only PiP shape from wide/sidebar/fold layouts, then portrait chat
+  PiP from a scrolled-up chat and return to normal message following.
+- [ ] Open/close the player repeatedly and check retained fragments with a heap
+  dump; static observer tests do not measure retained heap on actual hardware.
+
+### TV device-code sign-in (required)
+
+- [ ] Use a disposable account: entering the existing login activity revokes its
+  previous login tokens. On TV, reach phone sign-in by D-pad, read the limitation,
+  cancel and continue. Browser sign-in must remain available.
+- [ ] Scan the QR on a real phone and compare the displayed activation code.
+  Authorize, choose Check sign-in, and verify account identity and features.
+- [ ] Check before approval/twice rapidly, deny/revoke the code, interrupt
+  networking, expire it while visible/hidden and request a new code. Old results
+  must not sign in a new session. Close/reopen and rotate during each request.
+- [ ] Test browser fallback, no installed browser, phone external-code flow,
+  Helix/GQL preferences, enlarged fonts, compact/wide layouts and OEM remote
+  focus. All text/actions must remain readable/reachable by scrolling.
+
+### Bounded local live recovery (required)
+
+- [ ] Interrupt/restore connectivity during live playback in foreground, PiP,
+  background and audio-only. Verify quality, speed, volume and last-frame retention.
+- [ ] Stay offline over 60s and simulate repeated transient errors/buffering.
+  Recovery must stop and allow manual retry. One observed validated return can
+  start a finite second episode; repeated flaps must not keep rearming it.
+  Healthy playback over 30s should permit another bounded recovery sequence.
+- [ ] Pause during the wait, then restore the network: no automatic playback.
+  Repeat close/reopen, switching, live/VoD transitions and sleep-timer expiry.
+  No old player may reopen or produce double audio.
+- [ ] Confirm live chat reconnects with new messages after short/long outages,
+  including signed-in read/write, notices and third-party emotes. Repeat rapid
+  loss/return, PiP/background and manual chat disconnect; old cleanup must not
+  close the new connection, and manual disconnect must stay disconnected.
+- [ ] Test ended/404, unauthorized and custom-proxy failures, including the
+  one-way fallback. Transfer to a Cast receiver during a pending wait.
+- [ ] Repeat live/VoD, minimize/restore, PiP/background, speed/quality, gestures
+  and floating chat. Check the optional legacy backend separately.
+
 ### Website presentation
 
 - [ ] On a physical phone and laptop, accept the visual layout in both themes;
@@ -212,6 +285,79 @@ behavior remain unverified; emulator results are recorded separately in
 | README/site screenshots render | [ ] | [ ] | |
 | Icon/banner assets look correct | [ ] | [ ] | |
 | No private account data exposed | [ ] | [ ] | |
+
+### Startup profiling (performance stack)
+
+- [ ] On physical hardware, compare cold startup with/without the saved profile
+  using `baselineprofile/README.md`. Record raw timings/device/API/commit and test
+  launch, navigation, first scroll and returning from background. Emulator profile
+  generation alone does not establish a speedup.
+
+### Media3 1.11.1 (performance stack)
+
+- [ ] Default session service first: visible live/VoD video and usable quality,
+  seek and speed controls. An advancing position alone cannot establish video.
+- [ ] Stream switching, minimize/restore, close/reopen, PiP/background, rotation,
+  gestures and floating chat: one current session, no stale frame/audio overlap.
+- [ ] Repeat on the direct-bound custom ExoPlayer backend; check the platform
+  MediaPlayer alternative still opens and switches correctly. Cover an older
+  Android device as well as current Android, plus TV and foldable/window changes.
+
+### Portrait live rewind (performance stack)
+
+- [ ] Portrait live player: the bottom-left rewind action opens the existing
+  recording options. Check 360dp width, 200% text, RTL, uptime/viewer count and
+  optional restart, seek-live, volume, compressor, audio-only and keyboard buttons.
+  Rotate, minimize/restore and return from recording replay; controls stay readable.
+
+### VoD seek previews (performance stack)
+
+- [ ] Finished online VoD: drag slowly, quickly and across sprite-sheet boundaries;
+  preview time follows the thumb, stays within the player at both ends and vanishes
+  on release/cancel. Playback seeks once on release as before.
+- [ ] Check compact portrait, landscape, tablet, RTL, enlarged fonts and TV D-pad.
+- [ ] Missing/processing storyboards and offline networking leave seeking usable.
+  Spoiler-free VoDs, downloads, clips, live and live rewind show no preview.
+- [ ] Minimize/restore, close/reopen, switch VoDs/live streams, rotate and enter/leave
+  PiP/background during a drag. No old preview or image request survives.
+- [ ] Live/VoD playback, speed/quality, gestures and floating chat remain usable.
+
+### Optional chat in picture-in-picture
+
+- [ ] Setting off: normal video-only PiP for live/VoD/clip on every backend.
+- [ ] Enable the option over an already running portrait live player. Home shows
+  video above readable, updating chat in a portrait PiP window. Resize, move,
+  stash, play/pause and restore; no input, emote, poll/status or scroll overlays.
+- [ ] Return with a typed draft/reply/emote panel open. Normal chat/input state
+  returns without sending or clearing the draft. Repeat entry/exit and rotate.
+- [ ] Landscape, minimized, disabled/hidden/unavailable chat, floating chat,
+  hinge-split layouts, VoD, clips and TV retain video-only PiP. Cast cannot enter
+  PiP. Test settings changes before entry and view recreation while in PiP.
+- [ ] Repeat minimize/restore, stream switching, close/reopen, background/lock,
+  speed/quality, gestures and floating chat. Check Android 8–11 manual entry and
+  Android 12+ gesture auto-entry on physical devices.
+
+### Optional Google Cast
+
+- [ ] With Cast off, default live/VoD/clip/download playback and controls match the
+  local player. With Cast enabled, test Google Play services absent/unavailable.
+- [ ] On real hardware on the same network: discover, connect, play live, VoD and
+  clip, pause, seek VoD and change speed. Check automatic receiver quality and the
+  phone's remote status. Check receiver-supported codecs and URL/header limits.
+- [ ] Switch live/live, live/VoD and VoD/live while casting. Open a download: the
+  existing receiver session must remain, with an explanation on the phone.
+- [ ] Disconnect: one local player resumes the same paused/playing VoD position
+  and speed, or the live edge, using normal quality and HTTP configuration.
+- [ ] Background/lock/restore the phone, minimize/restore, rotate, lose/recover
+  sender and receiver networks, close/reopen, close from the notification and
+  remove the task. No duplicate audio, stale route dialog or orphaned receiver.
+- [ ] Keep casting after closing the app: off (default), backing out of the app or
+  removing the task stops the receiver. On, both leave receiver playback running
+  with a working media notification (pause/play/stop); local-only playback and an
+  empty receiver session still close normally. Reopen the app and start another
+  stream: it replaces the receiver media without a second player.
+- [ ] Repeat local speed/quality, gestures, floating chat and system PiP. Cast is
+  currently supported only by the default Media3 session backend.
 
 ## Evidence
 

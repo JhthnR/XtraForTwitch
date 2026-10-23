@@ -79,6 +79,7 @@ class ChatFragment : BaseNetworkFragment(), MessageClickedDialog.OnButtonClickLi
     private val binding get() = _binding!!
     private val viewModel: ChatViewModel by viewModels()
     private var adapter: ChatAdapter? = null
+    private var pipMode = false
 
     private var isChatTouched = false
     private var showChatStatus = false
@@ -109,6 +110,7 @@ class ChatFragment : BaseNetworkFragment(), MessageClickedDialog.OnButtonClickLi
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
+        applyPipChrome()
         viewLifecycleOwner.lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
                 viewModel.integrity.collectLatest {
@@ -142,7 +144,7 @@ class ChatFragment : BaseNetworkFragment(), MessageClickedDialog.OnButtonClickLi
                     adapter = ChatAdapter(
                         messages = viewModel.chatMessages,
                         localTwitchEmotes = viewModel.localTwitchEmotes,
-                        thirdPartyEmotes = viewModel.thirdPartyEmotes,
+                        thirdPartyEmotes = viewModel.thirdPartyEmoteIndex,
                         globalBadges = viewModel.globalBadges,
                         channelBadges = viewModel.channelBadges,
                         cheerEmotes = viewModel.cheerEmotes,
@@ -171,7 +173,6 @@ class ChatFragment : BaseNetworkFragment(), MessageClickedDialog.OnButtonClickLi
                         showSystemMessageEmotes = requireContext().prefs().getBoolean(C.CHAT_SYSTEM_MESSAGE_EMOTES, true),
                         chatUrl = chatUrl,
                         getEmoteBytes = viewModel::getEmoteBytes,
-                        fragment = this@ChatFragment,
                         backgroundColor = MaterialColors.getColor(requireView(), com.google.android.material.R.attr.colorSurface),
                         dialogBackgroundColor = MaterialColors.getColor(
                             requireView(),
@@ -181,7 +182,6 @@ class ChatFragment : BaseNetworkFragment(), MessageClickedDialog.OnButtonClickLi
                                 com.google.android.material.R.attr.colorSurface
                             }
                         ),
-                        imageLibrary = requireContext().prefs().getString(C.CHAT_IMAGE_LIBRARY, "0"),
                         messageTextSize = (requireContext().prefs().getString(C.CHAT_TEXT_SIZE, "14")?.toFloatOrNull() ?: 14f) * sizeModifier,
                         emoteSize = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, (requireContext().prefs().getString(C.CHAT_EMOTE_SIZE, "29.5")?.toFloatOrNull() ?: 29.5f) * sizeModifier, resources.displayMetrics).toInt(),
                         badgeSize = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, (requireContext().prefs().getString(C.CHAT_BADGE_SIZE, "18.5")?.toFloatOrNull() ?: 18.5f) * sizeModifier, resources.displayMetrics).toInt(),
@@ -735,54 +735,8 @@ class ChatFragment : BaseNetworkFragment(), MessageClickedDialog.OnButtonClickLi
                             }
                         }
                     }
-                    viewLifecycleOwner.lifecycleScope.launch {
-                        repeatOnLifecycle(Lifecycle.State.STARTED) {
-                            viewModel.newMessage.collect { result ->
-                                val message = result.first
-                                val lastIndex = result.second
-                                val removeCount = result.third
-                                adapter?.let { adapter ->
-                                    adapter.notifyItemInserted(lastIndex)
-                                    if (removeCount > 0) {
-                                        synchronized(viewModel.chatMessages) {
-                                            repeat(removeCount) {
-                                                viewModel.chatMessages.removeAt(0)
-                                            }
-                                        }
-                                        adapter.notifyItemRangeRemoved(0, removeCount)
-                                    }
-                                    if (!isChatTouched && binding.btnDown.isGone) {
-                                        binding.recyclerView.scrollToPosition(lastIndex - removeCount)
-                                    }
-                                }
-                                messageDialog?.newMessage(message)
-                                replyDialog?.newMessage(message)
-                            }
-                        }
-                    }
-                    viewLifecycleOwner.lifecycleScope.launch {
-                        repeatOnLifecycle(Lifecycle.State.STARTED) {
-                            viewModel.addMessages.collect { result ->
-                                val messages = result.first
-                                val lastIndex = result.second
-                                adapter?.let { adapter ->
-                                    adapter.notifyItemRangeInserted(0, messages.size)
-                                    if (!isChatTouched && binding.btnDown.isGone) {
-                                        binding.recyclerView.scrollToPosition(lastIndex)
-                                    }
-                                }
-                                messageDialog?.addMessages(messages)
-                                replyDialog?.addMessages(messages)
-                            }
-                        }
-                    }
-                    viewLifecycleOwner.lifecycleScope.launch {
-                        repeatOnLifecycle(Lifecycle.State.STARTED) {
-                            viewModel.removeMessages.collect { size ->
-                                adapter?.notifyItemRangeRemoved(0, size)
-                            }
-                        }
-                    }
+                    // Set until onDestroyView, so the adapter also hears about changes made while stopped.
+                    viewModel.messageListener = ::onChatMessagesChanged
                     viewLifecycleOwner.lifecycleScope.launch {
                         repeatOnLifecycle(Lifecycle.State.STARTED) {
                             viewModel.updateUserMessages.collectLatest { userId ->
@@ -866,6 +820,38 @@ class ChatFragment : BaseNetworkFragment(), MessageClickedDialog.OnButtonClickLi
         }
     }
 
+    private fun onChatMessagesChanged(changes: List<ChatMessageStore.Change>) {
+        val adapter = adapter ?: return
+        val messageDialog = messageDialog
+        val replyDialog = replyDialog
+        var added = false
+        changes.forEach { change ->
+            when (change) {
+                is ChatMessageStore.Change.Appended -> {
+                    if (change.removedFromHead > 0) {
+                        adapter.notifyItemRangeRemoved(0, change.removedFromHead)
+                    }
+                    adapter.notifyItemRangeInserted(change.insertedAt, change.messages.size)
+                    change.messages.forEach { message ->
+                        messageDialog?.newMessage(message)
+                        replyDialog?.newMessage(message)
+                    }
+                    added = true
+                }
+                is ChatMessageStore.Change.Prepended -> {
+                    adapter.notifyItemRangeInserted(0, change.messages.size)
+                    messageDialog?.addMessages(change.messages)
+                    replyDialog?.addMessages(change.messages)
+                    added = true
+                }
+                is ChatMessageStore.Change.Cleared -> adapter.notifyItemRangeRemoved(0, change.count)
+            }
+        }
+        if (added && (pipMode || (!isChatTouched && binding.btnDown.isGone)) && adapter.itemCount > 0) {
+            binding.recyclerView.scrollToPosition(adapter.itemCount - 1)
+        }
+    }
+
     override fun onResume() {
         super.onResume()
         val args = requireArguments()
@@ -883,6 +869,35 @@ class ChatFragment : BaseNetworkFragment(), MessageClickedDialog.OnButtonClickLi
                 getCurrentPosition = (parentFragment as PlayerFragment)::getCurrentPosition,
                 getCurrentSpeed = (parentFragment as PlayerFragment)::getCurrentSpeed
             )
+        }
+    }
+
+    fun supportsPipMode() = _binding != null && adapter != null
+
+    /** Keep the existing list and drafts; PiP displays messages without chat actions. */
+    fun setPipMode(enabled: Boolean) {
+        if (pipMode == enabled) return
+        pipMode = enabled
+        applyPipChrome()
+        if (enabled) {
+            _binding?.let {
+                it.root.clearFocus()
+                val count = it.recyclerView.adapter?.itemCount ?: 0
+                if (count > 0) it.recyclerView.scrollToPosition(count - 1)
+            }
+        } else {
+            // PiP followed the newest message without a scroll-state transition.
+            // Restore normal following instead of retaining the old scrolled-up flag.
+            isChatTouched = false
+            _binding?.btnDown?.visibility = View.GONE
+        }
+    }
+
+    private fun applyPipChrome() {
+        _binding?.let {
+            it.root.firstChildOnly = pipMode
+            it.chatContentColumn.firstChildOnly = pipMode
+            it.chatViewportFrame.firstChildOnly = pipMode
         }
     }
 
@@ -1240,6 +1255,10 @@ class ChatFragment : BaseNetworkFragment(), MessageClickedDialog.OnButtonClickLi
             .show()
     }
 
+    override fun onNetworkLost() {
+        if (requireArguments().getBoolean(KEY_IS_LIVE)) viewModel.onNetworkLost()
+    }
+
     override fun onNetworkRestored() {
         if (isResumed) {
             val args = requireArguments()
@@ -1271,6 +1290,7 @@ class ChatFragment : BaseNetworkFragment(), MessageClickedDialog.OnButtonClickLi
 
     override fun onDestroyView() {
         super.onDestroyView()
+        viewModel.messageListener = null
         _binding = null
     }
 
