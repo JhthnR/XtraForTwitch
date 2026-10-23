@@ -11,8 +11,7 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.MediaSource
 import java.net.URI
 import java.net.URISyntaxException
-import java.net.InetAddress
-import java.net.UnknownHostException
+import com.google.common.net.InetAddresses
 
 /** Retains only this session's current source, including its parser/HTTP configuration. */
 @OptIn(UnstableApi::class)
@@ -51,6 +50,8 @@ internal class CastPlaybackHandoff(
             to.clearMediaItems()
             reject()
         } else {
+            // A previous rejected local-only Cast attempt must not override this newer session.
+            rejected = null
             ownedItem = from.currentMediaItem
             transferOnline(from, to)
         }
@@ -73,6 +74,8 @@ internal class CastPlaybackHandoff(
     }
 
     private fun installSource(active: Player, prepared: MediaSource) {
+        // Discard any pending fallback for an older, rejected source.
+        rejected = null
         source = prepared
         ownedItem = prepared.mediaItem
         if (active.deviceInfo.playbackType == androidx.media3.common.DeviceInfo.PLAYBACK_TYPE_REMOTE) {
@@ -114,9 +117,12 @@ internal class CastPlaybackHandoff(
             val host = try { URI(uri.toString()).host?.lowercase() } catch (_: URISyntaxException) { null } ?: return false
             if (uri.scheme?.lowercase() !in listOf("https", "http") || host.isBlank() || host == "localhost") return false
             val literal = host.removeSurrounding("[", "]")
-            // Parse numeric literals only: never resolve a hostname while building route UI.
+            // Parse numeric literals only: never invoke a DNS resolver on the main thread.
             if (':' in literal || literal.all { it.isDigit() || it == '.' }) {
-                val address = try { InetAddress.getByName(literal) } catch (_: UnknownHostException) { return false }
+                // Guava validates an IP literal without DNS; malformed numeric hosts
+                // and noncanonical integer IPv4 forms are intentionally rejected.
+                if (!InetAddresses.isInetAddress(literal)) return false
+                val address = InetAddresses.forString(literal)
                 return !address.isLoopbackAddress && !address.isAnyLocalAddress
             }
             return true
