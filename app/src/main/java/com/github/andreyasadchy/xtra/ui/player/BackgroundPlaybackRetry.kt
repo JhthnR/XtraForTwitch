@@ -1,6 +1,7 @@
 package com.github.andreyasadchy.xtra.ui.player
 
 import android.os.Handler
+import androidx.media3.common.DeviceInfo
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
@@ -21,13 +22,19 @@ internal class BackgroundPlaybackRetry(
     /** Called for every player error; [eligible] is false for live, remote and foreground playback. */
     fun onError(error: PlaybackException, eligible: Boolean) {
         cancelHealthy()
-        if (!eligible || retry != null || !LivePlaybackRecovery.isTransient(error) || attempts >= DELAYS.size) return
+        if (!eligible || !player.playWhenReady || !LivePlaybackRecovery.isTransient(error)) {
+            cancelRetry()
+            return
+        }
+        if (retry != null || attempts >= DELAYS.size) return
         val item = player.currentMediaItem ?: return
         val task = object : Runnable {
             override fun run() {
                 if (retry !== this) return
                 retry = null
-                if (player.currentMediaItem === item && player.playbackState == Player.STATE_IDLE && player.playerError != null) {
+                if (player.currentMediaItem === item && player.playWhenReady &&
+                    player.deviceInfo.playbackType != DeviceInfo.PLAYBACK_TYPE_REMOTE &&
+                    player.playbackState == Player.STATE_IDLE && player.playerError?.let { LivePlaybackRecovery.isTransient(it) } == true) {
                     player.prepare()
                 }
             }
@@ -47,12 +54,24 @@ internal class BackgroundPlaybackRetry(
         if (reason == Player.MEDIA_ITEM_TRANSITION_REASON_PLAYLIST_CHANGED) reset()
     }
 
+    override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
+        if (!playWhenReady) cancelRetry()
+    }
+
+    override fun onDeviceInfoChanged(deviceInfo: DeviceInfo) {
+        if (deviceInfo.playbackType == DeviceInfo.PLAYBACK_TYPE_REMOTE) cancelRetry()
+    }
+
     /** Drops any pending retry and restores the full budget, e.g. for a new source or foreground playback. */
     fun reset() {
         cancelHealthy()
+        cancelRetry()
+        attempts = 0
+    }
+
+    private fun cancelRetry() {
         retry?.let(handler::removeCallbacks)
         retry = null
-        attempts = 0
     }
 
     private fun cancelHealthy() {

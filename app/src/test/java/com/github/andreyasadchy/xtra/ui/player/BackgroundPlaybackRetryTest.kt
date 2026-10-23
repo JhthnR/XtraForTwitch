@@ -3,6 +3,7 @@ package com.github.andreyasadchy.xtra.ui.player
 import android.app.Application
 import android.os.Handler
 import android.os.Looper
+import androidx.media3.common.DeviceInfo
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
@@ -66,6 +67,49 @@ class BackgroundPlaybackRetryTest {
         verify(h.player, times(1)).prepare()
     }
 
+    @Test fun `paused playback does not schedule a retry`() {
+        val h = Harness()
+        h.playWhenReady = false
+        h.fail()
+        h.advance(600_000)
+        verify(h.player, never()).prepare()
+    }
+
+    @Test fun `pausing cancels a pending retry even after playback intent returns`() {
+        val h = Harness()
+        h.fail()
+        h.playWhenReady = false
+        h.retry.onPlayWhenReadyChanged(false, Player.PLAY_WHEN_READY_CHANGE_REASON_USER_REQUEST)
+        h.playWhenReady = true
+        h.retry.onPlayWhenReadyChanged(true, Player.PLAY_WHEN_READY_CHANGE_REASON_USER_REQUEST)
+        h.advance(600_000)
+        verify(h.player, never()).prepare()
+    }
+
+    @Test fun `receiver handoff cancels a pending local retry`() {
+        val h = Harness()
+        h.fail()
+        h.retry.onDeviceInfoChanged(DeviceInfo.Builder(DeviceInfo.PLAYBACK_TYPE_REMOTE).build())
+        h.advance(600_000)
+        verify(h.player, never()).prepare()
+    }
+
+    @Test fun `a permanent error cancels an older transient retry`() {
+        val h = Harness()
+        h.fail()
+        h.fail(PlaybackException.ERROR_CODE_DECODING_FAILED)
+        h.advance(600_000)
+        verify(h.player, never()).prepare()
+    }
+
+    @Test fun `ineligible playback cancels an older transient retry`() {
+        val h = Harness()
+        h.fail()
+        h.fail(eligible = false)
+        h.advance(600_000)
+        verify(h.player, never()).prepare()
+    }
+
     @Test fun `a new source or user action cancels the pending retry`() {
         val h = Harness()
         h.fail()
@@ -115,12 +159,15 @@ class BackgroundPlaybackRetryTest {
         var item: MediaItem? = MediaItem.fromUri("https://example.com/vod.m3u8")
         var state = Player.STATE_IDLE
         var error: PlaybackException? = null
+        var playWhenReady = true
         val retry: BackgroundPlaybackRetry
 
         init {
             whenever(player.currentMediaItem).thenAnswer { item }
             whenever(player.playbackState).thenAnswer { state }
             whenever(player.playerError).thenAnswer { error }
+            whenever(player.playWhenReady).thenAnswer { playWhenReady }
+            whenever(player.deviceInfo).thenReturn(DeviceInfo.Builder(DeviceInfo.PLAYBACK_TYPE_LOCAL).build())
             retry = BackgroundPlaybackRetry(player, Handler(Looper.getMainLooper()))
         }
 
