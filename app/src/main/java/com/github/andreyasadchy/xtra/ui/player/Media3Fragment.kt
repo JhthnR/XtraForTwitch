@@ -996,6 +996,19 @@ class Media3Fragment : PlayerFragment() {
 
     override fun closeSession() = closePlayback(disconnect = true)
 
+    override fun closeOnExit(keepCasting: Boolean) {
+        val controller = player
+        if (keepCasting && isRemotePlayback() && controller?.currentMediaItem != null) {
+            // Leave the receiver playing; the service and its notification keep control.
+            savePosition()
+            playerListener?.let { controller.removeListener(it) }
+            playerListener = null
+            controllerFuture?.let { MediaController.releaseFuture(it) }
+        } else {
+            closeSession()
+        }
+    }
+
     private fun closePlayback(disconnect: Boolean) {
         savePosition()
         player?.pause()

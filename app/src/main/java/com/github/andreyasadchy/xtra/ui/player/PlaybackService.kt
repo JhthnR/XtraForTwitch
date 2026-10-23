@@ -808,6 +808,9 @@ class PlaybackService : MediaSessionService() {
     }
 
     override fun onTaskRemoved(rootIntent: Intent?) {
+        mediaSession?.player?.let {
+            if (keepsCastingAfterExit(prefs().getBoolean(C.PLAYER_CAST_KEEP_ON_EXIT, false), it)) return
+        }
         savePosition()
         mediaSession?.player?.clearMediaItems()
         pauseAllPlayersAndStopSelf()
@@ -839,6 +842,11 @@ class PlaybackService : MediaSessionService() {
     }
 
     companion object {
+        /** Receiver playback survives closing the app only when the user opted in and media is actually on the receiver. */
+        fun keepsCastingAfterExit(keepCasting: Boolean, player: Player) = keepCasting &&
+            player.deviceInfo.playbackType == androidx.media3.common.DeviceInfo.PLAYBACK_TYPE_REMOTE &&
+            player.currentMediaItem != null
+
         const val START_STREAM = "startStream"
         const val START_VIDEO = "startVideo"
         const val START_CLIP = "startClip"
