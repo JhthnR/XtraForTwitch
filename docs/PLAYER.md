@@ -372,7 +372,12 @@ ThystTV retains only the current configured MediaSource for a return to local:
 VoDs preserve receiver position, speed and pause; live returns to the live edge.
 Downloads remain local, including a service-side rejection while casting. Close
 stops playback and ends the Cast session. Backgrounding the phone leaves receiver
-playback alone. Receiver quality is automatic; phone-only audio processing,
+playback alone. Finishing the app (back out or remove the task) also ends the
+session unless **Keep casting after closing the app** is on: then, while media is
+on the receiver, the fragment only releases its controller and `onTaskRemoved`
+leaves the service running, so the media notification keeps control. Reopening
+the app does not restore the player UI for that session; starting playback
+replaces the receiver media through the same service. Receiver quality is automatic; phone-only audio processing,
 track controls, live rewind discovery and system PiP are unavailable remotely.
 
 The receiver fetches the media URL directly. Phone HTTP headers/proxies are not

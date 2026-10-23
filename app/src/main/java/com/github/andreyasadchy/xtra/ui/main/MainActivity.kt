@@ -540,7 +540,7 @@ class MainActivity : AppCompatActivity() {
         connectivityManager.unregisterNetworkCallback(networkCallback)
         unregisterReceiver(pipActionReceiver)
         if (isFinishing) {
-            playerFragment?.closeSession()
+            playerFragment?.closeOnExit(prefs().getBoolean(C.PLAYER_CAST_KEEP_ON_EXIT, false))
         }
         super.onDestroy()
     }

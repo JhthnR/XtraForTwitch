@@ -11,6 +11,7 @@ All notable changes to ThystTV should be documented here.
 - Optional Chat in picture-in-picture (off by default) keeps read-only live chat beneath the video when PiP starts from the portrait player.
 - Live streams reconnect on their own after short network drops or stalls: up to three retries, waiting at most a minute for the connection to return, then a message asks you to press Play.
 - Android TV can sign in from your phone: scan the on-screen QR code or enter the code at twitch.tv/activate, then choose Check sign-in. Browser sign-in stays available.
+- Keep casting after closing the app (Player settings, off by default) leaves a Cast video playing on the receiver when you close ThystTV; control it from the media notification.
 
 ### Changed
 - Update Media3 to 1.11.1, adapting session connection permissions and Twitch HLS metadata while preserving the default playback service.

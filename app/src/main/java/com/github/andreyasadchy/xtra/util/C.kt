@@ -167,6 +167,7 @@ object C {
     const val PLAYER_PICTURE_IN_PICTURE = "player_picture_in_picture"
     const val PLAYER_PIP_CHAT = "player_pip_chat"
     const val PLAYER_CAST = "player_cast"
+    const val PLAYER_CAST_KEEP_ON_EXIT = "player_cast_keep_on_exit"
     const val PLAYER_BACKGROUND_AUDIO = "player_background_audio"
     const val PLAYER_BACKGROUND_AUDIO_LOCKED = "player_background_audio_locked"
     const val PLAYER_BACKGROUND_AUDIO_PIP_CLOSED = "player_background_audio_pip_closed"

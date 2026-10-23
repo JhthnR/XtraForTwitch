@@ -9,6 +9,15 @@
         app:iconSpaceReserved="false"
         app:singleLineTitle="false" />
 
+    <SwitchPreferenceCompat
+        android:defaultValue="false"
+        android:dependency="player_cast"
+        android:key="player_cast_keep_on_exit"
+        android:title="@string/cast_keep_on_exit"
+        android:summary="@string/cast_keep_on_exit_summary"
+        app:iconSpaceReserved="false"
+        app:singleLineTitle="false" />
+
     <PreferenceCategory
         android:title="@string/settings_group_background"
         app:iconSpaceReserved="false">

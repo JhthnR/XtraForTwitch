@@ -327,6 +327,11 @@ behavior remain unverified; emulator results are recorded separately in
 - [ ] Background/lock/restore the phone, minimize/restore, rotate, lose/recover
   sender and receiver networks, close/reopen, close from the notification and
   remove the task. No duplicate audio, stale route dialog or orphaned receiver.
+- [ ] Keep casting after closing the app: off (default), backing out of the app or
+  removing the task stops the receiver. On, both leave receiver playback running
+  with a working media notification (pause/play/stop); local-only playback and an
+  empty receiver session still close normally. Reopen the app and start another
+  stream: it replaces the receiver media without a second player.
 - [ ] Repeat local speed/quality, gestures, floating chat and system PiP. Cast is
   currently supported only by the default Media3 session backend.
 

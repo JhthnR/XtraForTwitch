@@ -308,6 +308,9 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
     open fun close() {}
     open fun closeSession() { close() }
 
+    /** Called when the activity finishes; [keepCasting] leaves active receiver playback running. */
+    open fun closeOnExit(keepCasting: Boolean) { closeSession() }
+
     private var liveRewindDiscovery: Job? = null
     private var liveRewindStartup: Job? = null
     private var liveRewindDialog: androidx.appcompat.app.AlertDialog? = null
