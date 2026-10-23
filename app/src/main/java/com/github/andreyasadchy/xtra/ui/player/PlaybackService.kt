@@ -122,6 +122,7 @@ class PlaybackService : MediaSessionService() {
     private var mediaSession: MediaSession? = null
     private var castBridge: PlayerCastBridge? = null
     private var liveRecovery: LivePlaybackRecovery? = null
+    private var backgroundRetry: BackgroundPlaybackRetry? = null
     private val networkHandler = Handler(Looper.getMainLooper())
     private var networkCallback: ConnectivityManager.NetworkCallback? = null
     private var dynamicsProcessing: DynamicsProcessing? = null
@@ -163,6 +164,7 @@ class PlaybackService : MediaSessionService() {
             Toast.makeText(this, R.string.live_recovery_exhausted, Toast.LENGTH_LONG).show()
         })
         watchRecoveryConnectivity()
+        backgroundRetry = BackgroundPlaybackRetry(player, Handler(Looper.getMainLooper())).also(player::addListener)
         player.addListener(
             object : Player.Listener {
                 override fun onIsPlayingChanged(isPlaying: Boolean) {
@@ -188,10 +190,8 @@ class PlaybackService : MediaSessionService() {
                 }
 
                 override fun onPlayerError(error: PlaybackException) {
-                    if (background && liveRecovery?.isLiveSource != true &&
-                        player.deviceInfo.playbackType != androidx.media3.common.DeviceInfo.PLAYBACK_TYPE_REMOTE) {
-                        player.prepare()
-                    }
+                    backgroundRetry?.onError(error, background && liveRecovery?.isLiveSource != true &&
+                        player.deviceInfo.playbackType != androidx.media3.common.DeviceInfo.PLAYBACK_TYPE_REMOTE)
                 }
 
                 override fun onAudioSessionIdChanged(audioSessionId: Int) {
@@ -583,6 +583,7 @@ class PlaybackService : MediaSessionService() {
                             SET_SLEEP_TIMER -> {
                                 val duration = customCommand.customExtras.getLong(DURATION)
                                 background = duration != -1L
+                                if (!background) backgroundRetry?.reset()
                                 val endTime = sleepTimerEndTime
                                 sleepTimer?.cancel()
                                 sleepTimerEndTime = 0L
@@ -817,6 +818,8 @@ class PlaybackService : MediaSessionService() {
         stopRecoveryConnectivity()
         liveRecovery?.dispose()
         liveRecovery = null
+        backgroundRetry?.reset()
+        backgroundRetry = null
         castBridge?.dispose()
         mediaSession?.run {
             player.stop()
