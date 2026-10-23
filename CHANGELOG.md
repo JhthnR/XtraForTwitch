@@ -32,6 +32,7 @@ All notable changes to ThystTV should be documented here.
 - Saved and Search tabs and channel-profile actions stay readable at 200% text size.
 - A VoD or clip playing in the background no longer retries a broken video forever. It retries network errors up to five times over about a minute, then stops.
 - Retained Cast playback is checked before opening downloads or switching player backends after app exit. Rejected starts leave receiver media intact, and phone-local URLs cannot replace a playing receiver source.
+- A rejected Cast attempt cannot restore obsolete media after a newer source or transfer takes ownership. Numeric receiver URLs are validated without DNS lookups on the UI thread.
 
 ### Release metadata
 - Version 1.5.0 uses version code 15 and retains database version 36. Scope and limitations: `docs/release-notes/1.5.0.md`.

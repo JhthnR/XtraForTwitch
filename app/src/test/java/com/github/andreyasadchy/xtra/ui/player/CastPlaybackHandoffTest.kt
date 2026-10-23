@@ -117,8 +117,11 @@ class CastPlaybackHandoffTest {
 
     @Test fun `receiver URLs require reachable online media rather than phone files or loopback`() {
         assertTrue(CastPlaybackHandoff.canCast(MediaItem.fromUri("https://example.com/live.m3u8")))
+        assertTrue(CastPlaybackHandoff.canCast(MediaItem.fromUri("http://8.8.8.8/live")))
+        assertTrue(CastPlaybackHandoff.canCast(MediaItem.fromUri("http://[2001:4860:4860::8888]/live")))
         for (uri in listOf("file:///storage/video.mp4", "content://downloads/1", "http://LOCALHOST/live", "http://localhost/live", "http://127.0.0.1/live", "http://[::1]/live",
-            "http://[0:0:0:0:0:0:0:1]/live", "http://[::ffff:127.0.0.1]/live", "http://[::]/live", "http://2130706433/live")) {
+            "http://[0:0:0:0:0:0:0:1]/live", "http://[::ffff:127.0.0.1]/live", "http://[::]/live", "http://2130706433/live",
+            "http://999.10.0.1/live", "http://256.1.1.1/live", "http://999999999/live")) {
             assertFalse(uri, CastPlaybackHandoff.canCast(MediaItem.fromUri(uri)))
         }
         assertFalse(CastPlaybackHandoff.canCast(null))
@@ -146,6 +149,37 @@ class CastPlaybackHandoffTest {
         handoff.transfer(local, remote) { fail("Nothing was playing") }
         verify(remote).clearMediaItems()
         verifyNoMoreInteractions(remote)
+    }
+
+    @Test fun `new source invalidates a rejected local-only snapshot before transfer returns`() {
+        val blocked = MediaItem.fromUri("file:///storage/old.mp4")
+        whenever(local.currentMediaItem).thenReturn(blocked)
+        whenever(local.deviceInfo).thenReturn(DeviceInfo.UNKNOWN)
+        whenever(local.playbackParameters).thenReturn(PlaybackParameters(1f))
+        handoff.transfer(local, remote) { }
+        val next = source("https://example.com/new.m3u8")
+        val nextItem = next.mediaItem
+        assertTrue(handoff.setSource(local, next))
+        whenever(remote.currentMediaItem).thenReturn(nextItem)
+        handoff.transfer(remote, local) { fail("Returning from Cast must not reject") }
+        verify(local).setMediaSource(next, 42_000L)
+        verify(local, never()).setMediaItem(eq(blocked), any<Long>())
+    }
+
+    @Test fun `successful new cast transfer invalidates a rejected old snapshot`() {
+        val blocked = MediaItem.fromUri("file:///storage/old.mp4")
+        val next = source("https://example.com/new.m3u8")
+        val nextItem = next.mediaItem
+        val handoff = CastPlaybackHandoff(local, transferOnline = { _, _ -> })
+        whenever(local.currentMediaItem).thenReturn(blocked)
+        whenever(local.playbackParameters).thenReturn(PlaybackParameters(1f))
+        handoff.transfer(local, remote) { }
+        whenever(local.currentMediaItem).thenReturn(nextItem)
+        handoff.transfer(local, remote) { fail("Online transfer must succeed") }
+        whenever(remote.currentMediaItem).thenReturn(nextItem)
+        handoff.transfer(remote, local) { fail("Return to local must not reject") }
+        verify(local).clearMediaItems()
+        verify(local, never()).setMediaItem(eq(blocked), any<Long>())
     }
 
     @Test fun `unowned receiver media is cleared on return rather than paired with stale chat`() {
