@@ -383,6 +383,19 @@ the app does not restore the player UI for that session; starting playback
 replaces the receiver media through the same service. Receiver quality is automatic; phone-only audio processing,
 track controls, live rewind discovery and system PiP are unavailable remotely.
 
+The service registers its current player independently of any activity view.
+After reopening with a retained session, downloads remain blocked while media is
+remote. Switching to another backend without an attached Media3 player is
+rejected while the service owns media, including after receiver disconnection
+returns it locally. Stop the session from its notification before switching.
+An ordinary default-backend online start continues to reuse the same service.
+
+Both route transfers and already-remote source switches apply the same URL
+eligibility policy. Local-only URLs are rejected before retained source/factory
+or receiver ownership changes. Service command rejection removes only the failed
+screen and its controller, without saving unrelated media under the new source
+or stopping the receiver. Stale results cannot discard a replacement player.
+
 The receiver fetches the media URL directly. Phone HTTP headers/proxies are not
 forwarded. Receiver codec/network compatibility needs physical Cast QA; enabling
 the sender and passing state tests do not establish receiver playback support.

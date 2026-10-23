@@ -260,13 +260,20 @@ class PlaybackService : MediaSessionService() {
             setCallback(
                 object : PlaybackSessionCallback() {
                     override fun onCustomCommand(session: MediaSession, controller: MediaSession.ControllerInfo, customCommand: SessionCommand, args: Bundle): ListenableFuture<SessionResult> {
+                        if (customCommand.customAction in SOURCE_START_COMMANDS) {
+                            bridge.configure(prefs().getBoolean(C.PLAYER_CAST, false))
+                            val item = MediaItem.Builder().setUri(customCommand.customExtras.getString(URI)).build()
+                            if (player.deviceInfo.playbackType == androidx.media3.common.DeviceInfo.PLAYBACK_TYPE_REMOTE &&
+                                (customCommand.customAction == START_OFFLINE_VIDEO || !CastPlaybackHandoff.canSetSource(player, item))) {
+                                return Futures.immediateFuture(SessionResult(androidx.media3.session.SessionError.ERROR_NOT_SUPPORTED))
+                            }
+                        }
                         return when (customCommand.customAction) {
                             END_CAST_SESSION -> {
                                 bridge.endSession()
                                 Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
                             }
                             START_STREAM -> {
-                                bridge.configure(prefs().getBoolean(C.PLAYER_CAST, false))
                                 liveRecovery?.startSource(true, customCommand.customExtras.getBoolean(CUSTOM_PROXY))
                                 val uri = customCommand.customExtras.getString(URI)
                                 val title = customCommand.customExtras.getString(TITLE)
@@ -338,7 +345,7 @@ class PlaybackService : MediaSessionService() {
                                     }.build()
                                 } else null
                                 val networkLibrary = prefs().getString(C.NETWORK_LIBRARY, "OkHttp")
-                                bridge.handoff.setSource(player,
+                                val accepted = bridge.handoff.setSource(player,
                                     HlsMediaSource.Factory(
                                         DefaultDataSource.Factory(
                                             this@PlaybackService,
@@ -390,13 +397,13 @@ class PlaybackService : MediaSessionService() {
                                         )
                                     }.build()
                                 )
+                                if (!accepted) return Futures.immediateFuture(SessionResult(androidx.media3.session.SessionError.ERROR_NOT_SUPPORTED))
                                 session.player.applyLocalPlaybackDefaults(prefs().getInt(C.PLAYER_VOLUME, 100) / 100f, 1f)
                                 session.player.prepare()
                                 session.player.playWhenReady = true
                                 Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
                             }
                             START_VIDEO -> {
-                                bridge.configure(prefs().getBoolean(C.PLAYER_CAST, false))
                                 liveRecovery?.startSource(false)
                                 val uri = customCommand.customExtras.getString(URI)
                                 val title = customCommand.customExtras.getString(TITLE)
@@ -421,7 +428,7 @@ class PlaybackService : MediaSessionService() {
                                 videoId = newId
                                 offlineVideoId = null
                                 val networkLibrary = prefs().getString(C.NETWORK_LIBRARY, "OkHttp")
-                                bridge.handoff.setSource(player,
+                                val accepted = bridge.handoff.setSource(player,
                                     HlsMediaSource.Factory(
                                         DefaultDataSource.Factory(
                                             this@PlaybackService,
@@ -453,6 +460,7 @@ class PlaybackService : MediaSessionService() {
                                         )
                                     }.build()
                                 )
+                                if (!accepted) return Futures.immediateFuture(SessionResult(androidx.media3.session.SessionError.ERROR_NOT_SUPPORTED))
                                 session.player.applyLocalPlaybackDefaults(prefs().getInt(C.PLAYER_VOLUME, 100) / 100f, prefs().getFloat(C.PLAYER_SPEED, 1f))
                                 session.player.prepare()
                                 session.player.playWhenReady = true
@@ -460,7 +468,6 @@ class PlaybackService : MediaSessionService() {
                                 Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
                             }
                             START_CLIP -> {
-                                bridge.configure(prefs().getBoolean(C.PLAYER_CAST, false))
                                 liveRecovery?.startSource(false)
                                 val uri = customCommand.customExtras.getString(URI)
                                 val title = customCommand.customExtras.getString(TITLE)
@@ -479,7 +486,7 @@ class PlaybackService : MediaSessionService() {
                                 videoId = null
                                 offlineVideoId = null
                                 val networkLibrary = prefs().getString(C.NETWORK_LIBRARY, "OkHttp")
-                                bridge.handoff.setSource(player,
+                                val accepted = bridge.handoff.setSource(player,
                                     ProgressiveMediaSource.Factory(
                                         DefaultDataSource.Factory(
                                             this@PlaybackService,
@@ -508,16 +515,13 @@ class PlaybackService : MediaSessionService() {
                                         )
                                     }.build()
                                 )
+                                if (!accepted) return Futures.immediateFuture(SessionResult(androidx.media3.session.SessionError.ERROR_NOT_SUPPORTED))
                                 session.player.applyLocalPlaybackDefaults(prefs().getInt(C.PLAYER_VOLUME, 100) / 100f, prefs().getFloat(C.PLAYER_SPEED, 1f))
                                 session.player.prepare()
                                 session.player.playWhenReady = true
                                 Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
                             }
                             START_OFFLINE_VIDEO -> {
-                                bridge.configure(prefs().getBoolean(C.PLAYER_CAST, false))
-                                if (player.deviceInfo.playbackType == androidx.media3.common.DeviceInfo.PLAYBACK_TYPE_REMOTE) {
-                                    return Futures.immediateFuture(SessionResult(androidx.media3.session.SessionError.ERROR_NOT_SUPPORTED))
-                                }
                                 bridge.handoff.clear()
                                 liveRecovery?.startSource(false)
                                 val uri = customCommand.customExtras.getString(URI)
@@ -670,6 +674,7 @@ class PlaybackService : MediaSessionService() {
                 }
             )
         }.build()
+        mediaSession?.player?.let(PlaybackSessionOwner::register)
     }
 
     private fun reinitializeDynamicsProcessing(audioSessionId: Int) {
@@ -818,6 +823,7 @@ class PlaybackService : MediaSessionService() {
     }
 
     override fun onDestroy() {
+        mediaSession?.player?.let(PlaybackSessionOwner::unregister)
         stopRecoveryConnectivity()
         liveRecovery?.dispose()
         liveRecovery = null
@@ -845,6 +851,7 @@ class PlaybackService : MediaSessionService() {
     }
 
     companion object {
+        private val SOURCE_START_COMMANDS = setOf(START_STREAM, START_VIDEO, START_CLIP, START_OFFLINE_VIDEO)
         /** Receiver playback survives closing the app only when the user opted in and media is actually on the receiver. */
         fun keepsCastingAfterExit(keepCasting: Boolean, player: Player) = keepCasting &&
             player.deviceInfo.playbackType == androidx.media3.common.DeviceInfo.PLAYBACK_TYPE_REMOTE &&

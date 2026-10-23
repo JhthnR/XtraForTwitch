@@ -13,10 +13,16 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
+import org.mockito.Mockito
 import org.mockito.kotlin.*
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.ConscryptMode
+import org.robolectric.RuntimeEnvironment
+import org.robolectric.shadows.ShadowToast
+import org.robolectric.util.ReflectionHelpers
+import com.github.andreyasadchy.xtra.R
+import com.github.andreyasadchy.xtra.ui.main.MainActivity
 
 @RunWith(RobolectricTestRunner::class)
 @Config(application = Application::class, sdk = [23, 28])
@@ -105,5 +111,30 @@ class CastCloseSessionTest {
         assertFalse(PlaybackService.keepsCastingAfterExit(false, player(true, item)))
         assertFalse(PlaybackService.keepsCastingAfterExit(true, player(false, item)))
         assertFalse(PlaybackService.keepsCastingAfterExit(true, player(true, null)))
+    }
+
+    @Test fun `rejected download clears started UI and releases controller without closing receiver`() {
+        val controller = mock<MediaController>()
+        whenever(controller.applicationLooper).thenReturn(Looper.getMainLooper())
+        val fragment = mock<Media3Fragment>(defaultAnswer = Mockito.CALLS_REAL_METHODS,
+            useConstructor = UseConstructor.parameterless())
+        val activity = mock<MainActivity>()
+        val model = mock<PlayerViewModel>()
+        val context = RuntimeEnvironment.getApplication()
+        doReturn(context).whenever(fragment).requireContext()
+        doReturn(activity).whenever(fragment).activity
+        ReflectionHelpers.setField(fragment, "viewModel\$delegate", lazyOf(model))
+        ReflectionHelpers.setField(fragment, "controllerFuture", Futures.immediateFuture(controller))
+        Media3Fragment::class.java.getDeclaredMethod("rejectSourceStart", String::class.java, Integer.TYPE).apply {
+            isAccessible = true
+        }.invoke(fragment, PlaybackService.START_OFFLINE_VIDEO, androidx.media3.session.SessionError.ERROR_NOT_SUPPORTED)
+        verify(model).started = false
+        verify(activity).discardRejectedPlayer(fragment)
+        verify(controller).release()
+        verify(controller, never()).pause()
+        verify(controller, never()).stop()
+        verify(controller, never()).clearMediaItems()
+        verify(controller, never()).currentPosition
+        assertTrue(ShadowToast.getTextOfLatestToast() == context.getString(R.string.cast_disconnect_download))
     }
 }

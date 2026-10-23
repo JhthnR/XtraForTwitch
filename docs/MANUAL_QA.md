@@ -36,6 +36,14 @@ Required on the exact signed 1.5.0 candidate:
 - [ ] Updater discovery, download, install permission and installer handover.
 - [ ] Real Cast receiver: local/remote handoff, live/VoD, disconnect, app exit
   with keep-casting off/on, notification control and reopening/switching streams.
+- [ ] Keep casting, remove the task, reopen with no player screen: a download
+  explains the rejection and leaves receiver media unchanged. Switch to each
+  alternate player backend and try live/VoD/clip/download; it must not create a
+  second owner. Repeat after receiver disconnection returns playback locally.
+- [ ] While casting valid online media, start a phone-local proxy URL (localhost,
+  IPv4/IPv6 loopback or wildcard): reject it and preserve the old receiver media.
+  Rapidly replace/close the pending screen; a late rejection must not close the
+  new player. Repeat background/restore and rotation during command completion.
 - [ ] Authenticated TV phone/QR sign-in, browser fallback and physical D-pad/codec
   behavior. The emulator and state tests do not certify hardware compatibility.
 

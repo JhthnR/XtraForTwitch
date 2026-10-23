@@ -46,6 +46,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import androidx.lifecycle.withStarted
+import androidx.lifecycle.withResumed
 import androidx.media3.common.MimeTypes
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.mediacodec.MediaCodecSelector
@@ -81,6 +82,7 @@ import com.github.andreyasadchy.xtra.ui.player.Media3Fragment
 import com.github.andreyasadchy.xtra.ui.player.MediaPlayerFragment
 import com.github.andreyasadchy.xtra.ui.player.PlayerQualityNetworkProfile
 import com.github.andreyasadchy.xtra.ui.player.PlayerFragment
+import com.github.andreyasadchy.xtra.ui.player.PlaybackSessionOwner
 import com.github.andreyasadchy.xtra.ui.team.TeamFragmentDirections
 import com.github.andreyasadchy.xtra.ui.top.TopStreamsFragmentDirections
 import com.github.andreyasadchy.xtra.util.C
@@ -858,7 +860,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     fun startOfflineVideo(video: OfflineVideo) {
-        if (playerFragment?.isRemotePlayback() == true) {
+        if (PlaybackSessionOwner.hasRemoteMedia() || playerFragment?.isRemotePlayback() == true) {
             Toast.makeText(this, R.string.cast_disconnect_download, Toast.LENGTH_LONG).show()
             return
         }
@@ -878,7 +880,14 @@ class MainActivity : AppCompatActivity() {
 //Player methods
 
     private fun startPlayer(fragment: PlayerFragment) {
-        (supportFragmentManager.findFragmentById(R.id.playerContainer) as? PlayerFragment)?.close()
+        val previous = supportFragmentManager.findFragmentById(R.id.playerContainer) as? PlayerFragment
+        // Closing a visible Media3 fragment sends asynchronous service commands.
+        // Do not start another backend until the service has actually released its media.
+        if (fragment !is Media3Fragment && PlaybackSessionOwner.hasMedia()) {
+            Toast.makeText(this, R.string.player_session_in_use, Toast.LENGTH_LONG).show()
+            return
+        }
+        previous?.close()
         playerFragment = fragment
         supportFragmentManager.beginTransaction()
             .replace(R.id.playerContainer, fragment).commit()
@@ -892,12 +901,23 @@ class MainActivity : AppCompatActivity() {
     }
 
     fun closePlayer(sourceFragment: PlayerFragment? = null) {
+        removePlayer(sourceFragment, closeSession = true)
+    }
+
+    /** A rejected start must not close the unrelated service media it found. */
+    internal fun discardRejectedPlayer(sourceFragment: Media3Fragment) {
+        lifecycleScope.launch {
+            withResumed { removePlayer(sourceFragment, closeSession = false) }
+        }
+    }
+
+    private fun removePlayer(sourceFragment: PlayerFragment?, closeSession: Boolean) {
         val currentFragment = supportFragmentManager.findFragmentById(R.id.playerContainer) as? PlayerFragment
         if (sourceFragment != null && sourceFragment !== currentFragment) {
             return
         }
         currentFragment?.let {
-            it.closeSession()
+            if (closeSession) it.closeSession()
             supportFragmentManager.beginTransaction()
                 .setTransition(FragmentTransaction.TRANSIT_FRAGMENT_FADE)
                 .remove(it)
