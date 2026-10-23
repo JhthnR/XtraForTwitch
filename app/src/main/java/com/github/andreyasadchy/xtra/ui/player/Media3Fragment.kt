@@ -64,6 +64,13 @@ class Media3Fragment : PlayerFragment() {
     private val player: MediaController?
         get() = controllerFuture?.let { if (it.isDone && !it.isCancelled) it.get() else null }
     private var playerListener: Player.Listener? = null
+    private val sourceCommands = PlayerSourceCommands(
+        isCurrent = { controller ->
+            isAdded && view != null && player === controller &&
+                (activity as? MainActivity)?.supportFragmentManager?.findFragmentById(R.id.playerContainer) === this
+        },
+        rejected = ::rejectSourceStart,
+    )
     private var castUi: PlayerCastUi? = null
     private var castUiRequest = 0
     private val updateProgressAction = Runnable { if (view != null) updateProgress() }
@@ -473,7 +480,7 @@ class Media3Fragment : PlayerFragment() {
     } == true
 
     override fun startStream(url: String?) {
-        player?.sendCustomCommand(
+        sendSourceCommand(
             SessionCommand(
                     PlaybackService.START_STREAM, bundleOf(
                         PlaybackService.CUSTOM_PROXY to viewModel.useCustomProxy,
@@ -486,17 +493,19 @@ class Media3Fragment : PlayerFragment() {
                     PlaybackService.GAME_ID to requireArguments().getString(KEY_GAME_ID),
                     PlaybackService.GAME_NAME to requireArguments().getString(KEY_GAME_NAME),
                     )
-                ), Bundle.EMPTY
+                )
             )
     }
 
     override fun startVideo(url: String?, playbackPosition: Long?, multivariantPlaylist: Boolean) {
         player?.let { player ->
-            player.trackSelectionParameters = player.trackSelectionParameters.buildUpon().apply {
-                setTrackTypeDisabled(androidx.media3.common.C.TRACK_TYPE_VIDEO, false)
-            }.build()
-            binding.playerSurface.visibility = View.VISIBLE
-            player.sendCustomCommand(
+            if (!isRemotePlayback()) {
+                player.trackSelectionParameters = player.trackSelectionParameters.buildUpon().apply {
+                    setTrackTypeDisabled(androidx.media3.common.C.TRACK_TYPE_VIDEO, false)
+                }.build()
+                binding.playerSurface.visibility = View.VISIBLE
+            }
+            sendSourceCommand(
                 SessionCommand(
                     PlaybackService.START_VIDEO, bundleOf(
                         PlaybackService.URI to url,
@@ -510,25 +519,25 @@ class Media3Fragment : PlayerFragment() {
                         PlaybackService.GAME_ID to requireArguments().getString(KEY_GAME_ID),
                         PlaybackService.GAME_NAME to requireArguments().getString(KEY_GAME_NAME),
                     )
-                ), Bundle.EMPTY
+                )
             )
         }
     }
 
     override fun startClip(url: String?) {
         player?.let { player ->
-            if (viewModel.quality?.name == AUDIO_ONLY_QUALITY) {
+            if (!isRemotePlayback() && viewModel.quality?.name == AUDIO_ONLY_QUALITY) {
                 player.trackSelectionParameters = player.trackSelectionParameters.buildUpon().apply {
                     setTrackTypeDisabled(androidx.media3.common.C.TRACK_TYPE_VIDEO, true)
                 }.build()
                 binding.playerSurface.visibility = View.GONE
-            } else {
+            } else if (!isRemotePlayback()) {
                 player.trackSelectionParameters = player.trackSelectionParameters.buildUpon().apply {
                     setTrackTypeDisabled(androidx.media3.common.C.TRACK_TYPE_VIDEO, false)
                 }.build()
                 binding.playerSurface.visibility = View.VISIBLE
             }
-            player.sendCustomCommand(
+            sendSourceCommand(
                 SessionCommand(
                     PlaybackService.START_CLIP, bundleOf(
                         PlaybackService.URI to url,
@@ -540,25 +549,25 @@ class Media3Fragment : PlayerFragment() {
                         PlaybackService.GAME_ID to requireArguments().getString(KEY_GAME_ID),
                         PlaybackService.GAME_NAME to requireArguments().getString(KEY_GAME_NAME),
                     )
-                ), Bundle.EMPTY
+                )
             )
         }
     }
 
     override fun startOfflineVideo(url: String?, position: Long) {
         player?.let { player ->
-            if (viewModel.quality?.name == AUDIO_ONLY_QUALITY) {
+            if (!isRemotePlayback() && viewModel.quality?.name == AUDIO_ONLY_QUALITY) {
                 player.trackSelectionParameters = player.trackSelectionParameters.buildUpon().apply {
                     setTrackTypeDisabled(androidx.media3.common.C.TRACK_TYPE_VIDEO, true)
                 }.build()
                 binding.playerSurface.visibility = View.GONE
-            } else {
+            } else if (!isRemotePlayback()) {
                 player.trackSelectionParameters = player.trackSelectionParameters.buildUpon().apply {
                     setTrackTypeDisabled(androidx.media3.common.C.TRACK_TYPE_VIDEO, false)
                 }.build()
                 binding.playerSurface.visibility = View.VISIBLE
             }
-            player.sendCustomCommand(
+            sendSourceCommand(
                 SessionCommand(
                     PlaybackService.START_OFFLINE_VIDEO, bundleOf(
                         PlaybackService.URI to url,
@@ -572,9 +581,34 @@ class Media3Fragment : PlayerFragment() {
                         PlaybackService.GAME_ID to requireArguments().getString(KEY_GAME_ID),
                         PlaybackService.GAME_NAME to requireArguments().getString(KEY_GAME_NAME),
                     )
-                ), Bundle.EMPTY
+                )
             )
         }
+    }
+
+    private fun sendSourceCommand(command: SessionCommand) {
+        player?.let { sourceCommands.send(it, command) }
+    }
+
+    private fun rejectSourceStart(action: String, resultCode: Int) {
+        sourceCommands.cancel()
+        viewModel.started = false
+        val message = when {
+            resultCode != androidx.media3.session.SessionError.ERROR_NOT_SUPPORTED -> R.string.player_error_stopped
+            action == PlaybackService.START_OFFLINE_VIDEO -> R.string.cast_disconnect_download
+            else -> R.string.cast_local_only
+        }
+        Toast.makeText(requireContext(), message, Toast.LENGTH_LONG).show()
+        releaseController()
+        (activity as? MainActivity)?.discardRejectedPlayer(this)
+    }
+
+    private fun releaseController() {
+        playerListener?.let { player?.removeListener(it) }
+        playerListener = null
+        val future = controllerFuture
+        controllerFuture = null
+        future?.let { MediaController.releaseFuture(it) }
     }
 
     private fun handleStreamError(error: PlaybackException) {
@@ -1001,9 +1035,7 @@ class Media3Fragment : PlayerFragment() {
         if (keepCasting && isRemotePlayback() && controller?.currentMediaItem != null) {
             // Leave the receiver playing; the service and its notification keep control.
             savePosition()
-            playerListener?.let { controller.removeListener(it) }
-            playerListener = null
-            controllerFuture?.let { MediaController.releaseFuture(it) }
+            releaseController()
         } else {
             closeSession()
         }
@@ -1028,6 +1060,7 @@ class Media3Fragment : PlayerFragment() {
     }
 
     override fun onStop() {
+        sourceCommands.cancel()
         super.onStop()
         castUi?.dismissDialog()
         player?.let { player ->
@@ -1095,9 +1128,7 @@ class Media3Fragment : PlayerFragment() {
             }
         }
         binding.playerControls.root.removeCallbacks(updateProgressAction)
-        playerListener?.let { player?.removeListener(it) }
-        playerListener = null
-        controllerFuture?.let { MediaController.releaseFuture(it) }
+        releaseController()
     }
 
     override fun onDestroyView() {

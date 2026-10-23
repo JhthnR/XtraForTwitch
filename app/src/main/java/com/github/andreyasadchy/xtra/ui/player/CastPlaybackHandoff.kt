@@ -56,13 +56,23 @@ internal class CastPlaybackHandoff(
         }
     }
 
-    fun setSource(active: Player, factory: MediaSource.Factory, item: MediaItem) {
+    fun setSource(active: Player, factory: MediaSource.Factory, item: MediaItem): Boolean {
+        if (!canSetSource(active, item)) return false
+        val prepared = factory.createMediaSource(item)
+        if (!canSetSource(active, prepared.mediaItem)) return false
         this.factory = factory
         sourceFactoryChanged(factory)
-        setSource(active, factory.createMediaSource(item))
+        installSource(active, prepared)
+        return true
     }
 
-    internal fun setSource(active: Player, prepared: MediaSource) {
+    internal fun setSource(active: Player, prepared: MediaSource): Boolean {
+        if (!canSetSource(active, prepared.mediaItem)) return false
+        installSource(active, prepared)
+        return true
+    }
+
+    private fun installSource(active: Player, prepared: MediaSource) {
         source = prepared
         ownedItem = prepared.mediaItem
         if (active.deviceInfo.playbackType == androidx.media3.common.DeviceInfo.PLAYBACK_TYPE_REMOTE) {
@@ -95,6 +105,9 @@ internal class CastPlaybackHandoff(
     }
 
     companion object {
+        fun canSetSource(active: Player, item: MediaItem?): Boolean =
+            active.deviceInfo.playbackType != androidx.media3.common.DeviceInfo.PLAYBACK_TYPE_REMOTE || canCast(item)
+
         fun canCast(item: MediaItem?): Boolean {
             val uri = item?.localConfiguration?.uri ?: return false
             // Older Android Uri implementations split IPv6 hosts at the first colon.

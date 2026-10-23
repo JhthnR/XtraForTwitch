@@ -155,4 +155,34 @@ class CastPlaybackHandoffTest {
         verify(local, never()).prepare()
     }
 
+    @Test fun `remote local-only source switches preserve the receiver and retained factory`() {
+        val old = source()
+        val oldItem = old.mediaItem
+        val factory = mock<MediaSource.Factory>()
+        whenever(factory.createMediaSource(oldItem)).thenReturn(old)
+        val changes = mutableListOf<MediaSource.Factory?>()
+        val handoff = CastPlaybackHandoff(local, sourceFactoryChanged = { changes.add(it) })
+        assertTrue(handoff.setSource(remote, factory, oldItem))
+        clearInvocations(remote)
+        for (url in listOf("http://localhost/live", "http://127.0.0.1/live", "http://[::1]/live", "http://[::ffff:127.0.0.1]/live", "http://0.0.0.0/live", "file:///storage/video.mp4")) {
+            val replacementFactory = mock<MediaSource.Factory>()
+            assertFalse(url, handoff.setSource(remote, replacementFactory, source(url).mediaItem))
+            assertFalse(url, handoff.setSource(remote, source(url)))
+            verifyNoInteractions(replacementFactory)
+        }
+        verify(remote, never()).setMediaItem(any())
+        assertEquals(listOf(factory), changes)
+        whenever(remote.currentMediaItem).thenReturn(oldItem)
+        assertTrue(handoff.restoreFrom(remote))
+        verify(local).setMediaSource(old, 42_000L)
+    }
+
+    @Test fun `phone-local proxy remains playable locally`() {
+        whenever(local.deviceInfo).thenReturn(DeviceInfo.UNKNOWN)
+        val proxy = source("http://127.0.0.1/live")
+        assertTrue(handoff.setSource(local, proxy))
+        verify(local).setMediaSource(proxy)
+        verifyNoInteractions(remote)
+    }
+
 }
