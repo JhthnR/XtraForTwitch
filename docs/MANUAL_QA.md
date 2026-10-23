@@ -15,6 +15,30 @@ Agents should mark **Required** when a human should test an area. Mark **Complet
 
 ## Checklist
 
+### 1.5.0 release candidate
+
+On October 23 the maintainer reported that mobile testing of the earlier 1.5
+debug candidate works. This is general phone smoke evidence; the report did not
+identify a device, certify every scenario below, or test the final signed APK.
+Cast and physical TV hardware are unavailable. Cast is labelled experimental and
+both Cast and Keep casting after closing the app remain off by default.
+
+Required on the exact signed 1.5.0 candidate:
+
+- [ ] Upgrade official 1.4.0 and preserve accounts, settings, Stats, bookmarks and
+  downloads. Cold-start while signed in and offline: open Saved, Bookmarks and
+  Downloads, then restore networking and retry.
+- [ ] Live/VoD playback, stream switching without old audio, minimize/restore,
+  close/reopen, PiP/background, speed/quality, gestures and floating chat.
+- [ ] Brief network loss and recovery; background VoD/clip recovery gives up
+  after its finite budget. Pause, source changes and foreground return cancel
+  stale retries.
+- [ ] Updater discovery, download, install permission and installer handover.
+- [ ] Real Cast receiver: local/remote handoff, live/VoD, disconnect, app exit
+  with keep-casting off/on, notification control and reopening/switching streams.
+- [ ] Authenticated TV phone/QR sign-in, browser fallback and physical D-pad/codec
+  behavior. The emulator and state tests do not certify hardware compatibility.
+
 ### Opus review corrections (required)
 
 The [correction handoff](OPUS_REVIEW_FIXES.md) records automated checks and the

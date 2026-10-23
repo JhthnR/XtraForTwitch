@@ -132,25 +132,27 @@ test("verifyPromotion rejects every mismatched field", () => {
   assert.throws(() => verifyPromotion({ extra: true }, validManifestFields), /manifest schema mismatch/);
 });
 
-test("1.4.0 release metadata is finalized", () => {
+test("1.5.0 release metadata is finalized", () => {
   const buildGradle = fs.readFileSync("app/build.gradle.kts", "utf8");
   const changelog = fs.readFileSync("CHANGELOG.md", "utf8");
   const bundledChangelog = fs.readFileSync("app/src/main/res/raw/thysttv_changelog.md", "utf8");
-  const releaseNotes = fs.readFileSync("docs/release-notes/1.4.0.md", "utf8");
-  const fastlaneNotes = fs.readFileSync("fastlane/metadata/android/en-US/changelogs/14.txt", "utf8");
+  const releaseNotes = fs.readFileSync("docs/release-notes/1.5.0.md", "utf8");
+  const fastlaneNotes = fs.readFileSync("fastlane/metadata/android/en-US/changelogs/15.txt", "utf8");
 
   assert.deepEqual(readVersionConfig(buildGradle), {
-    versionName: "1.4.0",
-    versionCode: 14,
+    versionName: "1.5.0",
+    versionCode: 15,
   });
-  assert.match(changelog, /^## \[1\.4\.0\] - \d{4}-\d{2}-\d{2}$/m);
+  assert.match(changelog, /^## \[1\.5\.0\] - \d{4}-\d{2}-\d{2}$/m);
+  assert.match(bundledChangelog, /^# ThystTV 1\.5\.0$/m);
   assert.match(bundledChangelog, /^# ThystTV 1\.4\.0$/m);
   assert.match(bundledChangelog, /^# ThystTV 1\.3\.1$/m);
   assert.match(bundledChangelog, /^# ThystTV 1\.3\.0$/m);
   assert.match(bundledChangelog, /^# ThystTV 1\.2\.1$/m);
-  assert.match(releaseNotes, /^# ThystTV 1\.4\.0$/m);
-  assert.match(releaseNotes, /Rewind a live stream/i);
-  assert.match(releaseNotes, /migrates the database to\s+version 36/i);
+  assert.match(releaseNotes, /^# ThystTV 1\.5\.0$/m);
+  assert.match(releaseNotes, /storyboard thumbnails/i);
+  assert.match(releaseNotes, /database version 36, unchanged from 1\.4\.0/i);
+  assert.match(releaseNotes, /Cast is off by default/i);
   assert.doesNotMatch(releaseNotes, /TBD|TODO|placeholder|Release notes were not found/i);
   assert.ok(fastlaneNotes.length <= 500);
 });

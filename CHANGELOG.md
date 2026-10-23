@@ -4,10 +4,12 @@ All notable changes to ThystTV should be documented here.
 
 ## [Unreleased]
 
+## [1.5.0] - 2026-10-23
+
 ### Added
 - Finished online VoDs can show storyboard thumbnails and timestamps while dragging the seek bar.
 - The live-rewind button is available in the maximized portrait player too, with stream stats below the action row.
-- Optional Google Cast (Player settings, off by default) hands online video to a receiver on the same network. Downloads stay on the phone, and the receiver fetches video directly without the phone's proxy or custom headers.
+- Experimental Google Cast (Player settings, off by default) hands online video to a receiver on the same network. Downloads stay on the phone, and the receiver fetches video directly without the phone's proxy or custom headers. Physical receiver playback remains unverified.
 - Optional Chat in picture-in-picture (off by default) keeps read-only live chat beneath the video when PiP starts from the portrait player.
 - Live streams reconnect on their own after short network drops or stalls: up to three retries, waiting at most a minute for the connection to return, then a message asks you to press Play.
 - Android TV can sign in from your phone: scan the on-screen QR code or enter the code at twitch.tv/activate, then choose Check sign-in. Browser sign-in stays available.
@@ -26,7 +28,12 @@ All notable changes to ThystTV should be documented here.
 - Channel Points use Twitch's current balance query.
 - A late-loading emote can no longer show an older message in a reused chat row.
 - Chat cleared while the app was in the background no longer leaves the list out of sync when you return.
+- VoD replay chat resumes when playback becomes ready.
+- Saved and Search tabs and channel-profile actions stay readable at 200% text size.
 - A VoD or clip playing in the background no longer retries a broken video forever. It retries network errors up to five times over about a minute, then stops.
+
+### Release metadata
+- Version 1.5.0 uses version code 15 and retains database version 36. Scope and limitations: `docs/release-notes/1.5.0.md`.
 
 ## [1.4.0] - 2026-10-13
 

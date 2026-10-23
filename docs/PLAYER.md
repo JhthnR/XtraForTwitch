@@ -38,7 +38,9 @@ ordinary foreground VoD recovery are unchanged.
 
 Background VoD/clip playback (the app is stopped and the service keeps playing)
 re-prepares only after the same transient errors, at most five times at
-2s/5s/10s/20s/30s, and only while the same source is still idle in error.
+2s/5s/10s/20s/30s, and only while the same local source is still idle in a
+transient error with playback requested. Pausing, receiver handoff and a later
+permanent/ineligible error cancel any queued retry.
 Thirty seconds of continuous playback, a new source or returning to the
 foreground restores the budget. Other errors stay visible instead of being
 re-prepared in a loop. Live and Cast playback never use this path.
@@ -357,7 +359,8 @@ For release-risk player work, also verify:
 
 ## Optional Google Cast (default Media3 backend)
 
-Enable Google Cast in Player settings, then reopen playback. The route button is
+Google Cast is experimental and off by default; receiver playback remains
+unverified on hardware. Enable it in Player settings, then reopen playback. The route button is
 inflated only when the service reports actual Cast capability. Setting changes apply at the next
 explicit source start, including after closing/reopening; the MediaSession stays
 stable while the old stopped route is released. Default-off playback does not

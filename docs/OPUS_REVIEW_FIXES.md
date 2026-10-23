@@ -1,10 +1,15 @@
 # Opus review corrections — local feature stack
 
+This is the historical pre-publication correction record. The stack was later
+pushed as PR #53, with the background retry and Cast exit follow-ups in #54/#55.
+Current candidate scope and QA limits are in `release-notes/1.5.0.md`; the
+validation results below apply to the specific older commits named here.
+
 The original Claude Opus 5.5/max review targeted `cf2127566` and requested changes.
 Corrections are on local branch `fix/13-opus-review`, based on that reviewed SHA.
-The original feature branches and main checkout are preserved. Nothing is pushed,
-published, versioned or signed for production. These fixes have not received a
-second independent review.
+At the time of this correction pass, the original feature branches and main
+checkout were preserved, nothing had been pushed, published, versioned or signed
+for production, and the fixes had not received a second independent review.
 
 ## Corrected behavior
 

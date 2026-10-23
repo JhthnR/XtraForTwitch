@@ -956,8 +956,8 @@
     <string name="player_error_stopped" tools:ignore="MissingTranslation">Playback failed. Press Play to retry or reopen the stream.</string>
     <string name="pip_chat" tools:ignore="MissingTranslation">Chat in picture-in-picture</string>
     <string name="pip_chat_summary" tools:ignore="MissingTranslation">Show live chat beneath the video when entering picture-in-picture from portrait. Chat is read-only; other layouts keep video only.</string>
-    <string name="cast_enabled" tools:ignore="MissingTranslation">Google Cast</string>
-    <string name="cast_enabled_summary" tools:ignore="MissingTranslation">Cast online video with the default player. Reopen playback after changing this setting. Requires Google Play services and a receiver on the same network.</string>
+    <string name="cast_enabled" tools:ignore="MissingTranslation">Google Cast (experimental)</string>
+    <string name="cast_enabled_summary" tools:ignore="MissingTranslation">Cast online video with the default player. Receiver playback has not been verified on hardware. Reopen playback after changing this setting. Requires Google Play services and a receiver on the same network.</string>
     <string name="cast_keep_on_exit" tools:ignore="MissingTranslation">Keep casting after closing the app</string>
     <string name="cast_keep_on_exit_summary" tools:ignore="MissingTranslation">Closing ThystTV while casting leaves the video playing on the receiver. Control or stop it from the media notification. When off, closing the app stops casting.</string>
     <string name="cast_local_only" tools:ignore="MissingTranslation">This video can only play on this device.</string>
