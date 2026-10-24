@@ -39,9 +39,11 @@ Required before implementation: yes; received through the maintainer's instructi
 Automated checks:
 
 - [x] Original diagnostic fails on source tree c42bfa85 with closed media restored.
-- [ ] Focused Cast/session tests on API23/API28.
-- [ ] gradlew assembleDebug test lintDebug assembleRelease (release unsigned locally).
-- [ ] Node site/workflow/release suites.
+- [x] Focused Cast/session tests on API23/API28:64 tests, no failures/errors/skips.
+- [x] gradlew test:1082 tests, no failures/errors/skips.
+- [x] gradlew lintDebug assembleDebug:0 lint errors/331 existing warnings; debug passed.
+- [x] gradlew assembleRelease:unsigned release passed.
+- [x] Node site/workflow/release suites:79 passed,2 platform skips.
 
 Human QA required:
 
@@ -56,6 +58,8 @@ Human QA completed: prior exact-candidate phone smoke reported successful; super
 
 - 2026-10-24: Reproduced old snapshot restoration with actual PlayerCastBridge/ExoPlayer and an injected SDK transfer callback. Preserved failing source/log/XML privately. Added state invalidation and regression coverage before/during SDK disconnect callbacks.
 - 2026-10-24: Final GPT/high review independently confirmed the close-state defect and localhost hostname forms bypassing rejection. Added DNS-free rejection of absolute localhost and .localhost subdomains, with outgoing transfer and already-remote preservation tests. Node suites passed 79/81 (two platform skips) with Git Bash first on PATH; the first attempt selected the Windows WSL launcher and failed a shell fixture, without a source defect.
+- 2026-10-25: All four PR58 CI checks passed on 3bf9b61d3. Local full suite passed1082 tests; lint0 errors/331 existing warnings and debug assembly passed. Isolated worktree initially lacked the existing ignored debug keystore; supplied it and resumed only unfinished build gates. Unsigned release assembly is in its final optimization/packaging steps. No source changes after this correction are planned; final signed-run/review/device evidence will remain outside source after freezing master.
+- 2026-10-25: Resumed build gates completed successfully, including unsigned release assembly. No gate was disabled. Final documentation-only progress update records these results before the new freeze.
 
 ## Decisions
 
@@ -67,4 +71,4 @@ Human QA completed: prior exact-candidate phone smoke reported successful; super
 
 Explicitly closing a player during a rejected Cast transfer could restore its old media when disconnect completed. Clear the pending handoff before ending the SDK session and cancel queued rejection callbacks. Regression tests cover delayed/synchronous returns and a later fallback.
 
-Tests: pending. Human QA: exact new signed APK and receiver timing remain required. Risks: Cast callback timing; no source is restored after explicit end.
+Tests: focused64 and full1082 pass, lint0 errors, debug/unsigned release pass, Node79 pass/2 skips. Human QA: exact new signed APK and receiver timing remain required. Risks: Cast callback timing; no source is restored after explicit end.
