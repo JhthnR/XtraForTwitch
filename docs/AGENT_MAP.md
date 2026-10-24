@@ -13,18 +13,16 @@ ThystTV is viewer-first. Protect stable playback, fast VoD controls, floating ch
 Read:
 
 - `docs/ROADMAP.md`
-- `docs/release-notes/1.4.0.md`
-- `docs/release-notes/1.5.0.md` (candidate; publication remains gated)
+- `docs/release-notes/1.5.0.md`
+- `docs/release-notes/1.4.0.md` (previous release and upgrade baseline)
 - `CHANGELOG.md`
 
-The published release is 1.4.0. It adds the October Xtra feature
-ports (notifications, rewards, quality, live rewind), free pinch zoom,
-spoiler-free VoDs and a half-folded layout for foldables. Keep player lifecycle and experimental Twitch sync work
-separate. Follow `RELEASE_PROCESS.md` when preparing the next release.
-
-The 1.5.0/code 15 candidate adds VoD seek previews, chat/performance work, bounded
-recovery, optional PiP chat, TV phone sign-in and experimental, default-off Cast.
-Physical Cast/TV checks and exact signed-candidate approval remain separate gates.
+The published release is 1.5.0/code 15. It adds VoD seek previews,
+chat/performance work, bounded recovery, optional PiP chat, TV phone sign-in and
+experimental, default-off Cast.
+Physical Cast/TV and authenticated TV sign-in remain unverified. Keep player
+lifecycle and experimental Twitch sync work separate. Follow
+`RELEASE_PROCESS.md` when preparing the next release.
 
 ## Contribution And Style Conventions
 

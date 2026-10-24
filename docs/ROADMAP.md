@@ -1,6 +1,6 @@
 # Roadmap
 
-## Release candidate: 1.5.0 / code 15
+## Current release: 1.5.0 / code 15 (published)
 
 - VoD seek previews, portrait live rewind and chat/performance improvements.
 - Media3 1.11.1, bounded live recovery and background VoD/clip retries.
@@ -9,12 +9,12 @@
   to keep receiver playback after the app closes.
 - Enlarged-text navigation fixes and corrected VoD replay chat.
 
-The maintainer reports mobile testing works. Physical Cast/TV and authenticated
-TV sign-in remain unverified. See `release-notes/1.5.0.md`; signed-candidate
-verification, independent reviews and exact-APK device approval are required
-before publication. Version 1.4.0 remains the published release below.
+Version 1.5.0/code 15 is published. See `release-notes/1.5.0.md` for changes,
+upgrade guidance and limitations. Physical Cast/TV and authenticated TV sign-in
+remain unverified; Cast is experimental and off by default. Follow
+`RELEASE_PROCESS.md` when preparing the next release.
 
-## Current release: 1.4.0 (published October 13, 2026)
+## Previous release: 1.4.0 (published October 13, 2026)
 
 - Selective Xtra feature ports: live notification reliability, Channel Points
   rewards, exact quality variants with a metered Wi-Fi preset, and
