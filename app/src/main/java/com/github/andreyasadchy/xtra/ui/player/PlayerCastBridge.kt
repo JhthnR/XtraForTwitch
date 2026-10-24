@@ -96,6 +96,9 @@ internal class PlayerCastBridge(
     }
 
     fun endSession() {
+        // Explicit close must invalidate pending restores before SDK disconnect callbacks.
+        handler.removeCallbacksAndMessages(null)
+        handoff.clear()
         routing.detachOutput()
         endCurrentSession()
     }

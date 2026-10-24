@@ -8,6 +8,7 @@ import androidx.media3.common.ForwardingPlayer
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.source.MediaSource
 import org.junit.Assert.*
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -84,6 +85,58 @@ class PlayerCastBridgeTest {
             val to = mock<Player>()
             retired.transferState(from, to)
             verifyNoInteractions(from, to)
+        } finally { bridge.dispose(); bridge.player.release() }
+    }
+
+    @Test fun `explicit close invalidates a rejected local source before delayed return`() {
+        for (uri in listOf("file:///storage/video.mp4", "http://127.0.0.1/live")) {
+            lateinit var callback: CastPlayer.TransferCallback
+            lateinit var local: ExoPlayer
+            val bridge = PlayerCastBridge(context, true,
+                createLocal = { ExoPlayer.Builder(context).build().also { local = it } },
+                endCurrentSession = {}, createCast = { player, transfer ->
+                    callback = transfer
+                    ForwardingPlayer(player)
+                })
+            try {
+                val remote = mock<Player>()
+                local.setMediaItem(MediaItem.fromUri(uri))
+                local.playWhenReady = true
+                callback.transferState(local, remote)
+                // Media3Fragment.closeSession sends these before END_CAST_SESSION.
+                bridge.player.pause()
+                bridge.player.stop()
+                bridge.player.clearMediaItems()
+                bridge.endSession()
+                callback.transferState(remote, local)
+                assertNull(local.currentMediaItem)
+                assertFalse(local.playWhenReady)
+            } finally { bridge.dispose(); bridge.player.release() }
+        }
+    }
+
+    @Test fun `explicit disconnect clears owned source before synchronous receiver return`() {
+        lateinit var callback: CastPlayer.TransferCallback
+        lateinit var local: ExoPlayer
+        val remote = mock<Player>()
+        val item = MediaItem.fromUri("https://example.com/video.m3u8")
+        whenever(remote.currentMediaItem).thenReturn(item)
+        val bridge = PlayerCastBridge(context, true,
+            createLocal = { ExoPlayer.Builder(context).build().also { local = it } },
+            endCurrentSession = { callback.transferState(remote, local) },
+            createCast = { player, transfer -> callback = transfer; ForwardingPlayer(player) })
+        try {
+            val source = mock<MediaSource>()
+            whenever(source.mediaItem).thenReturn(item)
+            bridge.handoff.setSource(local, source)
+            bridge.endSession()
+            assertNull(local.currentMediaItem)
+            // Explicit close does not retire the bridge's future transfer callbacks.
+            local.setMediaItem(MediaItem.fromUri("file:///storage/next.mp4"))
+            local.playWhenReady = false
+            callback.transferState(local, remote)
+            callback.transferState(remote, local)
+            assertEquals("file:///storage/next.mp4", local.currentMediaItem?.localConfiguration?.uri.toString())
         } finally { bridge.dispose(); bridge.player.release() }
     }
 
