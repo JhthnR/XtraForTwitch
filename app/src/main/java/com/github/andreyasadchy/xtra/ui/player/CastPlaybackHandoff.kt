@@ -115,7 +115,9 @@ internal class CastPlaybackHandoff(
             val uri = item?.localConfiguration?.uri ?: return false
             // Older Android Uri implementations split IPv6 hosts at the first colon.
             val host = try { URI(uri.toString()).host?.lowercase() } catch (_: URISyntaxException) { null } ?: return false
-            if (uri.scheme?.lowercase() !in listOf("https", "http") || host.isBlank() || host == "localhost") return false
+            val hostname = host.removeSuffix(".")
+            if (uri.scheme?.lowercase() !in listOf("https", "http") || hostname.isBlank() ||
+                hostname == "localhost" || hostname.endsWith(".localhost")) return false
             val literal = host.removeSurrounding("[", "]")
             // Parse numeric literals only: never invoke a DNS resolver on the main thread.
             if (':' in literal || literal.all { it.isDigit() || it == '.' }) {

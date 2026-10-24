@@ -117,9 +117,11 @@ class CastPlaybackHandoffTest {
 
     @Test fun `receiver URLs require reachable online media rather than phone files or loopback`() {
         assertTrue(CastPlaybackHandoff.canCast(MediaItem.fromUri("https://example.com/live.m3u8")))
+        assertTrue(CastPlaybackHandoff.canCast(MediaItem.fromUri("https://localhost.example.com/live.m3u8")))
         assertTrue(CastPlaybackHandoff.canCast(MediaItem.fromUri("http://8.8.8.8/live")))
         assertTrue(CastPlaybackHandoff.canCast(MediaItem.fromUri("http://[2001:4860:4860::8888]/live")))
-        for (uri in listOf("file:///storage/video.mp4", "content://downloads/1", "http://LOCALHOST/live", "http://localhost/live", "http://127.0.0.1/live", "http://[::1]/live",
+        for (uri in listOf("file:///storage/video.mp4", "content://downloads/1", "http://LOCALHOST/live", "http://localhost/live",
+            "http://localhost./live", "http://video.localhost/live", "http://VIDEO.LOCALHOST./live", "http://127.0.0.1/live", "http://[::1]/live",
             "http://[0:0:0:0:0:0:0:1]/live", "http://[::ffff:127.0.0.1]/live", "http://[::]/live", "http://2130706433/live",
             "http://999.10.0.1/live", "http://256.1.1.1/live", "http://999999999/live")) {
             assertFalse(uri, CastPlaybackHandoff.canCast(MediaItem.fromUri(uri)))
@@ -149,6 +151,22 @@ class CastPlaybackHandoffTest {
         handoff.transfer(local, remote) { fail("Nothing was playing") }
         verify(remote).clearMediaItems()
         verifyNoMoreInteractions(remote)
+    }
+
+    @Test fun `localhost names reject outgoing transfer without loading receiver media`() {
+        for (uri in listOf("http://localhost./live", "http://video.localhost/live", "http://VIDEO.LOCALHOST./live")) {
+            val local = mock<ExoPlayer>()
+            val remote = mock<Player>()
+            val item = MediaItem.fromUri(uri)
+            whenever(local.currentMediaItem).thenReturn(item)
+            whenever(local.playbackParameters).thenReturn(PlaybackParameters(1f))
+            val handoff = CastPlaybackHandoff(local, transferOnline = { _, _ -> fail("Localhost must not transfer") })
+            var rejected = false
+            handoff.transfer(local, remote) { rejected = true }
+            assertTrue(uri, rejected)
+            verify(remote).clearMediaItems()
+            verifyNoMoreInteractions(remote)
+        }
     }
 
     @Test fun `new source invalidates a rejected local-only snapshot before transfer returns`() {
@@ -198,7 +216,8 @@ class CastPlaybackHandoffTest {
         val handoff = CastPlaybackHandoff(local, sourceFactoryChanged = { changes.add(it) })
         assertTrue(handoff.setSource(remote, factory, oldItem))
         clearInvocations(remote)
-        for (url in listOf("http://localhost/live", "http://127.0.0.1/live", "http://[::1]/live", "http://[::ffff:127.0.0.1]/live", "http://0.0.0.0/live", "file:///storage/video.mp4")) {
+        for (url in listOf("http://localhost/live", "http://localhost./live", "http://video.localhost/live", "http://VIDEO.LOCALHOST./live",
+            "http://127.0.0.1/live", "http://[::1]/live", "http://[::ffff:127.0.0.1]/live", "http://0.0.0.0/live", "file:///storage/video.mp4")) {
             val replacementFactory = mock<MediaSource.Factory>()
             assertFalse(url, handoff.setSource(remote, replacementFactory, source(url).mediaItem))
             assertFalse(url, handoff.setSource(remote, source(url)))
