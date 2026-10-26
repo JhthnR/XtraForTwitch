@@ -35,7 +35,10 @@ class SourceStartPositionTest {
 
     private val item = MediaItem.Builder().setUri("https://example.com/video.mp4").setMimeType("video/mp4").build()
 
-    /** Cast off routes through RoutePlayer; Cast on adds Media3's forwarding CastPlayer layer. */
+    /**
+     * Cast off routes through RoutePlayer; Cast on adds a forwarding layer in CastPlayer's place.
+     * Both stay local. CastPlaybackHandoffTest covers the receiver call.
+     */
     private fun withSession(block: (PlayerCastBridge, Player, () -> ExoPlayer) -> Unit) {
         for (cast in listOf(false, true)) {
             lateinit var local: ExoPlayer

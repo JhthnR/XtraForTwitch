@@ -50,6 +50,17 @@ class CastPlaybackHandoffTest {
         verifyNoInteractions(local)
     }
 
+    @Test fun `a saved position goes with the source on the phone and the receiver`() {
+        val onPhone = source("https://example.com/phone.mp4")
+        whenever(local.deviceInfo).thenReturn(DeviceInfo.UNKNOWN)
+        handoff.setSource(local, onPhone, 600_000L)
+        verify(local).setMediaSource(onPhone, 600_000L)
+        val onReceiver = source("https://example.com/receiver.mp4")
+        handoff.setSource(remote, onReceiver, 600_000L)
+        verify(remote).setMediaItem(onReceiver.mediaItem, 600_000L)
+        verify(remote, never()).seekTo(any())
+    }
+
     @Test fun `selected quality returns through the configured source factory`() {
         val master = source()
         val selected = source("https://example.com/720p.m3u8")
