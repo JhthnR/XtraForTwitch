@@ -40,12 +40,16 @@ internal class CastPlaybackHandoff(
     private var request = 0
     private data class LocalSnapshot(val item: MediaItem, val position: Long, val play: Boolean, val speed: PlaybackParameters)
     private var rejected: LocalSnapshot? = null
+    /** Restores local playback if the route returns before a receiver lookup completes. */
+    private var pending: LocalSnapshot? = null
 
     fun transfer(from: Player, to: Player, reject: () -> Unit) {
         request++
         val item = from.currentMediaItem
+        val lookup = pending
+        pending = null
         if (to === local) {
-            val snapshot = rejected
+            val snapshot = rejected ?: lookup
             rejected = null
             if (snapshot != null) {
                 val prepared = configuredSource(snapshot.item)
@@ -103,6 +107,7 @@ internal class CastPlaybackHandoff(
         request++
         // Discard any pending fallback for an older, rejected source.
         rejected = null
+        pending = null
         source = prepared
         val item = prepared.mediaItem
         ownedItem = item
@@ -156,6 +161,7 @@ internal class CastPlaybackHandoff(
             return
         }
         val preferred = selectedVideoFormat()
+        pending = fallback
         background.execute {
             val variant = try {
                 CastReceiverVariants.select(loader.load(uri), preferred)
@@ -165,6 +171,7 @@ internal class CastPlaybackHandoff(
             }
             main.execute {
                 if (token != request) return@execute
+                pending = null
                 if (variant != null) load(item.withReceiverUri(variant)) else unavailable(fallback)
             }
         }
@@ -178,7 +185,7 @@ internal class CastPlaybackHandoff(
 
     fun clear() {
         request++
-        source = null; factory = null; loader = null; ownedItem = null; rejected = null
+        source = null; factory = null; loader = null; ownedItem = null; rejected = null; pending = null
         sourceFactoryChanged(null)
     }
 

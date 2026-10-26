@@ -264,8 +264,10 @@ class PlaybackService : MediaSessionService() {
                             bridge.configure(prefs().getBoolean(C.PLAYER_CAST, false))
                             val item = MediaItem.Builder().setUri(customCommand.customExtras.getString(URI)).build()
                             if (player.deviceInfo.playbackType == androidx.media3.common.DeviceInfo.PLAYBACK_TYPE_REMOTE &&
+                                // VoDs stay local. Live items gain their live configuration in
+                                // START_STREAM, where setSource validates the full item.
                                 (customCommand.customAction == START_OFFLINE_VIDEO || customCommand.customAction == START_VIDEO ||
-                                    !CastPlaybackHandoff.canSetSource(player, item))) {
+                                    !CastPlaybackHandoff.canCast(item))) {
                                 return Futures.immediateFuture(SessionResult(androidx.media3.session.SessionError.ERROR_NOT_SUPPORTED))
                             }
                         }

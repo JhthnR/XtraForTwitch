@@ -327,6 +327,38 @@ class CastPlaybackHandoffTest {
         verify(local).setPlayWhenReady(true)
     }
 
+    @Test fun `disconnecting during a playlist lookup keeps the stream playing on the phone`() {
+        val pending = mutableListOf<Runnable>()
+        val handoff = CastPlaybackHandoff(local, main = direct, background = { pending += it })
+        val source = liveSource()
+        val factory = mock<MediaSource.Factory>()
+        whenever(factory.createMediaSource(source.mediaItem)).thenReturn(source)
+        whenever(local.deviceInfo).thenReturn(DeviceInfo.UNKNOWN)
+        assertTrue(handoff.setSource(local, factory, source.mediaItem) { multivariant() })
+        // Buffering: no parsed manifest yet, so the transfer waits on the loader.
+        val item = source.mediaItem
+        whenever(local.currentMediaItem).thenReturn(item)
+        whenever(local.playWhenReady).thenReturn(true)
+        whenever(local.playbackParameters).thenReturn(PlaybackParameters(1.5f))
+        handoff.transfer(local, remote) { fail("Live must cast") }
+        clearInvocations(local)
+        whenever(remote.currentMediaItem).thenReturn(null)
+        handoff.transfer(remote, local) { fail("Return must not reject") }
+        verify(local).setMediaSource(source, C.TIME_UNSET)
+        verify(local).setPlaybackParameters(PlaybackParameters(1.5f))
+        verify(local).setPlayWhenReady(true)
+        verify(local, never()).clearMediaItems()
+        pending.single().run()
+        verify(remote, never()).setMediaItem(any())
+    }
+
+    @Test fun `switching live channels while casting passes the service pre-check`() {
+        // PlaybackService validates a URI-only item before START_STREAM adds live configuration.
+        assertTrue(CastPlaybackHandoff.canCast(MediaItem.fromUri("https://usher.example/next.m3u8")))
+        val next = liveSource("https://usher.example/next.m3u8")
+        assertTrue(CastPlaybackHandoff.canSetSource(remote, next.mediaItem))
+    }
+
     @Test fun `Twitch VoD playlists stay on the phone while live and clips can cast`() {
         assertFalse(CastPlaybackHandoff.canReceive(source("https://usher.example/vod.m3u8").mediaItem))
         assertFalse(CastPlaybackHandoff.canReceive(MediaItem.fromUri("https://usher.example/vod.m3u8")))
