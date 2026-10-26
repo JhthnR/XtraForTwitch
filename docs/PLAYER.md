@@ -372,16 +372,16 @@ playback. Custom ExoPlayer and platform MediaPlayer backends are unchanged.
 
 Media3 CastPlayer owns the local/receiver switch and stops the inactive player.
 ThystTV retains only the current configured MediaSource for a return to local:
-VoDs preserve receiver position, speed and pause; live returns to the live edge.
-Downloads remain local, including a service-side rejection while casting. Close
+clips preserve receiver position, speed and pause; live returns to the live edge.
+Downloads and VoDs remain local, including a service-side rejection while casting. Close
 stops playback and ends the Cast session. Backgrounding the phone leaves receiver
 playback alone. Finishing the app (back out or remove the task) also ends the
 session unless **Keep casting after closing the app** is on: then, while media is
 on the receiver, the fragment only releases its controller and `onTaskRemoved`
 leaves the service running, so the media notification keeps control. Reopening
 the app does not restore the player UI for that session; starting playback
-replaces the receiver media through the same service. Receiver quality is automatic; phone-only audio processing,
-track controls, live rewind discovery and system PiP are unavailable remotely.
+replaces the receiver media through the same service. Phone-only audio processing,
+quality/track controls, live rewind discovery and system PiP are unavailable remotely.
 
 The service registers its current player independently of any activity view.
 After reopening with a retained session, downloads remain blocked while media is
@@ -397,8 +397,17 @@ screen and its controller, without saving unrelated media under the new source
 or stopping the receiver. Stale results cannot discard a replacement player.
 
 The receiver fetches the media URL directly. Phone HTTP headers/proxies are not
-forwarded. Receiver codec/network compatibility needs physical Cast QA; enabling
-the sender and passing state tests do not establish receiver playback support.
+forwarded. Receivers are browsers, so HLS needs CORS (issue #60): Twitch's usher
+multivariant playlists and the VoD CDNs allow only Twitch origins, while live
+variant playlists and segments allow any origin. A live stream is therefore sent
+as one H.264 variant (`CastReceiverMediaItemConverter` swaps `contentUrl`; the
+local URI stays the session identity). Transfers pick it from the local player's
+parsed playlist, matching a fixed local quality or using the best for Auto;
+streams started while casting fetch the playlist off the main thread with the
+source's own HTTP stack. If no variant can be found, the session ends with a
+message and the stream continues on the phone. VoD HLS is local-only. Clips are
+progressive MP4 and are sent unchanged. Quality is fixed while casting.
+Receiver codec/network compatibility still needs physical Cast QA.
 
 ## Optional chat in system PiP
 

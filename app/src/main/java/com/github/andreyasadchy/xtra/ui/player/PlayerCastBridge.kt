@@ -32,6 +32,7 @@ internal class PlayerCastBridge(
     private val createCast: (ExoPlayer, CastPlayer.TransferCallback) -> Player = { local, transfer ->
         CastPlayer.Builder(context).setLocalPlayer(local)
             .setRemotePlayer(RemoteCastPlayer.Builder(context)
+                .setMediaItemConverter(CastReceiverMediaItemConverter())
                 .setSeekBackIncrementMs(local.seekBackIncrement)
                 .setSeekForwardIncrementMs(local.seekForwardIncrement).build())
             .setTransferCallback(transfer).build()
@@ -42,7 +43,7 @@ internal class PlayerCastBridge(
     private var generation = 0
     private var configured = enabled
     private var local = createLocal()
-    var handoff = CastPlaybackHandoff(local, sourceFactoryChanged)
+    var handoff = newHandoff()
         private set
     private var active = buildPlayer(enabled)
     private val routing = RoutePlayer(active)
@@ -54,18 +55,30 @@ internal class PlayerCastBridge(
         val routeHandoff = handoff
         createCast(local, CastPlayer.TransferCallback { source, target ->
             if (!closed && generation == routeGeneration) routeHandoff.transfer(source, target) {
-                handler.post {
-                    if (!closed && generation == routeGeneration) {
-                        Toast.makeText(context, R.string.cast_local_only, Toast.LENGTH_LONG).show()
-                        endCurrentSession()
-                    }
-                }
+                returnToLocal(routeGeneration, R.string.cast_local_only)
             }
         })
     } catch (error: RuntimeException) {
         Log.w("PlayerCastBridge", "Cast unavailable; local playback remains available", error)
         local
     } else local
+
+    private fun newHandoff(): CastPlaybackHandoff {
+        val handoffGeneration = generation
+        return CastPlaybackHandoff(local, sourceFactoryChanged,
+            receiverUnavailable = { returnToLocal(handoffGeneration, R.string.cast_receiver_unavailable) },
+            main = { handler.post(it) })
+    }
+
+    /** Ending the session lets the handoff restore its rejected snapshot locally. */
+    private fun returnToLocal(routeGeneration: Int, message: Int) {
+        handler.post {
+            if (!closed && generation == routeGeneration) {
+                Toast.makeText(context, message, Toast.LENGTH_LONG).show()
+                endCurrentSession()
+            }
+        }
+    }
 
     /** Only called before an explicit source command, never in the middle of playback. */
     fun configure(enabled: Boolean) {
@@ -80,7 +93,7 @@ internal class PlayerCastBridge(
         handoff.clear()
         endCurrentSession()
         local = createLocal().also { it.trackSelectionParameters = selection }
-        handoff = CastPlaybackHandoff(local, sourceFactoryChanged)
+        handoff = newHandoff()
         active = buildPlayer(enabled)
         routing.replace(active)
         previous.release()

@@ -1,16 +1,24 @@
 package com.github.andreyasadchy.xtra.ui.player
 
+import android.os.Handler
+import android.os.Looper
+import android.util.Log
 import androidx.annotation.OptIn
 import androidx.media3.common.C
+import androidx.media3.common.DeviceInfo
+import androidx.media3.common.Format
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.Player
-import androidx.media3.cast.CastPlayer
+import androidx.media3.common.PlayerTransferState
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.hls.HlsManifest
 import androidx.media3.exoplayer.source.MediaSource
 import java.net.URI
 import java.net.URISyntaxException
+import java.util.concurrent.Executor
+import java.util.concurrent.Executors
 import com.google.common.net.InetAddresses
 
 /** Retains only this session's current source, including its parser/HTTP configuration. */
@@ -18,15 +26,24 @@ import com.google.common.net.InetAddresses
 internal class CastPlaybackHandoff(
     private val local: ExoPlayer,
     private val sourceFactoryChanged: (MediaSource.Factory?) -> Unit = {},
-    private val transferOnline: (Player, Player) -> Unit = CastPlayer.TransferCallback.DEFAULT::transferState,
+    /** Called on [main] when a castable live source has no receiver-loadable variant. */
+    private val receiverUnavailable: () -> Unit = {},
+    private val main: Executor = MAIN,
+    private val background: Executor = PLAYLISTS,
+    private val transferOnline: (Player, Player, MediaItem) -> Unit = ::transferState,
 ) {
     private var source: MediaSource? = null
     private var factory: MediaSource.Factory? = null
+    private var loader: CastPlaylistLoader? = null
     private var ownedItem: MediaItem? = null
+    /** Invalidates pending receiver playlist lookups whenever ownership or route changes. */
+    private var request = 0
     private data class LocalSnapshot(val item: MediaItem, val position: Long, val play: Boolean, val speed: PlaybackParameters)
     private var rejected: LocalSnapshot? = null
 
     fun transfer(from: Player, to: Player, reject: () -> Unit) {
+        request++
+        val item = from.currentMediaItem
         if (to === local) {
             val snapshot = rejected
             rejected = null
@@ -41,27 +58,36 @@ internal class CastPlaybackHandoff(
                 // Never adopt unrelated receiver content into a Twitch player/chat.
                 local.clearMediaItems()
             }
-        } else if (from.currentMediaItem == null) {
+        } else if (item == null) {
             to.clearMediaItems()
-        } else if (!canCast(from.currentMediaItem)) {
-            from.currentMediaItem?.let {
-                rejected = LocalSnapshot(it, from.currentPosition.coerceAtLeast(0), from.playWhenReady, from.playbackParameters)
-            }
+        } else if (!canReceive(item)) {
+            rejected = snapshot(item, from.currentPosition, from.playWhenReady, from.playbackParameters)
             to.clearMediaItems()
             reject()
         } else {
             // A previous rejected local-only Cast attempt must not override this newer session.
             rejected = null
-            ownedItem = from.currentMediaItem
-            transferOnline(from, to)
+            ownedItem = item
+            if (!needsVariant(item)) {
+                transferOnline(from, to, item)
+            } else {
+                val fallback = snapshot(item, from.currentPosition, from.playWhenReady, from.playbackParameters)
+                val variant = localVariant(item)
+                if (variant != null) transferOnline(from, to, item.withReceiverUri(variant))
+                else resolve(item, fallback) {
+                    to.playWhenReady = fallback.play
+                    to.setMediaItem(it)
+                }
+            }
         }
     }
 
-    fun setSource(active: Player, factory: MediaSource.Factory, item: MediaItem): Boolean {
+    fun setSource(active: Player, factory: MediaSource.Factory, item: MediaItem, loader: CastPlaylistLoader? = null): Boolean {
         if (!canSetSource(active, item)) return false
         val prepared = factory.createMediaSource(item)
         if (!canSetSource(active, prepared.mediaItem)) return false
         this.factory = factory
+        this.loader = loader
         sourceFactoryChanged(factory)
         installSource(active, prepared)
         return true
@@ -74,12 +100,16 @@ internal class CastPlaybackHandoff(
     }
 
     private fun installSource(active: Player, prepared: MediaSource) {
+        request++
         // Discard any pending fallback for an older, rejected source.
         rejected = null
         source = prepared
-        ownedItem = prepared.mediaItem
-        if (active.deviceInfo.playbackType == androidx.media3.common.DeviceInfo.PLAYBACK_TYPE_REMOTE) {
-            active.setMediaItem(prepared.mediaItem)
+        val item = prepared.mediaItem
+        ownedItem = item
+        if (active.deviceInfo.playbackType == DeviceInfo.PLAYBACK_TYPE_REMOTE) {
+            if (!needsVariant(item)) active.setMediaItem(item)
+            // The service starts playback right after a source command.
+            else resolve(item, snapshot(item, 0, true, PlaybackParameters.DEFAULT)) { active.setMediaItem(it) }
         } else {
             local.setMediaSource(prepared)
         }
@@ -102,14 +132,77 @@ internal class CastPlaybackHandoff(
         source?.takeIf { it.mediaItem.localConfiguration?.uri == item.localConfiguration?.uri }
             ?: factory?.createMediaSource(item)?.also { source = it }
 
+    private fun snapshot(item: MediaItem, position: Long, play: Boolean, speed: PlaybackParameters) =
+        LocalSnapshot(item, if (CastReceiverVariants.isLive(item)) C.TIME_UNSET else position.coerceAtLeast(0), play, speed)
+
+    /** The local player already parsed this source's playlist while it was playing. */
+    private fun localVariant(item: MediaItem): android.net.Uri? {
+        if (local.currentMediaItem?.localConfiguration?.uri != item.localConfiguration?.uri) return null
+        val playlist = (local.currentManifest as? HlsManifest)?.multivariantPlaylist ?: return null
+        return CastReceiverVariants.select(playlist, selectedVideoFormat())
+    }
+
+    /** The user's fixed local quality; Auto has no override and casts the best variant. */
+    private fun selectedVideoFormat(): Format? = local.trackSelectionParameters.overrides.values
+        .firstOrNull { it.type == C.TRACK_TYPE_VIDEO && it.trackIndices.isNotEmpty() }
+        ?.let { it.mediaTrackGroup.getFormat(it.trackIndices[0]) }
+
+    private fun resolve(item: MediaItem, fallback: LocalSnapshot, load: (MediaItem) -> Unit) {
+        val token = ++request
+        val loader = loader
+        val uri = item.localConfiguration?.uri
+        if (loader == null || uri == null) {
+            unavailable(fallback)
+            return
+        }
+        val preferred = selectedVideoFormat()
+        background.execute {
+            val variant = try {
+                CastReceiverVariants.select(loader.load(uri), preferred)
+            } catch (e: Exception) {
+                Log.w(TAG, "Cast receiver playlist unavailable", e)
+                null
+            }
+            main.execute {
+                if (token != request) return@execute
+                if (variant != null) load(item.withReceiverUri(variant)) else unavailable(fallback)
+            }
+        }
+    }
+
+    /** Session end returns to local playback through [rejected]. */
+    private fun unavailable(fallback: LocalSnapshot) {
+        rejected = fallback
+        receiverUnavailable()
+    }
+
     fun clear() {
-        source = null; factory = null; ownedItem = null; rejected = null
+        request++
+        source = null; factory = null; loader = null; ownedItem = null; rejected = null
         sourceFactoryChanged(null)
     }
 
     companion object {
+        private const val TAG = "CastPlaybackHandoff"
+        private val MAIN = Executor { Handler(Looper.getMainLooper()).post(it) }
+        private val PLAYLISTS: Executor by lazy { Executors.newSingleThreadExecutor() }
+
+        private fun transferState(from: Player, to: Player, item: MediaItem) {
+            PlayerTransferState.fromPlayer(from).buildUpon()
+                .setMediaItems(listOf(item))
+                .setCurrentMediaItemIndex(0)
+                .build().setToPlayer(to)
+        }
+
+        /** Live HLS must be swapped for a variant before a receiver can fetch it. */
+        private fun needsVariant(item: MediaItem) = CastReceiverVariants.isHls(item) && CastReceiverVariants.isLive(item)
+
         fun canSetSource(active: Player, item: MediaItem?): Boolean =
-            active.deviceInfo.playbackType != androidx.media3.common.DeviceInfo.PLAYBACK_TYPE_REMOTE || canCast(item)
+            active.deviceInfo.playbackType != DeviceInfo.PLAYBACK_TYPE_REMOTE || canReceive(item)
+
+        /** Twitch VoD playlists and segments reject receiver origins, so VoDs stay on the phone. */
+        fun canReceive(item: MediaItem?): Boolean =
+            canCast(item) && (!CastReceiverVariants.isHls(item) || CastReceiverVariants.isLive(item))
 
         fun canCast(item: MediaItem?): Boolean {
             val uri = item?.localConfiguration?.uri ?: return false
