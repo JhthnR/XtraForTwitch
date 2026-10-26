@@ -168,6 +168,10 @@ the exact signed 1.3.1 upgrade and release matrix remain pending.
   the listed duration. It must retain position. Repeat via cached bookmarks;
   completed VoDs with final metadata still restart, explicit timestamps win and
   downloaded segments retain their own duration behavior.
+- [ ] Issue #61: reopen a partly watched VoD from Followed/channel VoDs, Saved
+  and a download. Each resumes at its saved position, not 0:00. Mid-VoD,
+  change quality and toggle audio-only/background audio: position is kept.
+  Repeat with Cast enabled in settings but not connected.
 - [ ] With no API tokens but a retained account ID, player/channel buttons reflect
   local follows. Repeat signed in through GQL and Helix fallback.
 - [ ] Open chat profiles using moderator permissions and Helix fallback; follow

@@ -57,31 +57,37 @@ internal class CastPlaybackHandoff(
         }
     }
 
-    fun setSource(active: Player, factory: MediaSource.Factory, item: MediaItem): Boolean {
+    /**
+     * [startPositionMs] goes with the source: a later seek can be dropped by wrapper players
+     * while the new item's placeholder timeline is not seekable yet (issue #61).
+     */
+    fun setSource(active: Player, factory: MediaSource.Factory, item: MediaItem, startPositionMs: Long = C.TIME_UNSET): Boolean {
         if (!canSetSource(active, item)) return false
         val prepared = factory.createMediaSource(item)
         if (!canSetSource(active, prepared.mediaItem)) return false
         this.factory = factory
         sourceFactoryChanged(factory)
-        installSource(active, prepared)
+        installSource(active, prepared, startPositionMs)
         return true
     }
 
-    internal fun setSource(active: Player, prepared: MediaSource): Boolean {
+    internal fun setSource(active: Player, prepared: MediaSource, startPositionMs: Long = C.TIME_UNSET): Boolean {
         if (!canSetSource(active, prepared.mediaItem)) return false
-        installSource(active, prepared)
+        installSource(active, prepared, startPositionMs)
         return true
     }
 
-    private fun installSource(active: Player, prepared: MediaSource) {
+    private fun installSource(active: Player, prepared: MediaSource, startPositionMs: Long) {
         // Discard any pending fallback for an older, rejected source.
         rejected = null
         source = prepared
         ownedItem = prepared.mediaItem
         if (active.deviceInfo.playbackType == androidx.media3.common.DeviceInfo.PLAYBACK_TYPE_REMOTE) {
-            active.setMediaItem(prepared.mediaItem)
+            if (startPositionMs == C.TIME_UNSET) active.setMediaItem(prepared.mediaItem)
+            else active.setMediaItem(prepared.mediaItem, startPositionMs)
         } else {
-            local.setMediaSource(prepared)
+            if (startPositionMs == C.TIME_UNSET) local.setMediaSource(prepared)
+            else local.setMediaSource(prepared, startPositionMs)
         }
     }
 

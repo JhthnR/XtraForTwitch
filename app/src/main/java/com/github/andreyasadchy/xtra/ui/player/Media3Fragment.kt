@@ -841,9 +841,8 @@ class Media3Fragment : PlayerFragment() {
                             viewModel.playlistUrl?.let { uri ->
                                 if (mediaItem.localConfiguration?.uri != uri) {
                                     val position = player.currentPosition
-                                    player.setMediaItem(mediaItem.buildUpon().setUri(uri).build())
+                                    player.setMediaItem(mediaItem.buildUpon().setUri(uri).build(), position)
                                     player.prepare()
-                                    player.seekTo(position)
                                 }
                                 viewModel.playlistUrl = null
                             } ?: player.prepare()
@@ -873,9 +872,8 @@ class Media3Fragment : PlayerFragment() {
                                 if (viewModel.qualities?.find { it.name == AUTO_QUALITY } != null) {
                                     viewModel.playlistUrl = mediaItem.localConfiguration?.uri
                                 }
-                                player.setMediaItem(mediaItem.buildUpon().setUri(it).build())
+                                player.setMediaItem(mediaItem.buildUpon().setUri(it).build(), position)
                                 player.prepare()
-                                player.seekTo(position)
                             }
                         }
                         CHAT_ONLY_QUALITY -> {
@@ -896,9 +894,8 @@ class Media3Fragment : PlayerFragment() {
                                 viewModel.playlistUrl?.let { uri ->
                                     player.currentMediaItem?.let {
                                         val position = player.currentPosition
-                                        player.setMediaItem(it.buildUpon().setUri(uri).build())
+                                        player.setMediaItem(it.buildUpon().setUri(uri).build(), position)
                                         player.prepare()
-                                        player.seekTo(position)
                                         viewModel.playlistUrl = null
                                     }
                                 } ?: player.prepare()
@@ -913,9 +910,8 @@ class Media3Fragment : PlayerFragment() {
                                 player.currentMediaItem?.let {
                                     if (it.localConfiguration?.uri?.toString() != quality.url) {
                                         val position = player.currentPosition
-                                        player.setMediaItem(it.buildUpon().setUri(quality.url).build())
+                                        player.setMediaItem(it.buildUpon().setUri(quality.url).build(), position)
                                         player.prepare()
-                                        player.seekTo(position)
                                     }
                                 }
                                 player.trackSelectionParameters = player.trackSelectionParameters.buildUpon().apply {
@@ -968,9 +964,8 @@ class Media3Fragment : PlayerFragment() {
                                     if (viewModel.qualities?.find { it.name == AUTO_QUALITY } != null) {
                                         viewModel.playlistUrl = mediaItem.localConfiguration?.uri
                                     }
-                                    player.setMediaItem(mediaItem.buildUpon().setUri(url).build())
+                                    player.setMediaItem(mediaItem.buildUpon().setUri(url).build(), position)
                                     player.prepare()
-                                    player.seekTo(position)
                                 }
                             }
                         }
@@ -1105,9 +1100,8 @@ class Media3Fragment : PlayerFragment() {
                                             if (viewModel.qualities?.find { it.name == AUTO_QUALITY } != null) {
                                                 viewModel.playlistUrl = mediaItem.localConfiguration?.uri
                                             }
-                                            player.setMediaItem(mediaItem.buildUpon().setUri(url).build())
+                                            player.setMediaItem(mediaItem.buildUpon().setUri(url).build(), position)
                                             player.prepare()
-                                            player.seekTo(position)
                                         }
                                     }
                                 }
