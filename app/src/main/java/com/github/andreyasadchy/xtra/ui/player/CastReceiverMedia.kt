@@ -36,6 +36,8 @@ internal class CastReceiverMediaItemConverter(
     override fun toMediaQueueItem(mediaItem: MediaItem): MediaQueueItem {
         val queueItem = delegate.toMediaQueueItem(mediaItem)
         val receiver = mediaItem.localConfiguration?.tag as? CastReceiverUri ?: return queueItem
+        // MediaInfo.Writer is @KeepForSdk, but it ships in the APK with play-services-cast;
+        // CastReceiverMediaItemConverterTest catches a removal when that library is upgraded.
         queueItem.media?.writer?.setContentUrl(receiver.uri.toString())
         return queueItem
     }
@@ -76,7 +78,8 @@ internal object CastReceiverVariants {
         val video = variants.filter { it.format.height > 0 }
         if (video.isEmpty()) return variants.firstOrNull()?.url
         // Receivers decode H.264 reliably; HEVC/AV1 variants are a phone-side opt-in.
-        val avc = video.filter { it.format.codecs?.contains("avc1", ignoreCase = true) != false }.ifEmpty { video }
+        // With no H.264 variant the stream stays on the phone: receiver errors are not reported back.
+        val avc = video.filter { it.format.codecs?.contains("avc1", ignoreCase = true) != false }.ifEmpty { return null }
         val height = preferred?.height?.takeIf { it > 0 } ?: return avc.maxBy { it.format.bitrate }.url
         avc.filter { it.format.height == height }.minByOrNull { abs(it.format.frameRate - preferred.frameRate) }
             ?.let { return it.url }

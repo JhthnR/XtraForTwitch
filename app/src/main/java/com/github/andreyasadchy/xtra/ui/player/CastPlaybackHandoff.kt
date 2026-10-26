@@ -195,7 +195,8 @@ internal class CastPlaybackHandoff(
     companion object {
         private const val TAG = "CastPlaybackHandoff"
         private val MAIN = Executor { Handler(Looper.getMainLooper()).post(it) }
-        private val PLAYLISTS: Executor by lazy { Executors.newSingleThreadExecutor() }
+        // Idle threads expire, and a stalled lookup cannot delay a newer channel's lookup.
+        private val PLAYLISTS: Executor by lazy { Executors.newCachedThreadPool() }
 
         private fun transferState(from: Player, to: Player, item: MediaItem) {
             PlayerTransferState.fromPlayer(from).buildUpon()

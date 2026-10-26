@@ -416,6 +416,9 @@ class CastPlaybackHandoffTest {
         val audio = HlsPlaylistParser().parse(Uri.parse("https://usher.example/a.m3u8"),
             "#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=160000,CODECS=\"mp4a.40.2\"\nhttps://cdn.example/audio_only.m3u8\n".byteInputStream())
         assertEquals("https://cdn.example/audio_only.m3u8", CastReceiverVariants.select(audio, null).toString())
+        val hevcOnly = HlsPlaylistParser().parse(Uri.parse("https://usher.example/h.m3u8"),
+            "#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=9000000,RESOLUTION=1920x1080,CODECS=\"hvc1.1.2.L123.90,mp4a.40.2\"\nhttps://cdn.example/1080p-hevc.m3u8\n".byteInputStream())
+        assertNull(CastReceiverVariants.select(hevcOnly, null))
     }
 
     @Test fun `phone-local proxy remains playable locally`() {
