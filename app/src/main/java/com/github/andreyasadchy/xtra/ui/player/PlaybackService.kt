@@ -348,6 +348,7 @@ class PlaybackService : MediaSessionService() {
                                     }.build()
                                 } else null
                                 val networkLibrary = prefs().getString(C.NETWORK_LIBRARY, "OkHttp")
+                                val playlistParsers = CustomHlsPlaylistParserFactory()
                                 val dataSourceFactory = DefaultDataSource.Factory(
                                     this@PlaybackService,
                                     when {
@@ -379,7 +380,7 @@ class PlaybackService : MediaSessionService() {
                                 )
                                 val accepted = bridge.handoff.setSource(player,
                                     HlsMediaSource.Factory(dataSourceFactory).apply {
-                                        setPlaylistParserFactory(CustomHlsPlaylistParserFactory())
+                                        setPlaylistParserFactory(playlistParsers)
                                         setLoadErrorHandlingPolicy(DefaultLoadErrorHandlingPolicy(6))
                                     },
                                     MediaItem.Builder().apply {
@@ -399,7 +400,7 @@ class PlaybackService : MediaSessionService() {
                                         )
                                     }.build(),
                                     // Receivers cannot load usher playlists; resolve a variant with the same HTTP stack.
-                                    castPlaylistLoader(dataSourceFactory),
+                                    castPlaylistLoader(dataSourceFactory, playlistParsers),
                                 )
                                 if (!accepted) return Futures.immediateFuture(SessionResult(androidx.media3.session.SessionError.ERROR_NOT_SUPPORTED))
                                 session.player.applyLocalPlaybackDefaults(prefs().getInt(C.PLAYER_VOLUME, 100) / 100f, 1f)

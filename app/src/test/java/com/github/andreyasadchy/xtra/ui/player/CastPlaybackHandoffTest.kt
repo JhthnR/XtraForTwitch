@@ -14,6 +14,7 @@ import androidx.media3.common.TrackSelectionParameters
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.hls.HlsManifest
 import androidx.media3.exoplayer.hls.playlist.HlsMediaPlaylist
+import androidx.media3.datasource.ByteArrayDataSource
 import androidx.media3.exoplayer.hls.playlist.HlsMultivariantPlaylist
 import androidx.media3.exoplayer.hls.playlist.HlsPlaylistParser
 import androidx.media3.exoplayer.source.MediaSource
@@ -357,6 +358,35 @@ class CastPlaybackHandoffTest {
         assertTrue(CastPlaybackHandoff.canCast(MediaItem.fromUri("https://usher.example/next.m3u8")))
         val next = liveSource("https://usher.example/next.m3u8")
         assertTrue(CastPlaybackHandoff.canSetSource(remote, next.mediaItem))
+    }
+
+    @Test fun `receiver lookup uses the playback parser and skips portrait variants`() {
+        val bytes = """
+            #EXTM3U
+            #EXT-X-STREAM-INF:BANDWIDTH=9000000,RESOLUTION=1080x1920,CODECS="avc1.64002A,mp4a.40.2",FRAME-RATE=60.000,STABLE-VARIANT-ID="1080p60-portrait"
+            https://cdn.example/1080p60-portrait.m3u8
+            #EXT-X-STREAM-INF:BANDWIDTH=6000000,RESOLUTION=1920x1080,CODECS="avc1.64002A,mp4a.40.2",FRAME-RATE=60.000,STABLE-VARIANT-ID="1080p60"
+            https://cdn.example/1080p60.m3u8
+        """.trimIndent().toByteArray()
+        val loader = castPlaylistLoader({ ByteArrayDataSource(bytes) }, PlaybackService.CustomHlsPlaylistParserFactory())
+        assertEquals("https://cdn.example/1080p60.m3u8",
+            CastReceiverVariants.select(loader.load(Uri.parse("https://usher.example/live.m3u8")), null).toString())
+    }
+
+    @Test fun `a variant the receiver cannot reach returns the stream to the phone`() {
+        val source = liveSource()
+        val factory = mock<MediaSource.Factory>()
+        whenever(factory.createMediaSource(source.mediaItem)).thenReturn(source)
+        var unavailable = 0
+        val handoff = CastPlaybackHandoff(local, receiverUnavailable = { unavailable++ }, main = direct, background = direct)
+        val proxied = HlsPlaylistParser().parse(Uri.parse("https://usher.example/live.m3u8"), """
+            #EXTM3U
+            #EXT-X-STREAM-INF:BANDWIDTH=6000000,RESOLUTION=1920x1080,CODECS="avc1.64002A,mp4a.40.2"
+            http://127.0.0.1:8080/1080p.m3u8
+        """.trimIndent().byteInputStream())
+        assertTrue(handoff.setSource(remote, factory, source.mediaItem) { proxied })
+        assertEquals(1, unavailable)
+        verify(remote, never()).setMediaItem(any())
     }
 
     @Test fun `Twitch VoD playlists stay on the phone while live and clips can cast`() {

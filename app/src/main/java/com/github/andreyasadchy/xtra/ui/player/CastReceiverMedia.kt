@@ -13,7 +13,7 @@ import androidx.media3.datasource.DataSource
 import androidx.media3.exoplayer.hls.playlist.HlsMediaPlaylist
 import androidx.media3.exoplayer.hls.playlist.HlsMultivariantPlaylist
 import androidx.media3.exoplayer.hls.playlist.HlsPlaylist
-import androidx.media3.exoplayer.hls.playlist.HlsPlaylistParser
+import androidx.media3.exoplayer.hls.playlist.HlsPlaylistParserFactory
 import androidx.media3.exoplayer.upstream.ParsingLoadable
 import com.google.android.gms.cast.MediaQueueItem
 import kotlin.math.abs
@@ -49,9 +49,10 @@ internal fun interface CastPlaylistLoader {
     fun load(uri: Uri): HlsPlaylist
 }
 
+/** Uses the playback parser too, so the receiver sees the same variants as the quality menu. */
 @OptIn(UnstableApi::class)
-internal fun castPlaylistLoader(factory: DataSource.Factory) = CastPlaylistLoader { uri ->
-    ParsingLoadable.load(factory.createDataSource(), HlsPlaylistParser(), uri, C.DATA_TYPE_MANIFEST)
+internal fun castPlaylistLoader(factory: DataSource.Factory, parsers: HlsPlaylistParserFactory) = CastPlaylistLoader { uri ->
+    ParsingLoadable.load(factory.createDataSource(), parsers.createPlaylistParser(), uri, C.DATA_TYPE_MANIFEST)
 }
 
 @OptIn(UnstableApi::class)

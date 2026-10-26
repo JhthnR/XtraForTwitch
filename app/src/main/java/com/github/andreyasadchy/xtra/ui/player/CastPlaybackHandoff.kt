@@ -144,8 +144,11 @@ internal class CastPlaybackHandoff(
     private fun localVariant(item: MediaItem): android.net.Uri? {
         if (local.currentMediaItem?.localConfiguration?.uri != item.localConfiguration?.uri) return null
         val playlist = (local.currentManifest as? HlsManifest)?.multivariantPlaylist ?: return null
-        return CastReceiverVariants.select(playlist, selectedVideoFormat())
+        return receiverLoadable(CastReceiverVariants.select(playlist, selectedVideoFormat()))
     }
+
+    /** A variant the receiver cannot reach (for example a phone-local proxy) counts as none. */
+    private fun receiverLoadable(variant: android.net.Uri?) = variant?.takeIf { canCast(MediaItem.fromUri(it)) }
 
     /** The user's fixed local quality; Auto has no override and casts the best variant. */
     private fun selectedVideoFormat(): Format? = local.trackSelectionParameters.overrides.values
@@ -164,7 +167,7 @@ internal class CastPlaybackHandoff(
         pending = fallback
         background.execute {
             val variant = try {
-                CastReceiverVariants.select(loader.load(uri), preferred)
+                receiverLoadable(CastReceiverVariants.select(loader.load(uri), preferred))
             } catch (e: Exception) {
                 Log.w(TAG, "Cast receiver playlist unavailable", e)
                 null

@@ -404,7 +404,8 @@ as one H.264 variant (`CastReceiverMediaItemConverter` swaps `contentUrl`; the
 local URI stays the session identity). Transfers pick it from the local player's
 parsed playlist, matching a fixed local quality or using the best for Auto;
 streams started while casting fetch the playlist off the main thread with the
-source's own HTTP stack. If no variant can be found, the session ends with a
+source's own HTTP stack and playlist parser (portrait variants stay hidden).
+A variant the receiver cannot reach, such as a phone-local proxy, counts as none. If no variant can be found, the session ends with a
 message and the stream continues on the phone. VoD HLS is local-only. Clips are
 progressive MP4 and are sent unchanged. Quality is fixed while casting.
 Receiver codec/network compatibility still needs physical Cast QA.
