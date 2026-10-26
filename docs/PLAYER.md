@@ -288,7 +288,8 @@ The start position travels with the source (`setSource(..., startPositionMs)`,
 `setMediaItem(item, positionMs)`), never as a `seekTo` after `prepare()`. Until a
 new item's timeline is known it is not seekable, and the MediaSession/Cast
 forwarding players drop that seek, so resumed VoDs started at zero (issue #61).
-Quality and audio-only source swaps use the same rule.
+Quality and audio-only source swaps use the same rule; live swaps start at the
+live edge, since the old window offset can fall outside the new playlist window.
 
 The optional legacy `ExoPlayerService` supplements Android media-session dispatch
 only for unhandled previous/next key-down events. It checks seek command availability

@@ -659,6 +659,13 @@ class Media3Fragment : PlayerFragment() {
         }, ContextCompat.getMainExecutor(requireContext()))
     }
 
+    /**
+     * Start position for a quality or audio-only source swap. Live returns to the live edge:
+     * the old window offset can fall outside the new playlist's window.
+     */
+    private fun Player.sourceSwapPosition() =
+        if (isCurrentMediaItemLive) androidx.media3.common.C.TIME_UNSET else currentPosition.coerceAtLeast(0)
+
     private fun updateKeepScreenOn() {
         view?.keepScreenOn = !isRemotePlayback() &&
             (requireContext().prefs().getBoolean(C.PLAYER_KEEP_SCREEN_ON_WHEN_PAUSED, false) ||
@@ -840,7 +847,7 @@ class Media3Fragment : PlayerFragment() {
                         AUTO_QUALITY -> {
                             viewModel.playlistUrl?.let { uri ->
                                 if (mediaItem.localConfiguration?.uri != uri) {
-                                    val position = player.currentPosition
+                                    val position = player.sourceSwapPosition()
                                     player.setMediaItem(mediaItem.buildUpon().setUri(uri).build(), position)
                                     player.prepare()
                                 }
@@ -868,7 +875,7 @@ class Media3Fragment : PlayerFragment() {
                             }.build()
                             binding.playerSurface.visibility = View.GONE
                             quality.url?.let {
-                                val position = player.currentPosition
+                                val position = player.sourceSwapPosition()
                                 if (viewModel.qualities?.find { it.name == AUTO_QUALITY } != null) {
                                     viewModel.playlistUrl = mediaItem.localConfiguration?.uri
                                 }
@@ -893,7 +900,7 @@ class Media3Fragment : PlayerFragment() {
                             if (viewModel.qualities?.find { it.name == AUTO_QUALITY } != null) {
                                 viewModel.playlistUrl?.let { uri ->
                                     player.currentMediaItem?.let {
-                                        val position = player.currentPosition
+                                        val position = player.sourceSwapPosition()
                                         player.setMediaItem(it.buildUpon().setUri(uri).build(), position)
                                         player.prepare()
                                         viewModel.playlistUrl = null
@@ -909,7 +916,7 @@ class Media3Fragment : PlayerFragment() {
                             } else {
                                 player.currentMediaItem?.let {
                                     if (it.localConfiguration?.uri?.toString() != quality.url) {
-                                        val position = player.currentPosition
+                                        val position = player.sourceSwapPosition()
                                         player.setMediaItem(it.buildUpon().setUri(quality.url).build(), position)
                                         player.prepare()
                                     }
@@ -960,7 +967,7 @@ class Media3Fragment : PlayerFragment() {
                             }
                             if (requireContext().prefs().getBoolean(C.PLAYER_USE_BACKGROUND_AUDIO_TRACK, false)) {
                                 quality.url?.let { url ->
-                                    val position = player.currentPosition
+                                    val position = player.sourceSwapPosition()
                                     if (viewModel.qualities?.find { it.name == AUTO_QUALITY } != null) {
                                         viewModel.playlistUrl = mediaItem.localConfiguration?.uri
                                     }
@@ -1096,7 +1103,7 @@ class Media3Fragment : PlayerFragment() {
                                     }
                                     if (requireContext().prefs().getBoolean(C.PLAYER_USE_BACKGROUND_AUDIO_TRACK, false)) {
                                         quality.url?.let { url ->
-                                            val position = player.currentPosition
+                                            val position = player.sourceSwapPosition()
                                             if (viewModel.qualities?.find { it.name == AUTO_QUALITY } != null) {
                                                 viewModel.playlistUrl = mediaItem.localConfiguration?.uri
                                             }
