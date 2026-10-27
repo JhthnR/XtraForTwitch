@@ -1,5 +1,17 @@
 # Roadmap
 
+## Release candidate: 1.5.1 / code 16
+
+- Live casting fixed for Chromecast with Google TV (#62); VoDs stay on the phone.
+- "Stop casting and play here" when a VoD is opened while casting (#64).
+- VoDs and downloads resume at their saved position again (#63).
+
+Live casting, clips, live switching and disconnect were checked on a Chromecast
+with Google TV. The stop-casting offer has not been checked on a receiver. See
+`release-notes/1.5.1.md`; signed-candidate verification, independent reviews and
+exact-APK device approval are required before publication. Version 1.5.0 remains
+the published release below.
+
 ## Current release: 1.5.0 / code 15 (published)
 
 - VoD seek previews, portrait live rewind and chat/performance improvements.

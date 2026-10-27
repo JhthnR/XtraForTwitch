@@ -4,6 +4,19 @@ All notable changes to ThystTV should be documented here.
 
 ## [Unreleased]
 
+## [1.5.1] - 2026-10-27
+
+### Added
+- Opening a VoD while casting offers "Stop casting and play here", which ends the Cast session and plays the VoD on the phone. Downloads still ask you to stop casting first.
+
+### Fixed
+- Live casting works on Chromecast with Google TV: the receiver gets a variant playlist it can load, matching the phone's quality (best on Auto). Streams without a receiver-compatible variant keep playing on the phone with a message. VoDs stay on the phone because Twitch's VoD servers refuse receivers, and quality can't be changed while casting.
+- VoDs and downloads resume at their saved position again instead of restarting at 0:00.
+- Live quality changes start at the live edge.
+
+### Release metadata
+- Version 1.5.1 uses version code 16 and retains database version 36. Scope and limitations: `docs/release-notes/1.5.1.md`.
+
 ## [1.5.0] - 2026-10-23
 
 ### Added
