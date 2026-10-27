@@ -15,6 +15,27 @@ Agents should mark **Required** when a human should test an area. Mark **Complet
 
 ## Checklist
 
+### 1.5.1 release candidate
+
+On October 27 the maintainer reported that upgrade, offline cold start and player
+smoke tests pass on a pre-release build (not this signed candidate), and live
+casting works on a Chromecast with Google TV. No Cast receiver is available for
+this candidate. "Stop casting and play here" is covered by unit tests and two code
+reviews only.
+
+Required on the exact signed 1.5.1 candidate:
+
+- [ ] Upgrade official 1.5.0 and preserve accounts, settings, Stats, bookmarks and
+  downloads. Cold-start while signed in and offline, then restore networking and
+  retry.
+- [ ] Resume a partly watched VoD and a download: both start at the saved
+  position. Open a VoD link with a timestamp. Change live quality: playback
+  continues at the live edge.
+- [ ] Live/VoD playback, stream switching without old audio, minimize/restore,
+  close/reopen, PiP/background, speed/quality, gestures and floating chat.
+- [ ] Updater discovery, download, install permission and installer handover.
+- [ ] When a receiver is available: the Optional Google Cast checks below.
+
 ### 1.5.0 release candidate
 
 On October 23 the maintainer reported that mobile testing of the earlier 1.5

@@ -19,8 +19,10 @@ Read:
 
 The published release is 1.5.0/code 15. It adds VoD seek previews,
 chat/performance work, bounded recovery, optional PiP chat, TV phone sign-in and
-experimental, default-off Cast.
-Physical Cast/TV and authenticated TV sign-in remain unverified. Keep player
+experimental, default-off Cast. Release candidate 1.5.1/code 16 fixes live
+casting to Google TV (checked on a Chromecast with Google TV), keeps VoDs local
+with a stop-casting offer, and restores VoD resume. Authenticated TV sign-in
+remains unverified. Keep player
 lifecycle and experimental Twitch sync work separate. Follow
 `RELEASE_PROCESS.md` when preparing the next release.
 

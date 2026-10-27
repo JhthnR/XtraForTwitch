@@ -1,0 +1,1 @@
+Fixes live casting to Chromecast with Google TV and resuming VoDs and downloads at their saved position. Opening a VoD while casting offers to stop casting and play it on the phone. Live quality changes start at the live edge. Database version stays 36.
