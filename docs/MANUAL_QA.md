@@ -356,7 +356,10 @@ behavior remain unverified; emulator results are recorded separately in
   Also start casting from chat-only and enhanced-broadcasting (HEVC/AV1) channels.
 - [ ] Cast from a VoD: the phone explains it plays only on this device and keeps
   playing locally. Switch live/live and open a VoD or download while casting:
-  the existing receiver session must remain, with an explanation on the phone.
+  the phone offers "Stop casting and play here". Cancel leaves the receiver
+  session playing and closes the new screen. Stop casting clears the TV, ends the
+  session and plays the VoD (at its resume position) or download on the phone.
+  Leave the app while the offer is open and return: the offer appears again.
 - [ ] Disconnect: one local player resumes the same paused/playing VoD position
   and speed, or the live edge, using normal quality and HTTP configuration.
 - [ ] Background/lock/restore the phone, minimize/restore, rotate, lose/recover

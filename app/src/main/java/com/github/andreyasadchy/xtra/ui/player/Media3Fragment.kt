@@ -17,6 +17,7 @@ import android.widget.HorizontalScrollView
 import android.widget.TextView
 import android.widget.Toast
 import androidx.annotation.OptIn
+import androidx.appcompat.app.AlertDialog
 import androidx.core.content.ContextCompat
 import androidx.core.content.edit
 import androidx.core.os.bundleOf
@@ -71,6 +72,8 @@ class Media3Fragment : PlayerFragment() {
         },
         rejected = ::rejectSourceStart,
     )
+    private val castStopRestart = CastStopRestart()
+    private var localOnlyDialog: AlertDialog? = null
     private var castUi: PlayerCastUi? = null
     private var castUiRequest = 0
     private val updateProgressAction = Runnable { if (view != null) updateProgress() }
@@ -598,6 +601,39 @@ class Media3Fragment : PlayerFragment() {
             action == PlaybackService.START_OFFLINE_VIDEO -> R.string.cast_disconnect_download
             else -> R.string.cast_local_only
         }
+        val controller = player
+        if (message != R.string.player_error_stopped && controller?.deviceInfo?.playbackType == DeviceInfo.PLAYBACK_TYPE_REMOTE) {
+            offerStopCasting(controller, message)
+        } else {
+            discardRejectedStart(message)
+        }
+    }
+
+    /** Local-only sources rejected while casting can end the session and play here instead. */
+    private fun offerStopCasting(controller: MediaController, message: Int) {
+        var stopping = false
+        val dialog = requireContext().getAlertDialogBuilder()
+            .setMessage(message)
+            .setPositiveButton(R.string.cast_stop_and_play_here) { _, _ ->
+                stopping = true
+                castStopRestart.start(controller,
+                    restart = { if (view != null && player === controller) startPlayer() },
+                    failed = { if (view != null && player === controller) discardRejectedStart(R.string.player_error_stopped) })
+            }
+            .setNegativeButton(android.R.string.cancel, null)
+            .create()
+        dialog.setOnDismissListener {
+            if (localOnlyDialog === dialog) {
+                localOnlyDialog = null
+                if (!stopping) discardRejectedStart(message)
+            }
+        }
+        localOnlyDialog?.let { localOnlyDialog = null; it.dismiss() }
+        localOnlyDialog = dialog
+        dialog.show()
+    }
+
+    private fun discardRejectedStart(message: Int) {
         Toast.makeText(requireContext(), message, Toast.LENGTH_LONG).show()
         releaseController()
         (activity as? MainActivity)?.discardRejectedPlayer(this)
@@ -1061,9 +1097,14 @@ class Media3Fragment : PlayerFragment() {
 
     override fun onStop() {
         sourceCommands.cancel()
+        // The restarted fragment repeats its start, so a stopped offer must not discard it.
+        // Until then the controller shows receiver media, which must not be saved under this source.
+        val awaitingLocalStart = localOnlyDialog != null || castStopRestart.isPending
+        castStopRestart.cancel()
+        localOnlyDialog?.let { localOnlyDialog = null; it.dismiss() }
         super.onStop()
         castUi?.dismissDialog()
-        player?.let { player ->
+        player?.takeUnless { awaitingLocalStart }?.let { player ->
             if (player.isConnected) {
                 savePosition()
                 if (viewModel.usingProxy) {

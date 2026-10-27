@@ -395,6 +395,12 @@ eligibility policy. Local-only URLs are rejected before retained source/factory
 or receiver ownership changes. Service command rejection removes only the failed
 screen and its controller, without saving unrelated media under the new source
 or stopping the receiver. Stale results cannot discard a replacement player.
+When a local-only source (VoD, download, or live without a receiver variant) is
+rejected while casting, the screen offers "Stop casting and play here" instead.
+`CastStopRestart` clears the receiver media, ends the session and restarts the
+source once playback is local. Cancel discards the screen as before; a 10 s
+timeout discards it with a playback error; leaving the app repeats the offer on
+return.
 
 The receiver fetches the media URL directly. Phone HTTP headers/proxies are not
 forwarded. Receivers are browsers, so HLS needs CORS (issue #60): Twitch's usher
