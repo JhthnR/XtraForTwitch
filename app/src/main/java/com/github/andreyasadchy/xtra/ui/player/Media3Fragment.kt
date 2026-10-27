@@ -465,7 +465,7 @@ class Media3Fragment : PlayerFragment() {
                 }
             }
             if ((isInitialized || !enableNetworkCheck) && !viewModel.started) {
-                startPlayer()
+                startOrReplay()
             }
             player?.let { player ->
                 setPipActions(player.playbackState != Player.STATE_ENDED && player.playbackState != Player.STATE_IDLE && player.playWhenReady)
@@ -475,16 +475,20 @@ class Media3Fragment : PlayerFragment() {
 
     override fun initialize() {
         if (player != null && !viewModel.started) {
-            val rejected = lastSourceCommand?.takeIf { rejectedStart }
-            if (rejected != null) {
-                // Returning to a rejected screen repeats the same request (and its offer).
-                viewModel.started = true
-                sendSourceCommand(rejected)
-            } else {
-                startPlayer()
-            }
+            startOrReplay()
         }
         super.initialize()
+    }
+
+    private fun startOrReplay() {
+        val rejected = lastSourceCommand?.takeIf { rejectedStart }
+        if (rejected != null) {
+            // Returning to a rejected screen repeats the same request (and its offer).
+            viewModel.started = true
+            sendSourceCommand(rejected)
+        } else {
+            startPlayer()
+        }
     }
 
     override fun isLiveRewindPlaybackReady(): Boolean = player?.let {
@@ -618,7 +622,8 @@ class Media3Fragment : PlayerFragment() {
         }
         val controller = player
         val command = lastSourceCommand?.takeIf { it.customAction == action }
-        if (message != R.string.player_error_stopped && command != null &&
+        // A minimized screen keeps the toast; a modal offer would cover unrelated browsing UI.
+        if (message != R.string.player_error_stopped && command != null && isMaximized &&
             controller?.deviceInfo?.playbackType == DeviceInfo.PLAYBACK_TYPE_REMOTE) {
             offerStopCasting(controller, command, message)
         } else {
@@ -999,6 +1004,7 @@ class Media3Fragment : PlayerFragment() {
     }
 
     override fun startAudioOnly() {
+        if (rejectedStart) return
         player?.let { player ->
             if (player.isConnected) {
                 savePosition()
@@ -1096,7 +1102,7 @@ class Media3Fragment : PlayerFragment() {
         val controller = player
         if (keepCasting && isRemotePlayback() && controller?.currentMediaItem != null) {
             // Leave the receiver playing; the service and its notification keep control.
-            savePosition()
+            if (!rejectedStart) savePosition()
             releaseController()
         } else {
             closeSession()
