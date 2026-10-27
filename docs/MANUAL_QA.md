@@ -353,11 +353,14 @@ behavior remain unverified; emulator results are recorded separately in
 
 - [ ] With Cast off, default live/VoD/clip/download playback and controls match the
   local player. With Cast enabled, test Google Play services absent/unavailable.
-- [ ] On real hardware on the same network: discover, connect, play live, VoD and
-  clip, pause, seek VoD and change speed. Check automatic receiver quality and the
-  phone's remote status. Check receiver-supported codecs and URL/header limits.
-- [ ] Switch live/live, live/VoD and VoD/live while casting. Open a download: the
-  existing receiver session must remain, with an explanation on the phone.
+- [ ] On real hardware (Chromecast/Google TV) on the same network: discover,
+  connect, play live and clip, pause, seek a clip and change speed. Live must
+  keep playing on the TV (issue #60), not load and stop. Cast with Auto and with
+  a fixed quality (for example 480p): the TV uses the best or the chosen variant.
+  Also start casting from chat-only and enhanced-broadcasting (HEVC/AV1) channels.
+- [ ] Cast from a VoD: the phone explains it plays only on this device and keeps
+  playing locally. Switch live/live and open a VoD or download while casting:
+  the existing receiver session must remain, with an explanation on the phone.
 - [ ] Disconnect: one local player resumes the same paused/playing VoD position
   and speed, or the live edge, using normal quality and HTTP configuration.
 - [ ] Background/lock/restore the phone, minimize/restore, rotate, lose/recover

@@ -1,13 +1,25 @@
 package com.github.andreyasadchy.xtra.ui.player
 
 import android.app.Application
+import android.net.Uri
 import androidx.media3.common.C
 import androidx.media3.common.DeviceInfo
+import androidx.media3.common.Format
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.Player
+import androidx.media3.common.TrackGroup
+import androidx.media3.common.TrackSelectionOverride
+import androidx.media3.common.TrackSelectionParameters
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.hls.HlsManifest
+import androidx.media3.exoplayer.hls.playlist.HlsMediaPlaylist
+import androidx.media3.datasource.ByteArrayDataSource
+import androidx.media3.exoplayer.hls.playlist.HlsMultivariantPlaylist
+import androidx.media3.exoplayer.hls.playlist.HlsPlaylistParser
 import androidx.media3.exoplayer.source.MediaSource
+import java.io.IOException
+import java.util.concurrent.Executor
 import org.junit.Assert.*
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -20,19 +32,42 @@ import org.robolectric.annotation.ConscryptMode
 @Config(application = Application::class, sdk = [23, 28])
 @ConscryptMode(ConscryptMode.Mode.OFF)
 class CastPlaybackHandoffTest {
-    private val local = mock<ExoPlayer>()
+    private val local = mock<ExoPlayer>().also {
+        whenever(it.trackSelectionParameters).thenReturn(TrackSelectionParameters.Builder().build())
+    }
     private val remote = mock<Player>().also {
         whenever(it.deviceInfo).thenReturn(DeviceInfo.Builder(DeviceInfo.PLAYBACK_TYPE_REMOTE).build())
         whenever(it.playbackParameters).thenReturn(PlaybackParameters(1.25f))
         whenever(it.currentPosition).thenReturn(42_000L)
         whenever(it.playWhenReady).thenReturn(false)
     }
-    private val handoff = CastPlaybackHandoff(local)
-    private fun source(url: String = "https://example.com/vod.m3u8", live: Boolean = false): MediaSource {
-        val item = MediaItem.Builder().setUri(url).setMimeType("application/x-mpegURL").apply {
+    private val direct = Executor { it.run() }
+    private val handoff = CastPlaybackHandoff(local, main = direct, background = direct)
+    private fun source(url: String = "https://example.com/clip.mp4", live: Boolean = false): MediaSource {
+        val item = MediaItem.Builder().setUri(url).setMimeType(if (url.endsWith(".m3u8")) "application/x-mpegURL" else "video/mp4").apply {
             if (live) setLiveConfiguration(MediaItem.LiveConfiguration.Builder().setTargetOffsetMs(2000).build())
         }.build()
         return mock<MediaSource>().also { whenever(it.mediaItem).thenReturn(item) }
+    }
+    private fun liveSource(url: String = "https://usher.example/live.m3u8") = source(url, live = true)
+    private fun multivariant(): HlsMultivariantPlaylist = HlsPlaylistParser().parse(Uri.parse("https://usher.example/live.m3u8"), """
+        #EXTM3U
+        #EXT-X-STREAM-INF:BANDWIDTH=9000000,RESOLUTION=1920x1080,CODECS="hvc1.1.2.L123.90,mp4a.40.2",FRAME-RATE=60.000
+        https://cdn.example/1080p60-hevc.m3u8
+        #EXT-X-STREAM-INF:BANDWIDTH=6000000,RESOLUTION=1920x1080,CODECS="avc1.64002A,mp4a.40.2",FRAME-RATE=60.000
+        https://cdn.example/1080p60.m3u8
+        #EXT-X-STREAM-INF:BANDWIDTH=3000000,RESOLUTION=1280x720,CODECS="avc1.4D401F,mp4a.40.2",FRAME-RATE=60.000
+        https://cdn.example/720p60.m3u8
+        #EXT-X-STREAM-INF:BANDWIDTH=2000000,RESOLUTION=1280x720,CODECS="avc1.4D401F,mp4a.40.2",FRAME-RATE=30.000
+        https://cdn.example/720p30.m3u8
+        #EXT-X-STREAM-INF:BANDWIDTH=160000,CODECS="mp4a.40.2"
+        https://cdn.example/audio_only.m3u8
+    """.trimIndent().byteInputStream()) as HlsMultivariantPlaylist
+    private fun receiverUri(item: MediaItem) = (item.localConfiguration?.tag as? CastReceiverUri)?.uri?.toString()
+    private fun selectLocalQuality(height: Int, frameRate: Float) {
+        val format = Format.Builder().setHeight(height).setFrameRate(frameRate).setSampleMimeType("video/avc").build()
+        whenever(local.trackSelectionParameters).thenReturn(TrackSelectionParameters.Builder()
+            .setOverrideForType(TrackSelectionOverride(TrackGroup(format), 0)).build())
     }
 
     @Test fun `local playback keeps its exact configured media source`() {
@@ -63,7 +98,7 @@ class CastPlaybackHandoffTest {
 
     @Test fun `selected quality returns through the configured source factory`() {
         val master = source()
-        val selected = source("https://example.com/720p.m3u8")
+        val selected = source("https://example.com/720p.mp4")
         val masterItem = master.mediaItem
         val selectedItem = selected.mediaItem
         val factory = mock<MediaSource.Factory>()
@@ -73,7 +108,7 @@ class CastPlaybackHandoffTest {
         whenever(local.currentMediaItem).thenReturn(selectedItem)
         whenever(remote.currentMediaItem).thenReturn(selectedItem)
         var transfers = 0
-        val handoff = CastPlaybackHandoff(local) { _, _ -> transfers++ }
+        val handoff = CastPlaybackHandoff(local) { _, _, _ -> transfers++ }
         handoff.setSource(local, factory, masterItem)
         handoff.transfer(local, remote) { fail("Online quality should transfer") }
         handoff.transfer(remote, local) { fail("Return should not reject") }
@@ -83,7 +118,7 @@ class CastPlaybackHandoffTest {
         verify(local).setPlayWhenReady(false)
     }
 
-    @Test fun `returning VoD reuses parser and HTTP source with receiver position pause and speed`() {
+    @Test fun `returning clip reuses parser and HTTP source with receiver position pause and speed`() {
         val source = source()
         handoff.setSource(remote, source)
         val item = source.mediaItem
@@ -96,8 +131,9 @@ class CastPlaybackHandoffTest {
     }
 
     @Test fun `returning live uses live edge rather than a receiver window offset`() {
-        val source = source(live = true)
-        handoff.setSource(remote, source)
+        val source = liveSource()
+        handoff.setSource(remote, mock<MediaSource.Factory>().also { whenever(it.createMediaSource(any())).thenReturn(source) },
+            source.mediaItem) { multivariant() }
         val item = source.mediaItem
         whenever(remote.currentMediaItem).thenReturn(item)
         whenever(remote.playWhenReady).thenReturn(true)
@@ -171,7 +207,7 @@ class CastPlaybackHandoffTest {
             val item = MediaItem.fromUri(uri)
             whenever(local.currentMediaItem).thenReturn(item)
             whenever(local.playbackParameters).thenReturn(PlaybackParameters(1f))
-            val handoff = CastPlaybackHandoff(local, transferOnline = { _, _ -> fail("Localhost must not transfer") })
+            val handoff = CastPlaybackHandoff(local, transferOnline = { _, _, _ -> fail("Localhost must not transfer") })
             var rejected = false
             handoff.transfer(local, remote) { rejected = true }
             assertTrue(uri, rejected)
@@ -197,9 +233,9 @@ class CastPlaybackHandoffTest {
 
     @Test fun `successful new cast transfer invalidates a rejected old snapshot`() {
         val blocked = MediaItem.fromUri("file:///storage/old.mp4")
-        val next = source("https://example.com/new.m3u8")
+        val next = source("https://example.com/new.mp4")
         val nextItem = next.mediaItem
-        val handoff = CastPlaybackHandoff(local, transferOnline = { _, _ -> })
+        val handoff = CastPlaybackHandoff(local, transferOnline = { _, _, _ -> })
         whenever(local.currentMediaItem).thenReturn(blocked)
         whenever(local.playbackParameters).thenReturn(PlaybackParameters(1f))
         handoff.transfer(local, remote) { }
@@ -239,6 +275,161 @@ class CastPlaybackHandoffTest {
         whenever(remote.currentMediaItem).thenReturn(oldItem)
         assertTrue(handoff.restoreFrom(remote))
         verify(local).setMediaSource(old, 42_000L)
+    }
+
+    @Test fun `receiver loads a live variant because usher playlists reject receiver origins`() {
+        val sent = mutableListOf<MediaItem>()
+        val handoff = CastPlaybackHandoff(local, main = direct, background = direct, transferOnline = { _, _, item -> sent += item })
+        val item = liveSource().mediaItem
+        whenever(local.currentMediaItem).thenReturn(item)
+        whenever(local.playbackParameters).thenReturn(PlaybackParameters(1f))
+        whenever(local.currentManifest).thenReturn(
+            HlsManifest::class.java.getDeclaredConstructor(HlsMultivariantPlaylist::class.java, HlsMediaPlaylist::class.java)
+                .apply { isAccessible = true }.newInstance(multivariant(), null))
+        selectLocalQuality(720, 30f)
+        handoff.transfer(local, remote) { fail("Live must cast") }
+        assertEquals("https://usher.example/live.m3u8", sent.single().localConfiguration?.uri.toString())
+        assertEquals("https://cdn.example/720p30.m3u8", receiverUri(sent.single()))
+    }
+
+    @Test fun `live started while casting resolves its variant with the source loader`() {
+        val source = liveSource()
+        val factory = mock<MediaSource.Factory>()
+        whenever(factory.createMediaSource(source.mediaItem)).thenReturn(source)
+        val pending = mutableListOf<Runnable>()
+        val handoff = CastPlaybackHandoff(local, main = direct, background = { pending += it })
+        assertTrue(handoff.setSource(remote, factory, source.mediaItem) { multivariant() })
+        verify(remote, never()).setMediaItem(any())
+        pending.single().run()
+        val sent = argumentCaptor<MediaItem>()
+        verify(remote).setMediaItem(sent.capture())
+        assertEquals(source.mediaItem.localConfiguration?.uri, sent.firstValue.localConfiguration?.uri)
+        assertEquals("https://cdn.example/1080p60.m3u8", receiverUri(sent.firstValue))
+    }
+
+    @Test fun `a slow playlist lookup cannot replace a newer source or a returned route`() {
+        val pending = mutableListOf<Runnable>()
+        val handoff = CastPlaybackHandoff(local, main = direct, background = { pending += it })
+        val first = liveSource("https://usher.example/first.m3u8")
+        val factory = mock<MediaSource.Factory>()
+        whenever(factory.createMediaSource(first.mediaItem)).thenReturn(first)
+        val second = source("https://example.com/second.mp4")
+        assertTrue(handoff.setSource(remote, factory, first.mediaItem) { multivariant() })
+        assertTrue(handoff.setSource(remote, second))
+        assertTrue(handoff.setSource(remote, factory, first.mediaItem) { multivariant() })
+        whenever(remote.currentMediaItem).thenReturn(null)
+        handoff.transfer(remote, local) { fail("Return must not reject") }
+        assertEquals(2, pending.size)
+        pending.forEach { it.run() }
+        verify(remote).setMediaItem(second.mediaItem)
+        verify(remote, times(1)).setMediaItem(any())
+    }
+
+    @Test fun `failed receiver lookup returns the live stream to the phone at the live edge`() {
+        val source = liveSource()
+        val factory = mock<MediaSource.Factory>()
+        whenever(factory.createMediaSource(source.mediaItem)).thenReturn(source)
+        var unavailable = 0
+        val handoff = CastPlaybackHandoff(local, receiverUnavailable = { unavailable++ }, main = direct, background = direct)
+        assertTrue(handoff.setSource(remote, factory, source.mediaItem) { throw IOException("offline") })
+        assertEquals(1, unavailable)
+        verify(remote, never()).setMediaItem(any())
+        handoff.transfer(remote, local) { fail("Return must not reject") }
+        verify(local).setMediaSource(source, C.TIME_UNSET)
+        verify(local).setPlayWhenReady(true)
+    }
+
+    @Test fun `disconnecting during a playlist lookup keeps the stream playing on the phone`() {
+        val pending = mutableListOf<Runnable>()
+        val handoff = CastPlaybackHandoff(local, main = direct, background = { pending += it })
+        val source = liveSource()
+        val factory = mock<MediaSource.Factory>()
+        whenever(factory.createMediaSource(source.mediaItem)).thenReturn(source)
+        whenever(local.deviceInfo).thenReturn(DeviceInfo.UNKNOWN)
+        assertTrue(handoff.setSource(local, factory, source.mediaItem) { multivariant() })
+        // Buffering: no parsed manifest yet, so the transfer waits on the loader.
+        val item = source.mediaItem
+        whenever(local.currentMediaItem).thenReturn(item)
+        whenever(local.playWhenReady).thenReturn(true)
+        whenever(local.playbackParameters).thenReturn(PlaybackParameters(1.5f))
+        handoff.transfer(local, remote) { fail("Live must cast") }
+        clearInvocations(local)
+        whenever(remote.currentMediaItem).thenReturn(null)
+        handoff.transfer(remote, local) { fail("Return must not reject") }
+        verify(local).setMediaSource(source, C.TIME_UNSET)
+        verify(local).setPlaybackParameters(PlaybackParameters(1.5f))
+        verify(local).setPlayWhenReady(true)
+        verify(local, never()).clearMediaItems()
+        pending.single().run()
+        verify(remote, never()).setMediaItem(any())
+    }
+
+    @Test fun `switching live channels while casting passes the service pre-check`() {
+        // PlaybackService validates a URI-only item before START_STREAM adds live configuration.
+        assertTrue(CastPlaybackHandoff.canCast(MediaItem.fromUri("https://usher.example/next.m3u8")))
+        val next = liveSource("https://usher.example/next.m3u8")
+        assertTrue(CastPlaybackHandoff.canSetSource(remote, next.mediaItem))
+    }
+
+    @Test fun `receiver lookup uses the playback parser and skips portrait variants`() {
+        val bytes = """
+            #EXTM3U
+            #EXT-X-STREAM-INF:BANDWIDTH=9000000,RESOLUTION=1080x1920,CODECS="avc1.64002A,mp4a.40.2",FRAME-RATE=60.000,STABLE-VARIANT-ID="1080p60-portrait"
+            https://cdn.example/1080p60-portrait.m3u8
+            #EXT-X-STREAM-INF:BANDWIDTH=6000000,RESOLUTION=1920x1080,CODECS="avc1.64002A,mp4a.40.2",FRAME-RATE=60.000,STABLE-VARIANT-ID="1080p60"
+            https://cdn.example/1080p60.m3u8
+        """.trimIndent().toByteArray()
+        val loader = castPlaylistLoader({ ByteArrayDataSource(bytes) }, PlaybackService.CustomHlsPlaylistParserFactory())
+        assertEquals("https://cdn.example/1080p60.m3u8",
+            CastReceiverVariants.select(loader.load(Uri.parse("https://usher.example/live.m3u8")), null).toString())
+    }
+
+    @Test fun `a variant the receiver cannot reach returns the stream to the phone`() {
+        val source = liveSource()
+        val factory = mock<MediaSource.Factory>()
+        whenever(factory.createMediaSource(source.mediaItem)).thenReturn(source)
+        var unavailable = 0
+        val handoff = CastPlaybackHandoff(local, receiverUnavailable = { unavailable++ }, main = direct, background = direct)
+        val proxied = HlsPlaylistParser().parse(Uri.parse("https://usher.example/live.m3u8"), """
+            #EXTM3U
+            #EXT-X-STREAM-INF:BANDWIDTH=6000000,RESOLUTION=1920x1080,CODECS="avc1.64002A,mp4a.40.2"
+            http://127.0.0.1:8080/1080p.m3u8
+        """.trimIndent().byteInputStream())
+        assertTrue(handoff.setSource(remote, factory, source.mediaItem) { proxied })
+        assertEquals(1, unavailable)
+        verify(remote, never()).setMediaItem(any())
+    }
+
+    @Test fun `Twitch VoD playlists stay on the phone while live and clips can cast`() {
+        assertFalse(CastPlaybackHandoff.canReceive(source("https://usher.example/vod.m3u8").mediaItem))
+        assertFalse(CastPlaybackHandoff.canReceive(MediaItem.fromUri("https://usher.example/vod.m3u8")))
+        assertTrue(CastPlaybackHandoff.canReceive(liveSource().mediaItem))
+        assertTrue(CastPlaybackHandoff.canReceive(source().mediaItem))
+        val vod = source("https://usher.example/vod.m3u8").mediaItem
+        whenever(local.currentMediaItem).thenReturn(vod)
+        whenever(local.playbackParameters).thenReturn(PlaybackParameters(1f))
+        var rejected = 0
+        handoff.transfer(local, remote) { rejected++ }
+        assertEquals(1, rejected)
+        assertFalse(handoff.setSource(remote, source("https://usher.example/other.m3u8")))
+    }
+
+    @Test fun `receiver variants prefer H264 and follow the local quality choice`() {
+        val playlist = multivariant()
+        fun pick(height: Int?, fps: Float = 60f) = CastReceiverVariants.select(playlist,
+            height?.let { Format.Builder().setHeight(it).setFrameRate(fps).build() }).toString()
+        assertEquals("https://cdn.example/1080p60.m3u8", pick(null))
+        assertEquals("https://cdn.example/1080p60.m3u8", pick(1080))
+        assertEquals("https://cdn.example/720p60.m3u8", pick(720))
+        assertEquals("https://cdn.example/720p30.m3u8", pick(720, 30f))
+        assertEquals("https://cdn.example/720p60.m3u8", pick(900))
+        assertEquals("https://cdn.example/720p30.m3u8", pick(160))
+        val audio = HlsPlaylistParser().parse(Uri.parse("https://usher.example/a.m3u8"),
+            "#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=160000,CODECS=\"mp4a.40.2\"\nhttps://cdn.example/audio_only.m3u8\n".byteInputStream())
+        assertEquals("https://cdn.example/audio_only.m3u8", CastReceiverVariants.select(audio, null).toString())
+        val hevcOnly = HlsPlaylistParser().parse(Uri.parse("https://usher.example/h.m3u8"),
+            "#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=9000000,RESOLUTION=1920x1080,CODECS=\"hvc1.1.2.L123.90,mp4a.40.2\"\nhttps://cdn.example/1080p-hevc.m3u8\n".byteInputStream())
+        assertNull(CastReceiverVariants.select(hevcOnly, null))
     }
 
     @Test fun `phone-local proxy remains playable locally`() {
