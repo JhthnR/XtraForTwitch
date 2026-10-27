@@ -10,6 +10,7 @@ import androidx.media3.cast.CastPlayer
 import androidx.media3.cast.RemoteCastPlayer
 import androidx.media3.common.Player
 import androidx.media3.common.ForwardingSimpleBasePlayer
+import androidx.media3.common.ForwardingPlayer
 import androidx.media3.common.DeviceInfo
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
@@ -47,8 +48,23 @@ internal class PlayerCastBridge(
         private set
     private var active = buildPlayer(enabled)
     private val routing = RoutePlayer(active)
-    val player: Player get() = routing
+    private val commands = guardCommands(routing)
+    val player: Player get() = commands
     val castAvailable get() = active !== local
+
+    // SimpleBasePlayer can skip its handleStop/remove hooks for an idle/empty player.
+    // Intercept the explicit commands before that optimization, while a lookup has no item.
+    fun guardCommands(player: Player): Player = object : ForwardingPlayer(player) {
+        override fun stop() {
+            handoff.cancelPending()
+            super.stop()
+        }
+
+        override fun clearMediaItems() {
+            handoff.cancelPending(clearOwnership = true)
+            super.clearMediaItems()
+        }
+    }
 
     private fun buildPlayer(enabled: Boolean): Player = if (enabled) try {
         val routeGeneration = generation
@@ -72,8 +88,11 @@ internal class PlayerCastBridge(
 
     /** Ending the session lets the handoff restore its rejected snapshot locally. */
     private fun returnToLocal(routeGeneration: Int, message: Int) {
+        val sourceHandoff = handoff
+        val sourceRequest = sourceHandoff.requestToken
         handler.post {
-            if (!closed && generation == routeGeneration) {
+            if (!closed && generation == routeGeneration && handoff === sourceHandoff &&
+                sourceHandoff.requestToken == sourceRequest) {
                 Toast.makeText(context, message, Toast.LENGTH_LONG).show()
                 endCurrentSession()
             }

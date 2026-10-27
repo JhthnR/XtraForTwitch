@@ -162,6 +162,20 @@ class CastPlaybackHandoffTest {
         verifyNoInteractions(local)
     }
 
+    @Test fun `clear retires receiver ownership while retaining the configured local source factory`() {
+        val source = source()
+        val factory = mock<MediaSource.Factory>()
+        whenever(factory.createMediaSource(source.mediaItem)).thenReturn(source)
+        val changes = mutableListOf<MediaSource.Factory?>()
+        val handoff = CastPlaybackHandoff(local, sourceFactoryChanged = { changes += it })
+        assertTrue(handoff.setSource(remote, factory, source.mediaItem))
+        handoff.cancelPending(clearOwnership = true)
+        whenever(remote.currentMediaItem).thenReturn(source.mediaItem)
+        assertFalse(handoff.restoreFrom(remote))
+        assertEquals(listOf(factory), changes)
+        verifyNoInteractions(local)
+    }
+
     @Test fun `receiver URLs require reachable online media rather than phone files or loopback`() {
         assertTrue(CastPlaybackHandoff.canCast(MediaItem.fromUri("https://example.com/live.m3u8")))
         assertTrue(CastPlaybackHandoff.canCast(MediaItem.fromUri("https://localhost.example.com/live.m3u8")))
@@ -299,10 +313,15 @@ class CastPlaybackHandoffTest {
         val pending = mutableListOf<Runnable>()
         val handoff = CastPlaybackHandoff(local, main = direct, background = { pending += it })
         assertTrue(handoff.setSource(remote, factory, source.mediaItem) { multivariant() })
+        verify(remote).pause()
         verify(remote, never()).setMediaItem(any())
+        verify(remote, never()).setPlayWhenReady(true)
         pending.single().run()
         val sent = argumentCaptor<MediaItem>()
-        verify(remote).setMediaItem(sent.capture())
+        inOrder(remote) {
+            verify(remote).setMediaItem(sent.capture())
+            verify(remote).setPlayWhenReady(true)
+        }
         assertEquals(source.mediaItem.localConfiguration?.uri, sent.firstValue.localConfiguration?.uri)
         assertEquals("https://cdn.example/1080p60.m3u8", receiverUri(sent.firstValue))
     }

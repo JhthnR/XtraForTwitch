@@ -35,6 +35,20 @@ Required on the exact signed 1.5.1 candidate:
   close/reopen, PiP/background, speed/quality, gestures and floating chat.
 - [ ] Updater discovery, download, install permission and installer handover.
 - [ ] When a receiver is available: the Optional Google Cast checks below.
+- [ ] Delay the initial live playlist, connect Cast and immediately close or clear
+  playback. Complete the lookup: old receiver media must not start. While lookup
+  is pending, an alternate backend must be refused until the service releases
+  the source. Repeat receiver failure immediately followed by a newer live/clip
+  start: the old fallback must not disconnect the newer source.
+- [ ] Retain receiver playback after app exit, reopen and open a VoD. Close or
+  replace its screen before URL resolution, while the source command is pending,
+  and after rejection: unrelated receiver media must continue. Also close a
+  successfully accepted source before its result reaches the UI: that source
+  must stop, without affecting a later replacement.
+- [ ] Pause receiver media, then start a different live stream with a delayed
+  playlist: the previous item stays paused until the replacement starts. Repeat
+  background/return and screen recreation before source acceptance arrives;
+  the returning screen must regain controls and close only its own source.
 
 ### 1.5.0 release candidate
 

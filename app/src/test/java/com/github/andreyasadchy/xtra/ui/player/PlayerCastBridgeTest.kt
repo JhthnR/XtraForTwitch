@@ -2,13 +2,20 @@ package com.github.andreyasadchy.xtra.ui.player
 
 import android.app.Application
 import android.view.SurfaceView
+import android.os.Looper
+import android.net.Uri
 import androidx.media3.cast.CastPlayer
 import androidx.media3.common.DeviceInfo
 import androidx.media3.common.ForwardingPlayer
+import androidx.media3.common.ForwardingSimpleBasePlayer
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.MediaSource
+import androidx.media3.exoplayer.hls.HlsMediaSource
+import androidx.media3.exoplayer.hls.playlist.HlsPlaylistParser
+import androidx.media3.datasource.DefaultDataSource
+import java.util.concurrent.Executor
 import org.junit.Assert.*
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -17,12 +24,71 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.ConscryptMode
+import org.robolectric.Shadows.shadowOf
+import org.robolectric.util.ReflectionHelpers
 
 @RunWith(RobolectricTestRunner::class)
 @Config(application = Application::class, sdk = [23, 28])
 @ConscryptMode(ConscryptMode.Mode.OFF)
 class PlayerCastBridgeTest {
     private val context = RuntimeEnvironment.getApplication()
+
+    @Test fun `stop or clear cancels a delayed outgoing transfer without losing the configured factory`() {
+        for (stop in listOf(true, false)) {
+            lateinit var local: ExoPlayer
+            val bridge = PlayerCastBridge(context, true,
+                createLocal = { ExoPlayer.Builder(context).build().also { local = it } },
+                endCurrentSession = {}, createCast = { player, _ -> ForwardingPlayer(player) })
+            val queued = mutableListOf<Runnable>()
+            val factories = mutableListOf<MediaSource.Factory?>()
+            val handoff = CastPlaybackHandoff(local, sourceFactoryChanged = { factories += it },
+                main = Executor { it.run() }, background = { queued += it })
+            ReflectionHelpers.setField(bridge, "handoff", handoff)
+            try {
+                val item = MediaItem.Builder().setUri("https://example.com/live.m3u8")
+                    .setLiveConfiguration(MediaItem.LiveConfiguration.Builder().setTargetOffsetMs(2000).build()).build()
+                val factory = HlsMediaSource.Factory(DefaultDataSource.Factory(context))
+                assertTrue(handoff.setSource(bridge.player, factory, item) {
+                    HlsPlaylistParser().parse(Uri.parse("https://example.com/live.m3u8"),
+                        "#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=1000000,CODECS=\"avc1.4d401f\"\nhttps://example.com/variant.m3u8\n".byteInputStream())
+                })
+                local.playWhenReady = true
+                val remote = mock<Player>()
+                handoff.transfer(local, remote) { fail("Live transfer should resolve") }
+                assertTrue(handoff.hasPendingSource)
+                // Match the service's extra SimpleBasePlayer layer, including its idle-stop shortcut.
+                val sessionPlayer = bridge.guardCommands(object : ForwardingSimpleBasePlayer(bridge.player) {})
+                if (stop) sessionPlayer.stop() else sessionPlayer.clearMediaItems()
+                assertFalse(handoff.hasPendingSource)
+                queued.single().run()
+                verify(remote, never()).setMediaItem(any())
+                verify(remote, never()).setPlayWhenReady(true)
+                assertEquals(listOf(factory), factories)
+            } finally { bridge.dispose(); bridge.player.release() }
+        }
+    }
+
+    @Test fun `queued fallback cannot disconnect a newer source on the same Cast route`() {
+        var ended = 0
+        lateinit var local: ExoPlayer
+        val bridge = PlayerCastBridge(context, true,
+            createLocal = { ExoPlayer.Builder(context).build().also { local = it } },
+            endCurrentSession = { ended++ }, createCast = { player, _ -> ForwardingPlayer(player) })
+        try {
+            shadowOf(Looper.getMainLooper()).pause()
+            fun failLookup() = PlayerCastBridge::class.java.getDeclaredMethod("returnToLocal", Integer.TYPE, Integer.TYPE)
+                .apply { isAccessible = true }.invoke(bridge, 0, com.github.andreyasadchy.xtra.R.string.cast_receiver_unavailable)
+            failLookup()
+            val item = MediaItem.fromUri("https://example.com/new.mp4")
+            bridge.handoff.setSource(local, androidx.media3.exoplayer.source.ProgressiveMediaSource.Factory(
+                DefaultDataSource.Factory(context)), item)
+            shadowOf(Looper.getMainLooper()).idle()
+            assertEquals(0, ended)
+            failLookup()
+            shadowOf(Looper.getMainLooper()).idle()
+            assertEquals(1, ended)
+        } finally { bridge.dispose(); bridge.player.release() }
+    }
 
     @Test fun `setting changes replace only the idle route while keeping the session player stable`() {
         val locals = mutableListOf<ExoPlayer>()

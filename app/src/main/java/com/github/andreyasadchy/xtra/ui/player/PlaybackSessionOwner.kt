@@ -9,16 +9,22 @@ import java.lang.ref.WeakReference
 @MainThread
 internal object PlaybackSessionOwner {
     private var owner: WeakReference<Player>? = null
+    private var bridge: WeakReference<PlayerCastBridge>? = null
 
-    fun register(player: Player) { owner = WeakReference(player) }
-
-    fun unregister(player: Player) {
-        if (owner?.get() === player) owner = null
+    fun register(player: Player, castBridge: PlayerCastBridge? = null) {
+        owner = WeakReference(player)
+        bridge = castBridge?.let(::WeakReference)
     }
 
-    fun hasMedia(): Boolean = owner?.get()?.currentMediaItem != null
+    fun unregister(player: Player) {
+        if (owner?.get() === player) { owner = null; bridge = null }
+    }
+
+    fun hasMedia(): Boolean = owner?.get()?.let {
+        it.currentMediaItem != null || bridge?.get()?.handoff?.hasPendingSource == true
+    } == true
 
     fun hasRemoteMedia(): Boolean = owner?.get()?.let {
-        it.currentMediaItem != null && it.deviceInfo.playbackType == DeviceInfo.PLAYBACK_TYPE_REMOTE
+        hasMedia() && it.deviceInfo.playbackType == DeviceInfo.PLAYBACK_TYPE_REMOTE
     } == true
 }

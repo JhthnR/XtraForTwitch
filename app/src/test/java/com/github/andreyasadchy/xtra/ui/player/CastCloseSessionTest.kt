@@ -8,7 +8,11 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionCommand
+import androidx.media3.session.SessionResult
+import androidx.media3.session.MediaSession
+import androidx.media3.common.Tracks
 import com.google.common.util.concurrent.Futures
+import com.google.common.util.concurrent.SettableFuture
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -35,26 +39,21 @@ class CastCloseSessionTest {
                 .set(this, PlayerFragment.STREAM)
             Media3Fragment::class.java.getDeclaredField("controllerFuture").apply { isAccessible = true }
                 .set(this, Futures.immediateFuture(controller))
+            ReflectionHelpers.setField(this, "sourceRequest", "accepted-source")
+            ReflectionHelpers.setField(this, "acceptedStart", true)
         }
     }
 
     @Test fun `explicit close stops media and ends the receiver session`() {
         val controller = mock<MediaController>()
         fragment(controller).closeSession()
-        inOrder(controller) {
-            verify(controller).pause()
-            verify(controller).stop()
-            verify(controller).clearMediaItems()
-            verify(controller).sendCustomCommand(eq(SessionCommand(PlaybackService.END_CAST_SESSION, Bundle.EMPTY)), any())
-        }
+        verifyClosed(controller)
     }
 
     @Test fun `replacement stops old media while retaining the receiver route`() {
         val controller = mock<MediaController>()
         fragment(controller).close()
-        verify(controller).stop()
-        verify(controller).clearMediaItems()
-        verify(controller, never()).sendCustomCommand(eq(SessionCommand(PlaybackService.END_CAST_SESSION, Bundle.EMPTY)), any())
+        verifyCloseRequest(controller, disconnect = false)
     }
     private fun casting(controller: MediaController, remote: Boolean = true, item: MediaItem? = MediaItem.fromUri("https://example.com/vod.m3u8")) {
         whenever(controller.deviceInfo).thenReturn(
@@ -63,9 +62,19 @@ class CastCloseSessionTest {
     }
 
     private fun verifyClosed(controller: MediaController) {
-        verify(controller).stop()
-        verify(controller).clearMediaItems()
-        verify(controller).sendCustomCommand(eq(SessionCommand(PlaybackService.END_CAST_SESSION, Bundle.EMPTY)), any())
+        verifyCloseRequest(controller, disconnect = true)
+    }
+
+    private fun verifyCloseRequest(controller: MediaController, disconnect: Boolean) {
+        val command = argumentCaptor<SessionCommand>()
+        verify(controller).sendCustomCommand(command.capture(), eq(Bundle.EMPTY))
+        org.junit.Assert.assertEquals(PlaybackService.CLOSE_SOURCE, command.firstValue.customAction)
+        org.junit.Assert.assertEquals("accepted-source", command.firstValue.customExtras.getString(PlaybackService.SOURCE_REQUEST))
+        org.junit.Assert.assertEquals(disconnect, command.firstValue.customExtras.getBoolean(PlaybackService.DISCONNECT_CAST))
+        verify(controller, never()).pause()
+        verify(controller, never()).stop()
+        verify(controller, never()).clearMediaItems()
+        verify(controller).release()
     }
 
     @Test fun `app exit with keep casting leaves receiver playback running`() {
@@ -136,5 +145,90 @@ class CastCloseSessionTest {
         verify(controller, never()).clearMediaItems()
         verify(controller, never()).currentPosition
         assertTrue(ShadowToast.getTextOfLatestToast() == context.getString(R.string.cast_disconnect_download))
+    }
+
+    @Test fun `closing before URL resolution only releases the retained receiver controller`() {
+        val controller = mock<MediaController>()
+        casting(controller)
+        val fragment = fragment(controller)
+        ReflectionHelpers.setField(fragment, "acceptedStart", false)
+        ReflectionHelpers.setField(fragment, "sourceRequest", null)
+        fragment.closeSession()
+        verify(controller).release()
+        verify(controller, never()).pause()
+        verify(controller, never()).stop()
+        verify(controller, never()).clearMediaItems()
+        verify(controller, never()).sendCustomCommand(any(), any())
+        verify(controller, never()).currentPosition
+    }
+
+    @Test fun `closing while start result is pending sends only a source-guarded close`() {
+        val controller = mock<MediaController>()
+        casting(controller)
+        val fragment = fragment(controller)
+        ReflectionHelpers.setField(fragment, "acceptedStart", false)
+        val result = SettableFuture.create<SessionResult>()
+        whenever(controller.sendCustomCommand(any(), any())).thenReturn(result)
+        Media3Fragment::class.java.getDeclaredMethod("sendSourceCommand", SessionCommand::class.java).apply {
+            isAccessible = true
+        }.invoke(fragment, SessionCommand(PlaybackService.START_VIDEO, Bundle.EMPTY))
+        fragment.close()
+        val commands = argumentCaptor<SessionCommand>()
+        verify(controller, times(2)).sendCustomCommand(commands.capture(), eq(Bundle.EMPTY))
+        val start = commands.allValues[0]
+        val close = commands.allValues[1]
+        org.junit.Assert.assertEquals(PlaybackService.CLOSE_SOURCE, close.customAction)
+        org.junit.Assert.assertEquals(start.customExtras.getString(PlaybackService.SOURCE_REQUEST),
+            close.customExtras.getString(PlaybackService.SOURCE_REQUEST))
+        assertTrue(result.isCancelled)
+        verify(controller).release()
+        verify(controller, never()).stop()
+        verify(controller, never()).clearMediaItems()
+        verify(controller, never()).currentPosition
+    }
+
+    @Test fun `service closes only its accepted request even if the UI has not received success`() {
+        val player = mock<Player>()
+        whenever(player.currentTracks).thenReturn(Tracks.EMPTY)
+        val session = mock<MediaSession>()
+        whenever(session.player).thenReturn(player)
+        val handoff = mock<CastPlaybackHandoff>()
+        val bridge = mock<PlayerCastBridge>()
+        whenever(bridge.handoff).thenReturn(handoff)
+        val service = mock<PlaybackService>(defaultAnswer = Mockito.CALLS_REAL_METHODS)
+        ReflectionHelpers.setField(service, "mediaSession", session)
+        ReflectionHelpers.setField(service, "castBridge", bridge)
+        ReflectionHelpers.setField(service, "sourceRequest", "accepted")
+        for (request in listOf(null, "rejected", "older")) service.closeSource(request, disconnect = true)
+        verifyNoInteractions(player, bridge, handoff)
+        service.closeSource("accepted", disconnect = true)
+        inOrder(handoff, player, bridge) {
+            verify(handoff).cancelPending(clearOwnership = true)
+            verify(player).pause()
+            verify(player).stop()
+            verify(player).clearMediaItems()
+            verify(bridge).endSession()
+        }
+        service.closeSource("accepted", disconnect = true)
+        verify(player, times(1)).stop()
+    }
+
+    @Test fun `returning screen recovers only its own service acceptance after a delayed result`() {
+        for (currentRequest in listOf("accepted-source", "another-screen")) {
+            val controller = mock<MediaController>()
+            val fragment = fragment(controller)
+            ReflectionHelpers.setField(fragment, "acceptedStart", false)
+            val result = SettableFuture.create<SessionResult>()
+            whenever(controller.sendCustomCommand(eq(SessionCommand(PlaybackService.GET_SOURCE_REQUEST, Bundle.EMPTY)), any()))
+                .thenReturn(result)
+            Media3Fragment::class.java.getDeclaredMethod("refreshSourceOwnership", MediaController::class.java).apply {
+                isAccessible = true
+            }.invoke(fragment, controller)
+            result.set(SessionResult(SessionResult.RESULT_SUCCESS, Bundle().apply {
+                putString(PlaybackService.SOURCE_REQUEST, currentRequest)
+            }))
+            org.junit.Assert.assertEquals(currentRequest == "accepted-source",
+                ReflectionHelpers.getField<Boolean>(fragment, "acceptedStart"))
+        }
     }
 }

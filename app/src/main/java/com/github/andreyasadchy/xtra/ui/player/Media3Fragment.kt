@@ -56,6 +56,7 @@ import com.google.common.util.concurrent.MoreExecutors
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import java.util.UUID
 
 @OptIn(UnstableApi::class)
 @AndroidEntryPoint
@@ -71,15 +72,29 @@ class Media3Fragment : PlayerFragment() {
                 (activity as? MainActivity)?.supportFragmentManager?.findFragmentById(R.id.playerContainer) === this
         },
         rejected = ::rejectSourceStart,
+        accepted = { acceptedStart = true },
     )
     private val castStopRestart = CastStopRestart()
     private var localOnlyDialog: AlertDialog? = null
     private var lastSourceCommand: SessionCommand? = null
     /** Set from a service rejection until the next source command; the controller's media is not ours. */
     private var rejectedStart = false
+    /** A connected controller may still show another screen's retained media. */
+    private var acceptedStart = false
+    private var sourceRequest: String? = null
     private var castUi: PlayerCastUi? = null
     private var castUiRequest = 0
     private val updateProgressAction = Runnable { if (view != null) updateProgress() }
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        sourceRequest = savedInstanceState?.getString(PlaybackService.SOURCE_REQUEST)
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        outState.putString(PlaybackService.SOURCE_REQUEST, sourceRequest)
+        super.onSaveInstanceState(outState)
+    }
 
     override fun onStart() {
         super.onStart()
@@ -93,6 +108,7 @@ class Media3Fragment : PlayerFragment() {
         controllerFuture?.addListener({
             val controller = controllerFuture?.get()
             controller?.let(::refreshCastUi)
+            controller?.let(::refreshSourceOwnership)
             if (controller?.isCommandAvailable(Player.COMMAND_SET_VIDEO_SURFACE) == true) {
                 controller.setVideoSurfaceView(binding.playerSurface)
             }
@@ -605,9 +621,14 @@ class Media3Fragment : PlayerFragment() {
 
     private fun sendSourceCommand(command: SessionCommand) {
         player?.let {
-            lastSourceCommand = command
+            val request = UUID.randomUUID().toString()
+            val sourceCommand = SessionCommand(command.customAction, Bundle(command.customExtras).apply {
+                putString(PlaybackService.SOURCE_REQUEST, request)
+            })
+            sourceRequest = request
+            lastSourceCommand = sourceCommand
             rejectedStart = false
-            sourceCommands.send(it, command)
+            sourceCommands.send(it, sourceCommand)
         }
     }
 
@@ -615,6 +636,7 @@ class Media3Fragment : PlayerFragment() {
         sourceCommands.cancel()
         viewModel.started = false
         rejectedStart = true
+        acceptedStart = false
         val message = when {
             resultCode != androidx.media3.session.SessionError.ERROR_NOT_SUPPORTED -> R.string.player_error_stopped
             action == PlaybackService.START_OFFLINE_VIDEO -> R.string.cast_disconnect_download
@@ -671,11 +693,25 @@ class Media3Fragment : PlayerFragment() {
     }
 
     private fun releaseController() {
+        sourceCommands.cancel()
         playerListener?.let { player?.removeListener(it) }
         playerListener = null
         val future = controllerFuture
         controllerFuture = null
         future?.let { MediaController.releaseFuture(it) }
+    }
+
+    /** Recover acceptance after a stopped view cancelled its result or a screen was recreated. */
+    private fun refreshSourceOwnership(controller: MediaController) {
+        val request = sourceRequest ?: return
+        if (acceptedStart || rejectedStart) return
+        val result = controller.sendCustomCommand(SessionCommand(PlaybackService.GET_SOURCE_REQUEST, Bundle.EMPTY), Bundle.EMPTY)
+        result.addListener({
+            val response = runCatching { result.get() }.getOrNull()
+            if (player === controller && sourceRequest == request &&
+                response?.resultCode == SessionResult.RESULT_SUCCESS &&
+                response.extras.getString(PlaybackService.SOURCE_REQUEST) == request) acceptedStart = true
+        }, MoreExecutors.directExecutor())
     }
 
     private fun handleStreamError(error: PlaybackException) {
@@ -1007,7 +1043,7 @@ class Media3Fragment : PlayerFragment() {
     }
 
     override fun startAudioOnly() {
-        if (rejectedStart) return
+        if (!acceptedStart) return
         player?.let { player ->
             if (player.isConnected) {
                 savePosition()
@@ -1104,7 +1140,7 @@ class Media3Fragment : PlayerFragment() {
         val controller = player
         if (keepCasting && isRemotePlayback() && controller?.currentMediaItem != null) {
             // Leave the receiver playing; the service and its notification keep control.
-            if (!rejectedStart) savePosition()
+            if (acceptedStart) savePosition()
             releaseController()
         } else {
             closeSession()
@@ -1112,28 +1148,19 @@ class Media3Fragment : PlayerFragment() {
     }
 
     private fun closePlayback(disconnect: Boolean) {
-        if (rejectedStart) {
-            // Closing an unaccepted screen must not save, stop or disconnect media it never owned.
-            castStopRestart.cancel()
-            localOnlyDialog?.let { localOnlyDialog = null; it.dismiss() }
-            releaseController()
-            return
+        castStopRestart.cancel()
+        localOnlyDialog?.let { localOnlyDialog = null; it.dismiss() }
+        if (acceptedStart) savePosition()
+        // The service knows whether it accepted this source even before its result arrives here.
+        // A stale/pending/rejected screen can never close a different retained source.
+        sourceRequest?.let { request ->
+            player?.sendCustomCommand(SessionCommand(PlaybackService.CLOSE_SOURCE, bundleOf(
+                PlaybackService.SOURCE_REQUEST to request,
+                PlaybackService.DISCONNECT_CAST to disconnect,
+            )), Bundle.EMPTY)
         }
-        savePosition()
-        player?.pause()
-        player?.stop()
-        player?.clearMediaItems()
-        if (disconnect) {
-            player?.sendCustomCommand(SessionCommand(PlaybackService.END_CAST_SESSION, Bundle.EMPTY), Bundle.EMPTY)
-        }
-        player?.sendCustomCommand(
-            SessionCommand(PlaybackService.SET_SLEEP_TIMER, Bundle().apply {
-                putLong(PlaybackService.DURATION, 0L)
-            }), Bundle.EMPTY
-        )
-        playerListener?.let { player?.removeListener(it) }
-        playerListener = null
-        controllerFuture?.let { MediaController.releaseFuture(it) }
+        acceptedStart = false
+        releaseController()
     }
 
     override fun onStop() {
@@ -1144,7 +1171,7 @@ class Media3Fragment : PlayerFragment() {
         localOnlyDialog?.let { localOnlyDialog = null; it.dismiss() }
         super.onStop()
         castUi?.dismissDialog()
-        player?.takeUnless { rejectedStart }?.let { player ->
+        player?.takeIf { acceptedStart }?.let { player ->
             if (player.isConnected) {
                 savePosition()
                 if (viewModel.usingProxy) {
