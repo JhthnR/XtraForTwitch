@@ -395,6 +395,19 @@ eligibility policy. Local-only URLs are rejected before retained source/factory
 or receiver ownership changes. Service command rejection removes only the failed
 screen and its controller, without saving unrelated media under the new source
 or stopping the receiver. Stale results cannot discard a replacement player.
+When the service rejects a local-only start (a VoD, or live without a receiver
+variant) while casting, the screen offers "Stop casting and play here" instead.
+`CastStopRestart` clears the receiver media, ends the session and replays the
+rejected source command, which keeps its resolved URL and start position
+(explicit timestamps included), once playback is local. Cancel discards the
+screen as before; a 10 s timeout discards it with a playback error; leaving the
+app replays the same command (and offer) on return; a minimized screen gets the
+toast and is discarded instead. Until a new source command is sent, a rejected
+screen never saves a position, runs stop-time teardown, or stops/disconnects
+media on close: the controller's media belongs to someone else. Opening the VoD
+from a visible casting player still closes that player first, which stops
+receiver media, so Cancel keeps the session connected but idle. Downloads are
+still blocked in `MainActivity` with a toast before any screen opens.
 
 The receiver fetches the media URL directly. Phone HTTP headers/proxies are not
 forwarded. Receivers are browsers, so HLS needs CORS (issue #60): Twitch's usher

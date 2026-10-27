@@ -355,8 +355,15 @@ behavior remain unverified; emulator results are recorded separately in
   a fixed quality (for example 480p): the TV uses the best or the chosen variant.
   Also start casting from chat-only and enhanced-broadcasting (HEVC/AV1) channels.
 - [ ] Cast from a VoD: the phone explains it plays only on this device and keeps
-  playing locally. Switch live/live and open a VoD or download while casting:
-  the existing receiver session must remain, with an explanation on the phone.
+  playing locally. Switch live/live and open a VoD while casting: the phone
+  offers "Stop casting and play here". Cancel closes the new screen and keeps the
+  session connected (the TV is idle if the VoD was opened from the casting
+  player). Stop casting ends the session and plays the VoD on the phone at its
+  resume position, or at the link's timestamp with saved positions off. Leave
+  the app while the offer is open and return: the offer appears again. Retain a
+  session after closing the app, reopen, open a VoD and decline: the TV keeps
+  playing and no VoD position changes. A download while casting still shows
+  "Stop casting before opening a download".
 - [ ] Disconnect: one local player resumes the same paused/playing VoD position
   and speed, or the live edge, using normal quality and HTTP configuration.
 - [ ] Background/lock/restore the phone, minimize/restore, rotate, lose/recover
