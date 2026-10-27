@@ -18,6 +18,7 @@ import java.util.concurrent.Executor
 internal class PlayerSourceCommands(
     private val isCurrent: (MediaController) -> Boolean,
     private val rejected: (String, Int) -> Unit,
+    private val accepted: () -> Unit = {},
     private val executor: Executor = Handler(Looper.getMainLooper()).let { handler -> Executor { handler.post(it) } },
 ) {
     private var generation = 0
@@ -36,7 +37,7 @@ internal class PlayerSourceCommands(
             if (pending === result) pending = null
             if (request == generation && isCurrent(controller)) {
                 val code = runCatching { result.get().resultCode }.getOrDefault(SessionError.ERROR_UNKNOWN)
-                if (code != SessionResult.RESULT_SUCCESS) rejected(command.customAction, code)
+                if (code == SessionResult.RESULT_SUCCESS) accepted() else rejected(command.customAction, code)
             }
         }, executor)
     }

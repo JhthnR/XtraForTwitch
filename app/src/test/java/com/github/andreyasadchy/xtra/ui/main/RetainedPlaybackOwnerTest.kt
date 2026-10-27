@@ -5,12 +5,17 @@ import androidx.core.content.edit
 import androidx.media3.common.DeviceInfo
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
+import androidx.media3.common.ForwardingPlayer
+import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.source.MediaSource
 import com.github.andreyasadchy.xtra.R
 import com.github.andreyasadchy.xtra.model.ui.Clip
 import com.github.andreyasadchy.xtra.model.ui.OfflineVideo
 import com.github.andreyasadchy.xtra.model.ui.Stream
 import com.github.andreyasadchy.xtra.model.ui.Video
 import com.github.andreyasadchy.xtra.ui.player.PlaybackSessionOwner
+import com.github.andreyasadchy.xtra.ui.player.PlayerCastBridge
+import com.github.andreyasadchy.xtra.ui.player.CastPlaybackHandoff
 import com.github.andreyasadchy.xtra.util.C
 import com.github.andreyasadchy.xtra.util.prefs
 import org.junit.Assert.*
@@ -29,6 +34,44 @@ import org.robolectric.util.ReflectionHelpers
 @Config(application = Application::class, sdk = [23, 28])
 @ConscryptMode(ConscryptMode.Mode.OFF)
 class RetainedPlaybackOwnerTest {
+    @Test fun `pending receiver lookup blocks another backend even before its queue has media`() {
+        val app = RuntimeEnvironment.getApplication()
+        lateinit var local: ExoPlayer
+        val bridge = PlayerCastBridge(app, true,
+            createLocal = { ExoPlayer.Builder(app).build().also { local = it } },
+            endCurrentSession = {}, createCast = { player, _ -> ForwardingPlayer(player) })
+        val queued = mutableListOf<Runnable>()
+        val handoff = CastPlaybackHandoff(local, main = { it.run() }, background = { queued += it })
+        ReflectionHelpers.setField(bridge, "handoff", handoff)
+        val owner = mock<Player>()
+        whenever(owner.deviceInfo).thenReturn(DeviceInfo.Builder(DeviceInfo.PLAYBACK_TYPE_REMOTE).build())
+        PlaybackSessionOwner.register(owner, bridge)
+        try {
+            val item = MediaItem.Builder().setUri("https://example.com/live.m3u8")
+                .setLiveConfiguration(MediaItem.LiveConfiguration.Builder().setTargetOffsetMs(2000).build()).build()
+            val source = mock<MediaSource>()
+            whenever(source.mediaItem).thenReturn(item)
+            val factory = mock<MediaSource.Factory>()
+            whenever(factory.createMediaSource(item)).thenReturn(source)
+            assertTrue(handoff.setSource(owner, factory, item) { error("Cancelled loader must not run") })
+            assertTrue(PlaybackSessionOwner.hasMedia())
+            assertTrue(PlaybackSessionOwner.hasRemoteMedia())
+            val activity = Robolectric.buildActivity(MainActivity::class.java).get()
+            val prefs = app.prefs()
+            prefs.edit { putString(C.PLAYER, "MediaPlayer") }
+            ReflectionHelpers.setField(activity, "prefs", prefs)
+            activity.startStream(Stream(channelId = "1", channelLogin = "test"))
+            assertNull(activity.playerFragment)
+            assertEquals(app.getString(R.string.player_session_in_use), ShadowToast.getTextOfLatestToast())
+            handoff.cancelPending()
+            assertFalse(PlaybackSessionOwner.hasMedia())
+        } finally {
+            PlaybackSessionOwner.unregister(owner)
+            bridge.dispose()
+            bridge.player.release()
+        }
+    }
+
     @Test fun `reopened activity rejects every alternate backend entry while service owns media`() {
         val app = RuntimeEnvironment.getApplication()
         val owner = mock<Player>()

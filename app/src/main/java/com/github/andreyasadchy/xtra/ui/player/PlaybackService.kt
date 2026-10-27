@@ -134,6 +134,7 @@ class PlaybackService : MediaSessionService() {
     private var sleepTimerEndTime = 0L
     private var lastSavedPosition: Long? = null
     private var savePositionTimer: Timer? = null
+    private var sourceRequest: String? = null
 
     override fun onCreate() {
         super.onCreate()
@@ -207,7 +208,7 @@ class PlaybackService : MediaSessionService() {
         )
         mediaSession = MediaSession.Builder(
             this,
-            object : ForwardingSimpleBasePlayer(player) {
+            bridge.guardCommands(object : ForwardingSimpleBasePlayer(player) {
                 override fun handlePrepare(): ListenableFuture<*> {
                     liveRecovery?.onExplicitPrepare()
                     return super.handlePrepare()
@@ -244,7 +245,7 @@ class PlaybackService : MediaSessionService() {
                         else -> super.handleSeek(mediaItemIndex, positionMs, seekCommand)
                     }
                 }
-            }
+            })
         ).apply {
             setSessionActivity(
                 PendingIntent.getActivity(
@@ -272,6 +273,13 @@ class PlaybackService : MediaSessionService() {
                             }
                         }
                         return when (customCommand.customAction) {
+                            CLOSE_SOURCE -> {
+                                closeSource(customCommand.customExtras.getString(SOURCE_REQUEST),
+                                    customCommand.customExtras.getBoolean(DISCONNECT_CAST))
+                                Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
+                            }
+                            GET_SOURCE_REQUEST -> Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS,
+                                Bundle().apply { putString(SOURCE_REQUEST, sourceRequest) }))
                             END_CAST_SESSION -> {
                                 bridge.endSession()
                                 Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
@@ -403,9 +411,10 @@ class PlaybackService : MediaSessionService() {
                                     loader = castPlaylistLoader(dataSourceFactory, playlistParsers),
                                 )
                                 if (!accepted) return Futures.immediateFuture(SessionResult(androidx.media3.session.SessionError.ERROR_NOT_SUPPORTED))
+                                sourceRequest = customCommand.customExtras.getString(SOURCE_REQUEST)
                                 session.player.applyLocalPlaybackDefaults(prefs().getInt(C.PLAYER_VOLUME, 100) / 100f, 1f)
                                 session.player.prepare()
-                                session.player.playWhenReady = true
+                                if (!bridge.handoff.hasPendingSource) session.player.playWhenReady = true
                                 Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
                             }
                             START_VIDEO -> {
@@ -467,6 +476,7 @@ class PlaybackService : MediaSessionService() {
                                     startPositionMs = position,
                                 )
                                 if (!accepted) return Futures.immediateFuture(SessionResult(androidx.media3.session.SessionError.ERROR_NOT_SUPPORTED))
+                                sourceRequest = customCommand.customExtras.getString(SOURCE_REQUEST)
                                 session.player.applyLocalPlaybackDefaults(prefs().getInt(C.PLAYER_VOLUME, 100) / 100f, prefs().getFloat(C.PLAYER_SPEED, 1f))
                                 session.player.prepare()
                                 session.player.playWhenReady = true
@@ -521,6 +531,7 @@ class PlaybackService : MediaSessionService() {
                                     }.build()
                                 )
                                 if (!accepted) return Futures.immediateFuture(SessionResult(androidx.media3.session.SessionError.ERROR_NOT_SUPPORTED))
+                                sourceRequest = customCommand.customExtras.getString(SOURCE_REQUEST)
                                 session.player.applyLocalPlaybackDefaults(prefs().getInt(C.PLAYER_VOLUME, 100) / 100f, prefs().getFloat(C.PLAYER_SPEED, 1f))
                                 session.player.prepare()
                                 session.player.playWhenReady = true
@@ -564,6 +575,7 @@ class PlaybackService : MediaSessionService() {
                                     }.build(),
                                     position,
                                 )
+                                sourceRequest = customCommand.customExtras.getString(SOURCE_REQUEST)
                                 session.player.applyLocalPlaybackDefaults(prefs().getInt(C.PLAYER_VOLUME, 100) / 100f, prefs().getFloat(C.PLAYER_SPEED, 1f))
                                 session.player.prepare()
                                 session.player.playWhenReady = true
@@ -679,7 +691,7 @@ class PlaybackService : MediaSessionService() {
                 }
             )
         }.build()
-        mediaSession?.player?.let(PlaybackSessionOwner::register)
+        mediaSession?.player?.let { PlaybackSessionOwner.register(it, bridge) }
     }
 
     private fun reinitializeDynamicsProcessing(audioSessionId: Int) {
@@ -739,6 +751,23 @@ class PlaybackService : MediaSessionService() {
             }
         }
         lastStatsTime = now
+    }
+
+    /** Close is conditional on service acceptance, not on an asynchronous UI acknowledgement. */
+    internal fun closeSource(request: String?, disconnect: Boolean) {
+        if (request == null || request != sourceRequest) return
+        sourceRequest = null
+        savePosition()
+        castBridge?.handoff?.cancelPending(clearOwnership = true)
+        mediaSession?.player?.let {
+            it.pause()
+            it.stop()
+            it.clearMediaItems()
+        }
+        if (disconnect) castBridge?.endSession()
+        sleepTimer?.cancel()
+        sleepTimer = null
+        sleepTimerEndTime = 0L
     }
 
     private fun savePosition() {
@@ -867,6 +896,10 @@ class PlaybackService : MediaSessionService() {
         const val START_CLIP = "startClip"
         const val START_OFFLINE_VIDEO = "startOfflineVideo"
         const val END_CAST_SESSION = "endCastSession"
+        const val CLOSE_SOURCE = "closeSource"
+        const val SOURCE_REQUEST = "sourceRequest"
+        const val GET_SOURCE_REQUEST = "getSourceRequest"
+        const val DISCONNECT_CAST = "disconnectCast"
         const val GET_CAST_AVAILABLE = "getCastAvailable"
         const val TOGGLE_DYNAMICS_PROCESSING = "toggleDynamicsProcessing"
         const val TOGGLE_PROXY = "toggleProxy"

@@ -28,7 +28,9 @@ class PlayerSourceCommandsTest {
     private val result = SettableFuture.create<SessionResult>()
     private val rejected = mutableListOf<Pair<String, Int>>()
     private var current: MediaController? = controller
-    private val commands = PlayerSourceCommands({ it === current }, { action, code -> rejected.add(action to code) })
+    private var accepted = 0
+    private val commands = PlayerSourceCommands({ it === current }, { action, code -> rejected.add(action to code) },
+        accepted = { accepted++ })
 
     init { whenever(controller.sendCustomCommand(command, Bundle.EMPTY)).thenReturn(result) }
     private fun drain() = shadowOf(Looper.getMainLooper()).idle()
@@ -48,6 +50,7 @@ class PlayerSourceCommandsTest {
         result.set(SessionResult(SessionResult.RESULT_SUCCESS))
         drain()
         assertTrue(rejected.isEmpty())
+        assertEquals(1, accepted)
     }
 
     @Test fun `an old queued rejection cannot discard a newer start`() {
@@ -59,6 +62,7 @@ class PlayerSourceCommandsTest {
         newer.set(SessionResult(SessionResult.RESULT_SUCCESS))
         drain()
         assertTrue(rejected.isEmpty())
+        assertEquals(1, accepted)
     }
 
     @Test fun `stopped view cancels pending result and queued failure`() {
@@ -67,6 +71,7 @@ class PlayerSourceCommandsTest {
         assertTrue(result.isCancelled)
         drain()
         assertTrue(rejected.isEmpty())
+        assertEquals(0, accepted)
     }
 
     @Test fun `changed controller rejects no replacement UI`() {

@@ -38,6 +38,8 @@ internal class CastPlaybackHandoff(
     private var ownedItem: MediaItem? = null
     /** Invalidates pending receiver playlist lookups whenever ownership or route changes. */
     private var request = 0
+    val requestToken get() = request
+    val hasPendingSource get() = pending != null || rejected != null
     private data class LocalSnapshot(val item: MediaItem, val position: Long, val play: Boolean, val speed: PlaybackParameters)
     private var rejected: LocalSnapshot? = null
     /** Restores local playback if the route returns before a receiver lookup completes. */
@@ -79,8 +81,8 @@ internal class CastPlaybackHandoff(
                 val variant = localVariant(item)
                 if (variant != null) transferOnline(from, to, item.withReceiverUri(variant))
                 else resolve(item, fallback) {
-                    to.playWhenReady = fallback.play
                     to.setMediaItem(it)
+                    to.playWhenReady = fallback.play
                 }
             }
         }
@@ -123,8 +125,12 @@ internal class CastPlaybackHandoff(
         ownedItem = item
         if (active.deviceInfo.playbackType == DeviceInfo.PLAYBACK_TYPE_REMOTE) {
             if (needsVariant(item)) {
-                // Live only (VoD HLS is local-only); the service starts playback right after a source command.
-                resolve(item, snapshot(item, 0, true, PlaybackParameters.DEFAULT)) { active.setMediaItem(it) }
+                // Do not resume the receiver's previous item while the new playlist is resolving.
+                active.pause()
+                resolve(item, snapshot(item, 0, true, PlaybackParameters.DEFAULT)) {
+                    active.setMediaItem(it)
+                    active.playWhenReady = true
+                }
             } else if (startPositionMs == C.TIME_UNSET) {
                 active.setMediaItem(item)
             } else {
@@ -200,6 +206,14 @@ internal class CastPlaybackHandoff(
     private fun unavailable(fallback: LocalSnapshot) {
         rejected = fallback
         receiverUnavailable()
+    }
+
+    /** Stop/clear must retire async loads without losing the factory used by local prepare. */
+    fun cancelPending(clearOwnership: Boolean = false) {
+        request++
+        rejected = null
+        pending = null
+        if (clearOwnership) ownedItem = null
     }
 
     fun clear() {

@@ -44,7 +44,7 @@ class SourceStartPositionTest {
             lateinit var local: ExoPlayer
             val bridge = PlayerCastBridge(context, cast, { ExoPlayer.Builder(context).build().also { local = it } },
                 endCurrentSession = {}, createCast = { player, _ -> object : ForwardingSimpleBasePlayer(player) {} })
-            val session = SessionPlayer(bridge.player)
+            val session = bridge.guardCommands(SessionPlayer(bridge.player))
             try { block(bridge, session) { local } } finally { bridge.dispose(); session.release() }
         }
     }

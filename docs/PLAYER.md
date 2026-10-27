@@ -70,6 +70,19 @@ and uses the normal default factory. This also covers local playback with Cast o
 - Stream switching must not leave old audio playing.
 - UI controls should stay responsive during live/VoD transitions.
 - Overlay surfaces should remain readable over arbitrary video content.
+- Pending Cast playlist resolution still owns the service session even while the
+  receiver queue is empty. Explicit stop/clear and source close invalidate its
+  delayed load and fallback snapshots while preserving the configured local
+  source factory. Deferred fallback disconnects recheck the source request as
+  well as the Cast route generation.
+- Each source-start command carries a unique request ID. The service records it
+  only after accepting that source. Screen close sends a conditional close for
+  that ID; a pending/rejected/stale screen cannot stop another retained source,
+  and a source accepted before its UI acknowledgement can still be closed. UI
+  save/background changes require an accepted start. The request ID survives
+  screen recreation; a returning controller can recover acceptance from the
+  service after its earlier result was cancelled. Remote live autoplay waits
+  until the resolved item is installed so an older paused item stays paused.
 - Quality, Speed, Stream volume, and More share one player-owned popup host; only one
   can be attached at a time, and teardown/minimize/PiP must remove it with the player view.
 
