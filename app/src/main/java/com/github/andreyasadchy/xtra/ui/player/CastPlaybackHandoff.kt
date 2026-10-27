@@ -86,24 +86,34 @@ internal class CastPlaybackHandoff(
         }
     }
 
-    fun setSource(active: Player, factory: MediaSource.Factory, item: MediaItem, loader: CastPlaylistLoader? = null): Boolean {
+    /**
+     * [startPositionMs] goes with the source: a later seek can be dropped by wrapper players
+     * while the new item's placeholder timeline is not seekable yet (issue #61).
+     */
+    fun setSource(
+        active: Player,
+        factory: MediaSource.Factory,
+        item: MediaItem,
+        startPositionMs: Long = C.TIME_UNSET,
+        loader: CastPlaylistLoader? = null,
+    ): Boolean {
         if (!canSetSource(active, item)) return false
         val prepared = factory.createMediaSource(item)
         if (!canSetSource(active, prepared.mediaItem)) return false
         this.factory = factory
         this.loader = loader
         sourceFactoryChanged(factory)
-        installSource(active, prepared)
+        installSource(active, prepared, startPositionMs)
         return true
     }
 
-    internal fun setSource(active: Player, prepared: MediaSource): Boolean {
+    internal fun setSource(active: Player, prepared: MediaSource, startPositionMs: Long = C.TIME_UNSET): Boolean {
         if (!canSetSource(active, prepared.mediaItem)) return false
-        installSource(active, prepared)
+        installSource(active, prepared, startPositionMs)
         return true
     }
 
-    private fun installSource(active: Player, prepared: MediaSource) {
+    private fun installSource(active: Player, prepared: MediaSource, startPositionMs: Long) {
         request++
         // Discard any pending fallback for an older, rejected source.
         rejected = null
@@ -112,11 +122,17 @@ internal class CastPlaybackHandoff(
         val item = prepared.mediaItem
         ownedItem = item
         if (active.deviceInfo.playbackType == DeviceInfo.PLAYBACK_TYPE_REMOTE) {
-            if (!needsVariant(item)) active.setMediaItem(item)
-            // The service starts playback right after a source command.
-            else resolve(item, snapshot(item, 0, true, PlaybackParameters.DEFAULT)) { active.setMediaItem(it) }
+            if (needsVariant(item)) {
+                // Live only (VoD HLS is local-only); the service starts playback right after a source command.
+                resolve(item, snapshot(item, 0, true, PlaybackParameters.DEFAULT)) { active.setMediaItem(it) }
+            } else if (startPositionMs == C.TIME_UNSET) {
+                active.setMediaItem(item)
+            } else {
+                active.setMediaItem(item, startPositionMs)
+            }
         } else {
-            local.setMediaSource(prepared)
+            if (startPositionMs == C.TIME_UNSET) local.setMediaSource(prepared)
+            else local.setMediaSource(prepared, startPositionMs)
         }
     }
 

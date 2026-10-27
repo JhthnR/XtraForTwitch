@@ -400,7 +400,7 @@ class PlaybackService : MediaSessionService() {
                                         )
                                     }.build(),
                                     // Receivers cannot load usher playlists; resolve a variant with the same HTTP stack.
-                                    castPlaylistLoader(dataSourceFactory, playlistParsers),
+                                    loader = castPlaylistLoader(dataSourceFactory, playlistParsers),
                                 )
                                 if (!accepted) return Futures.immediateFuture(SessionResult(androidx.media3.session.SessionError.ERROR_NOT_SUPPORTED))
                                 session.player.applyLocalPlaybackDefaults(prefs().getInt(C.PLAYER_VOLUME, 100) / 100f, 1f)
@@ -463,13 +463,13 @@ class PlaybackService : MediaSessionService() {
                                                 setArtworkUri(channelLogo?.toUri())
                                             }.build()
                                         )
-                                    }.build()
+                                    }.build(),
+                                    startPositionMs = position,
                                 )
                                 if (!accepted) return Futures.immediateFuture(SessionResult(androidx.media3.session.SessionError.ERROR_NOT_SUPPORTED))
                                 session.player.applyLocalPlaybackDefaults(prefs().getInt(C.PLAYER_VOLUME, 100) / 100f, prefs().getFloat(C.PLAYER_SPEED, 1f))
                                 session.player.prepare()
                                 session.player.playWhenReady = true
-                                session.player.seekTo(position)
                                 Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
                             }
                             START_CLIP -> {
@@ -561,12 +561,12 @@ class PlaybackService : MediaSessionService() {
                                                 setArtworkUri(channelLogo?.toUri())
                                             }.build()
                                         )
-                                    }.build()
+                                    }.build(),
+                                    position,
                                 )
                                 session.player.applyLocalPlaybackDefaults(prefs().getInt(C.PLAYER_VOLUME, 100) / 100f, prefs().getFloat(C.PLAYER_SPEED, 1f))
                                 session.player.prepare()
                                 session.player.playWhenReady = true
-                                session.player.seekTo(position)
                                 Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
                             }
                             TOGGLE_DYNAMICS_PROCESSING -> {
