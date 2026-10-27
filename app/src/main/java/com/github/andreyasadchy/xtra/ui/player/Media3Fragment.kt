@@ -74,6 +74,9 @@ class Media3Fragment : PlayerFragment() {
     )
     private val castStopRestart = CastStopRestart()
     private var localOnlyDialog: AlertDialog? = null
+    private var lastSourceCommand: SessionCommand? = null
+    /** Set from a service rejection until the next source command; the controller's media is not ours. */
+    private var rejectedStart = false
     private var castUi: PlayerCastUi? = null
     private var castUiRequest = 0
     private val updateProgressAction = Runnable { if (view != null) updateProgress() }
@@ -472,7 +475,14 @@ class Media3Fragment : PlayerFragment() {
 
     override fun initialize() {
         if (player != null && !viewModel.started) {
-            startPlayer()
+            val rejected = lastSourceCommand?.takeIf { rejectedStart }
+            if (rejected != null) {
+                // Returning to a rejected screen repeats the same request (and its offer).
+                viewModel.started = true
+                sendSourceCommand(rejected)
+            } else {
+                startPlayer()
+            }
         }
         super.initialize()
     }
@@ -590,34 +600,50 @@ class Media3Fragment : PlayerFragment() {
     }
 
     private fun sendSourceCommand(command: SessionCommand) {
-        player?.let { sourceCommands.send(it, command) }
+        player?.let {
+            lastSourceCommand = command
+            rejectedStart = false
+            sourceCommands.send(it, command)
+        }
     }
 
     private fun rejectSourceStart(action: String, resultCode: Int) {
         sourceCommands.cancel()
         viewModel.started = false
+        rejectedStart = true
         val message = when {
             resultCode != androidx.media3.session.SessionError.ERROR_NOT_SUPPORTED -> R.string.player_error_stopped
             action == PlaybackService.START_OFFLINE_VIDEO -> R.string.cast_disconnect_download
             else -> R.string.cast_local_only
         }
         val controller = player
-        if (message != R.string.player_error_stopped && controller?.deviceInfo?.playbackType == DeviceInfo.PLAYBACK_TYPE_REMOTE) {
-            offerStopCasting(controller, message)
+        val command = lastSourceCommand?.takeIf { it.customAction == action }
+        if (message != R.string.player_error_stopped && command != null &&
+            controller?.deviceInfo?.playbackType == DeviceInfo.PLAYBACK_TYPE_REMOTE) {
+            offerStopCasting(controller, command, message)
         } else {
             discardRejectedStart(message)
         }
     }
 
-    /** Local-only sources rejected while casting can end the session and play here instead. */
-    private fun offerStopCasting(controller: MediaController, message: Int) {
+    /**
+     * Local-only sources rejected while casting can end the session and play here instead.
+     * The rejected command is replayed as-is: it already carries the resolved URL and start
+     * position, while the fragment arguments for explicit timestamps were consumed by the first start.
+     */
+    private fun offerStopCasting(controller: MediaController, command: SessionCommand, message: Int) {
         var stopping = false
         val dialog = requireContext().getAlertDialogBuilder()
             .setMessage(message)
             .setPositiveButton(R.string.cast_stop_and_play_here) { _, _ ->
                 stopping = true
                 castStopRestart.start(controller,
-                    restart = { if (view != null && player === controller) startPlayer() },
+                    restart = {
+                        if (view != null && player === controller) {
+                            viewModel.started = true
+                            sendSourceCommand(command)
+                        }
+                    },
                     failed = { if (view != null && player === controller) discardRejectedStart(R.string.player_error_stopped) })
             }
             .setNegativeButton(android.R.string.cancel, null)
@@ -1078,6 +1104,13 @@ class Media3Fragment : PlayerFragment() {
     }
 
     private fun closePlayback(disconnect: Boolean) {
+        if (rejectedStart) {
+            // Closing an unaccepted screen must not save, stop or disconnect media it never owned.
+            castStopRestart.cancel()
+            localOnlyDialog?.let { localOnlyDialog = null; it.dismiss() }
+            releaseController()
+            return
+        }
         savePosition()
         player?.pause()
         player?.stop()
@@ -1098,13 +1131,12 @@ class Media3Fragment : PlayerFragment() {
     override fun onStop() {
         sourceCommands.cancel()
         // The restarted fragment repeats its start, so a stopped offer must not discard it.
-        // Until then the controller shows receiver media, which must not be saved under this source.
-        val awaitingLocalStart = localOnlyDialog != null || castStopRestart.isPending
+        // Until then the controller shows media this screen does not own; never save it here.
         castStopRestart.cancel()
         localOnlyDialog?.let { localOnlyDialog = null; it.dismiss() }
         super.onStop()
         castUi?.dismissDialog()
-        player?.takeUnless { awaitingLocalStart }?.let { player ->
+        player?.takeUnless { rejectedStart }?.let { player ->
             if (player.isConnected) {
                 savePosition()
                 if (viewModel.usingProxy) {
