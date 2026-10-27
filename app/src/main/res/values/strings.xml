@@ -961,9 +961,10 @@
     <string name="cast_keep_on_exit" tools:ignore="MissingTranslation">Keep casting after closing the app</string>
     <string name="cast_keep_on_exit_summary" tools:ignore="MissingTranslation">Closing ThystTV while casting leaves the video playing on the receiver. Control or stop it from the media notification. When off, closing the app stops casting.</string>
     <string name="cast_local_only" tools:ignore="MissingTranslation">This video can only play on this device.</string>
+    <string name="cast_receiver_unavailable" tools:ignore="MissingTranslation">Couldn’t start this stream on your Cast device. Playing it here instead.</string>
     <string name="cast_disconnect_download" tools:ignore="MissingTranslation">Stop casting before opening a download.</string>
     <string name="player_session_in_use" tools:ignore="MissingTranslation">Stop the current playback session from its notification before switching players.</string>
-    <string name="cast_quality_managed" tools:ignore="MissingTranslation">Video quality is managed by your Cast device.</string>
-    <string name="cast_auto_quality" tools:ignore="MissingTranslation">Auto (Cast)</string>
+    <string name="cast_quality_managed" tools:ignore="MissingTranslation">Quality can’t be changed while casting. Choose it before you start casting.</string>
+    <string name="cast_auto_quality" tools:ignore="MissingTranslation">Cast</string>
     <string name="cast_playing_remotely" tools:ignore="MissingTranslation">Playing on your Cast device</string>
 </resources>

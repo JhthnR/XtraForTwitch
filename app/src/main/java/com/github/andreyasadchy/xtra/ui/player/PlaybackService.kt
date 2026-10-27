@@ -264,7 +264,10 @@ class PlaybackService : MediaSessionService() {
                             bridge.configure(prefs().getBoolean(C.PLAYER_CAST, false))
                             val item = MediaItem.Builder().setUri(customCommand.customExtras.getString(URI)).build()
                             if (player.deviceInfo.playbackType == androidx.media3.common.DeviceInfo.PLAYBACK_TYPE_REMOTE &&
-                                (customCommand.customAction == START_OFFLINE_VIDEO || !CastPlaybackHandoff.canSetSource(player, item))) {
+                                // VoDs stay local. Live items gain their live configuration in
+                                // START_STREAM, where setSource validates the full item.
+                                (customCommand.customAction == START_OFFLINE_VIDEO || customCommand.customAction == START_VIDEO ||
+                                    !CastPlaybackHandoff.canCast(item))) {
                                 return Futures.immediateFuture(SessionResult(androidx.media3.session.SessionError.ERROR_NOT_SUPPORTED))
                             }
                         }
@@ -345,39 +348,39 @@ class PlaybackService : MediaSessionService() {
                                     }.build()
                                 } else null
                                 val networkLibrary = prefs().getString(C.NETWORK_LIBRARY, "OkHttp")
-                                val accepted = bridge.handoff.setSource(player,
-                                    HlsMediaSource.Factory(
-                                        DefaultDataSource.Factory(
-                                            this@PlaybackService,
-                                            when {
-                                                networkLibrary == "HttpEngine" && Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && SdkExtensions.getExtensionVersion(Build.VERSION_CODES.S) >= 7 && httpEngine != null -> {
-                                                    HttpEngineDataSource.Factory(httpEngine!!.get(), cronetExecutor, multivariantPlaylistProxyClient, mediaPlaylistProxyClient) { proxyMediaPlaylist }
-                                                }
-                                                networkLibrary == "Cronet" && cronetEngine != null -> {
-                                                    CronetDataSource.Factory(cronetEngine!!.get(), cronetExecutor, multivariantPlaylistProxyClient, mediaPlaylistProxyClient) { proxyMediaPlaylist }
-                                                }
-                                                else -> {
-                                                    OkHttpDataSource.Factory(multivariantPlaylistProxyClient ?: okHttpClient, mediaPlaylistProxyClient) { proxyMediaPlaylist }
-                                                }
-                                            }.apply {
-                                                prefs().getString(C.PLAYER_STREAM_HEADERS, null)?.let {
-                                                    try {
-                                                        val json = JSONObject(it)
-                                                        hashMapOf<String, String>().apply {
-                                                            json.keys().forEach { key ->
-                                                                put(key, json.optString(key))
-                                                            }
-                                                        }
-                                                    } catch (e: Exception) {
-                                                        null
+                                val playlistParsers = CustomHlsPlaylistParserFactory()
+                                val dataSourceFactory = DefaultDataSource.Factory(
+                                    this@PlaybackService,
+                                    when {
+                                        networkLibrary == "HttpEngine" && Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && SdkExtensions.getExtensionVersion(Build.VERSION_CODES.S) >= 7 && httpEngine != null -> {
+                                            HttpEngineDataSource.Factory(httpEngine!!.get(), cronetExecutor, multivariantPlaylistProxyClient, mediaPlaylistProxyClient) { proxyMediaPlaylist }
+                                        }
+                                        networkLibrary == "Cronet" && cronetEngine != null -> {
+                                            CronetDataSource.Factory(cronetEngine!!.get(), cronetExecutor, multivariantPlaylistProxyClient, mediaPlaylistProxyClient) { proxyMediaPlaylist }
+                                        }
+                                        else -> {
+                                            OkHttpDataSource.Factory(multivariantPlaylistProxyClient ?: okHttpClient, mediaPlaylistProxyClient) { proxyMediaPlaylist }
+                                        }
+                                    }.apply {
+                                        prefs().getString(C.PLAYER_STREAM_HEADERS, null)?.let {
+                                            try {
+                                                val json = JSONObject(it)
+                                                hashMapOf<String, String>().apply {
+                                                    json.keys().forEach { key ->
+                                                        put(key, json.optString(key))
                                                     }
-                                                }?.let {
-                                                    setDefaultRequestProperties(it)
                                                 }
+                                            } catch (e: Exception) {
+                                                null
                                             }
-                                        )
-                                    ).apply {
-                                        setPlaylistParserFactory(CustomHlsPlaylistParserFactory())
+                                        }?.let {
+                                            setDefaultRequestProperties(it)
+                                        }
+                                    }
+                                )
+                                val accepted = bridge.handoff.setSource(player,
+                                    HlsMediaSource.Factory(dataSourceFactory).apply {
+                                        setPlaylistParserFactory(playlistParsers)
                                         setLoadErrorHandlingPolicy(DefaultLoadErrorHandlingPolicy(6))
                                     },
                                     MediaItem.Builder().apply {
@@ -395,7 +398,9 @@ class PlaybackService : MediaSessionService() {
                                                 setArtworkUri(channelLogo?.toUri())
                                             }.build()
                                         )
-                                    }.build()
+                                    }.build(),
+                                    // Receivers cannot load usher playlists; resolve a variant with the same HTTP stack.
+                                    castPlaylistLoader(dataSourceFactory, playlistParsers),
                                 )
                                 if (!accepted) return Futures.immediateFuture(SessionResult(androidx.media3.session.SessionError.ERROR_NOT_SUPPORTED))
                                 session.player.applyLocalPlaybackDefaults(prefs().getInt(C.PLAYER_VOLUME, 100) / 100f, 1f)
