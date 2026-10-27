@@ -164,13 +164,14 @@ class CastPlaybackHandoffTest {
 
     @Test fun `clear retires receiver ownership while retaining the configured local source factory`() {
         val source = source()
+        val item = source.mediaItem
         val factory = mock<MediaSource.Factory>()
-        whenever(factory.createMediaSource(source.mediaItem)).thenReturn(source)
+        whenever(factory.createMediaSource(item)).thenReturn(source)
         val changes = mutableListOf<MediaSource.Factory?>()
         val handoff = CastPlaybackHandoff(local, sourceFactoryChanged = { changes += it })
-        assertTrue(handoff.setSource(remote, factory, source.mediaItem))
+        assertTrue(handoff.setSource(remote, factory, item))
         handoff.cancelPending(clearOwnership = true)
-        whenever(remote.currentMediaItem).thenReturn(source.mediaItem)
+        whenever(remote.currentMediaItem).thenReturn(item)
         assertFalse(handoff.restoreFrom(remote))
         assertEquals(listOf(factory), changes)
         verifyNoInteractions(local)
