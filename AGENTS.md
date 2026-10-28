@@ -71,6 +71,7 @@ On Windows PowerShell, use:
 - Update docs when behavior, process, QA expectations, or release flow changes.
 - If mapped paths are stale, search the repo, use the current path, and update the map.
 - Never commit secrets, keystores, tokens, private crash logs, private APKs, or personal local notes.
+- Commits and PRs are the maintainer's: never add `Co-authored-by` trailers, "Generated with" lines or other attribution for Claude, Codex, GLM, Droid, Amp or any other agent. Author commits as `tzii <178386212+tzii@users.noreply.github.com>`, never a placeholder such as `@example.com`.
 
 ## Player Safety
 
