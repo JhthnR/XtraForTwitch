@@ -3,6 +3,12 @@ package com.github.andreyasadchy.xtra.ui.player
 import android.app.Application
 import android.os.Bundle
 import android.os.Looper
+import android.os.Parcel
+import android.view.View
+import androidx.fragment.app.FragmentManager
+import androidx.core.content.edit
+import com.github.andreyasadchy.xtra.util.C
+import com.github.andreyasadchy.xtra.util.prefs
 import androidx.media3.common.DeviceInfo
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
@@ -25,6 +31,7 @@ import org.robolectric.annotation.ConscryptMode
 import org.robolectric.RuntimeEnvironment
 import org.robolectric.shadows.ShadowToast
 import org.robolectric.util.ReflectionHelpers
+import org.robolectric.Shadows.shadowOf
 import com.github.andreyasadchy.xtra.R
 import com.github.andreyasadchy.xtra.ui.main.MainActivity
 
@@ -32,6 +39,29 @@ import com.github.andreyasadchy.xtra.ui.main.MainActivity
 @Config(application = Application::class, sdk = [23, 28])
 @ConscryptMode(ConscryptMode.Mode.OFF)
 class CastCloseSessionTest {
+    private fun currentFragment(controller: MediaController): Pair<Media3Fragment, PlayerViewModel> {
+        val context = RuntimeEnvironment.getApplication()
+        val fragment = mock<Media3Fragment>(defaultAnswer = Mockito.CALLS_REAL_METHODS,
+            useConstructor = UseConstructor.parameterless())
+        val activity = mock<MainActivity>()
+        val manager = mock<FragmentManager>()
+        val model = mock<PlayerViewModel>()
+        doReturn(true).whenever(fragment).isAdded
+        doReturn(View(context)).whenever(fragment).view
+        doReturn(activity).whenever(fragment).activity
+        doReturn(context).whenever(fragment).requireContext()
+        whenever(activity.supportFragmentManager).thenReturn(manager)
+        whenever(manager.findFragmentById(R.id.playerContainer)).thenReturn(fragment)
+        ReflectionHelpers.setField(fragment, "viewModel\$delegate", lazyOf(model))
+        ReflectionHelpers.setField(fragment, "controllerFuture", Futures.immediateFuture(controller))
+        ReflectionHelpers.setField(fragment, "sourceRequest", "accepted-source")
+        whenever(controller.applicationLooper).thenReturn(Looper.getMainLooper())
+        return fragment to model
+    }
+
+    private fun invoke(fragment: Media3Fragment, method: String, type: Class<*>, argument: Any?) =
+        Media3Fragment::class.java.getDeclaredMethod(method, type).apply { isAccessible = true }.invoke(fragment, argument)
+
     private fun fragment(controller: MediaController): Media3Fragment {
         whenever(controller.applicationLooper).thenReturn(Looper.getMainLooper())
         return Media3Fragment().apply {
@@ -213,11 +243,9 @@ class CastCloseSessionTest {
         verify(player, times(1)).stop()
     }
 
-    @Test fun `returning screen recovers only its own service acceptance after a delayed result`() {
-        for (currentRequest in listOf("accepted-source", "another-screen")) {
+    @Test fun `returning screen recovers its own service acceptance after a delayed result`() {
             val controller = mock<MediaController>()
-            val fragment = fragment(controller)
-            ReflectionHelpers.setField(fragment, "acceptedStart", false)
+            val (fragment, _) = currentFragment(controller)
             val result = SettableFuture.create<SessionResult>()
             whenever(controller.sendCustomCommand(eq(SessionCommand(PlaybackService.GET_SOURCE_REQUEST, Bundle.EMPTY)), any()))
                 .thenReturn(result)
@@ -225,10 +253,75 @@ class CastCloseSessionTest {
                 isAccessible = true
             }.invoke(fragment, controller)
             result.set(SessionResult(SessionResult.RESULT_SUCCESS, Bundle().apply {
-                putString(PlaybackService.SOURCE_REQUEST, currentRequest)
+                putString(PlaybackService.SOURCE_REQUEST, "accepted-source")
             }))
-            org.junit.Assert.assertEquals(currentRequest == "accepted-source",
-                ReflectionHelpers.getField<Boolean>(fragment, "acceptedStart"))
+            assertTrue(ReflectionHelpers.getField<Boolean>(fragment, "acceptedStart"))
+    }
+
+    @Test fun `cancelled rejection is replayed on return with either retained or empty receiver media`() {
+        for (retained in listOf(true, false)) {
+            val controller = mock<MediaController>()
+            casting(controller, item = if (retained) MediaItem.fromUri("https://example.com/old.mp4") else null)
+            val (fragment, model) = currentFragment(controller)
+            val first = SettableFuture.create<SessionResult>()
+            val replay = SettableFuture.create<SessionResult>()
+            val query = SettableFuture.create<SessionResult>()
+            whenever(controller.sendCustomCommand(eq(SessionCommand(PlaybackService.START_VIDEO, Bundle.EMPTY)), any()))
+                .thenReturn(first, replay)
+            whenever(controller.sendCustomCommand(eq(SessionCommand(PlaybackService.GET_SOURCE_REQUEST, Bundle.EMPTY)), any()))
+                .thenReturn(query)
+            val command = SessionCommand(PlaybackService.START_VIDEO, Bundle().apply {
+                putString(PlaybackService.URI, "https://example.com/vod.m3u8")
+                putLong(PlaybackService.PLAYBACK_POSITION, 637_000L)
+            })
+            invoke(fragment, "sendSourceCommand", SessionCommand::class.java, command)
+            ReflectionHelpers.getField<PlayerSourceCommands>(fragment, "sourceCommands").cancel()
+            first.set(SessionResult(androidx.media3.session.SessionError.ERROR_NOT_SUPPORTED))
+            shadowOf(Looper.getMainLooper()).idle()
+            assertFalse(ReflectionHelpers.getField<Boolean>(fragment, "rejectedStart"))
+            invoke(fragment, "refreshSourceOwnership", MediaController::class.java, controller)
+            query.set(SessionResult(SessionResult.RESULT_SUCCESS, Bundle().apply {
+                putString(PlaybackService.SOURCE_REQUEST, "retained-source")
+            }))
+            val sent = argumentCaptor<SessionCommand>()
+            verify(controller, times(3)).sendCustomCommand(sent.capture(), eq(Bundle.EMPTY))
+            val starts = sent.allValues.filter { it.customAction == PlaybackService.START_VIDEO }
+            org.junit.Assert.assertEquals(2, starts.size)
+            org.junit.Assert.assertEquals(637_000L, starts.last().customExtras.getLong(PlaybackService.PLAYBACK_POSITION))
+            org.junit.Assert.assertNotEquals(starts.first().customExtras.getString(PlaybackService.SOURCE_REQUEST),
+                starts.last().customExtras.getString(PlaybackService.SOURCE_REQUEST))
+            inOrder(model) { verify(model).started = false; verify(model).started = true }
+        }
+    }
+
+    @Test fun `recreated rejected screen replays its resolved timestamp with saved positions on or off`() {
+        for (savedPositions in listOf(true, false)) {
+            RuntimeEnvironment.getApplication().prefs().edit { putBoolean(C.PLAYER_USE_VIDEOPOSITIONS, savedPositions) }
+            val controller = mock<MediaController>()
+            val (original, _) = currentFragment(controller)
+            val command = SessionCommand(PlaybackService.START_VIDEO, Bundle().apply {
+                putString(PlaybackService.URI, "https://example.com/resolved-vod.m3u8")
+                putLong(PlaybackService.PLAYBACK_POSITION, 637_000L)
+            })
+            ReflectionHelpers.setField(original, "lastSourceCommand", command)
+            ReflectionHelpers.setField(original, "rejectedStart", true)
+            val saved = Bundle()
+            invoke(original, "saveSourceState", Bundle::class.java, saved)
+            val parcel = Parcel.obtain()
+            val restored = try {
+                saved.writeToParcel(parcel, 0)
+                parcel.setDataPosition(0)
+                parcel.readBundle(SessionCommand::class.java.classLoader)!!
+            } finally { parcel.recycle() }
+            val nextController = mock<MediaController>()
+            val (recreated, _) = currentFragment(nextController)
+            whenever(nextController.sendCustomCommand(any(), any())).thenReturn(SettableFuture.create())
+            invoke(recreated, "restoreSourceState", Bundle::class.java, restored)
+            Media3Fragment::class.java.getDeclaredMethod("startOrReplay").apply { isAccessible = true }.invoke(recreated)
+            val sent = argumentCaptor<SessionCommand>()
+            verify(nextController).sendCustomCommand(sent.capture(), eq(Bundle.EMPTY))
+            org.junit.Assert.assertEquals(637_000L, sent.firstValue.customExtras.getLong(PlaybackService.PLAYBACK_POSITION))
+            org.junit.Assert.assertEquals("https://example.com/resolved-vod.m3u8", sent.firstValue.customExtras.getString(PlaybackService.URI))
         }
     }
 }

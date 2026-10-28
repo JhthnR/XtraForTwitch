@@ -67,10 +67,7 @@ class Media3Fragment : PlayerFragment() {
         get() = controllerFuture?.let { if (it.isDone && !it.isCancelled) it.get() else null }
     private var playerListener: Player.Listener? = null
     private val sourceCommands = PlayerSourceCommands(
-        isCurrent = { controller ->
-            isAdded && view != null && player === controller &&
-                (activity as? MainActivity)?.supportFragmentManager?.findFragmentById(R.id.playerContainer) === this
-        },
+        isCurrent = ::isCurrentSourceController,
         rejected = ::rejectSourceStart,
         accepted = { acceptedStart = true },
     )
@@ -88,12 +85,24 @@ class Media3Fragment : PlayerFragment() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        restoreSourceState(savedInstanceState)
+    }
+
+    private fun restoreSourceState(savedInstanceState: Bundle?) {
         sourceRequest = savedInstanceState?.getString(PlaybackService.SOURCE_REQUEST)
+        lastSourceCommand = savedInstanceState?.getBundle(STATE_SOURCE_COMMAND)?.let(SessionCommand::fromBundle)
+        rejectedStart = savedInstanceState?.getBoolean(STATE_REJECTED_START) == true
     }
 
     override fun onSaveInstanceState(outState: Bundle) {
-        outState.putString(PlaybackService.SOURCE_REQUEST, sourceRequest)
+        saveSourceState(outState)
         super.onSaveInstanceState(outState)
+    }
+
+    private fun saveSourceState(outState: Bundle) {
+        outState.putString(PlaybackService.SOURCE_REQUEST, sourceRequest)
+        lastSourceCommand?.let { outState.putBundle(STATE_SOURCE_COMMAND, it.toBundle()) }
+        outState.putBoolean(STATE_REJECTED_START, rejectedStart)
     }
 
     override fun onStart() {
@@ -497,9 +506,9 @@ class Media3Fragment : PlayerFragment() {
     }
 
     private fun startOrReplay() {
-        val rejected = lastSourceCommand?.takeIf { rejectedStart }
+        val rejected = lastSourceCommand?.takeIf { !acceptedStart }
         if (rejected != null) {
-            // Returning to a rejected screen repeats the same request (and its offer).
+            // Preserve the resolved URL/position when a rejected or unknown start is recreated.
             viewModel.started = true
             sendSourceCommand(rejected)
         } else {
@@ -701,16 +710,28 @@ class Media3Fragment : PlayerFragment() {
         future?.let { MediaController.releaseFuture(it) }
     }
 
-    /** Recover acceptance after a stopped view cancelled its result or a screen was recreated. */
+    private fun isCurrentSourceController(controller: MediaController) =
+        isAdded && view != null && player === controller &&
+            (activity as? MainActivity)?.supportFragmentManager?.findFragmentById(R.id.playerContainer) === this
+
+    /** Resolve either acceptance or a lost rejection after a stopped/recreated screen returns. */
     private fun refreshSourceOwnership(controller: MediaController) {
         val request = sourceRequest ?: return
         if (acceptedStart || rejectedStart) return
         val result = controller.sendCustomCommand(SessionCommand(PlaybackService.GET_SOURCE_REQUEST, Bundle.EMPTY), Bundle.EMPTY)
         result.addListener({
             val response = runCatching { result.get() }.getOrNull()
-            if (player === controller && sourceRequest == request &&
-                response?.resultCode == SessionResult.RESULT_SUCCESS &&
-                response.extras.getString(PlaybackService.SOURCE_REQUEST) == request) acceptedStart = true
+            if (!isCurrentSourceController(controller) || sourceRequest != request ||
+                response?.resultCode != SessionResult.RESULT_SUCCESS) return@addListener
+            if (response.extras.getString(PlaybackService.SOURCE_REQUEST) == request) {
+                acceptedStart = true
+            } else {
+                acceptedStart = false
+                viewModel.started = false
+                // The service did not accept this request. Replaying it delivers the normal
+                // local-only offer, or starts it locally if Cast disconnected in the meantime.
+                startOrReplay()
+            }
         }, MoreExecutors.directExecutor())
     }
 
@@ -1265,6 +1286,8 @@ class Media3Fragment : PlayerFragment() {
     }
 
     companion object {
+        private const val STATE_SOURCE_COMMAND = "media3SourceCommand"
+        private const val STATE_REJECTED_START = "media3RejectedStart"
         fun newInstance(item: Stream): Media3Fragment {
             return Media3Fragment().apply {
                 arguments = getStreamArguments(item)

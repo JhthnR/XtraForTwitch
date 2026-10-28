@@ -345,6 +345,32 @@ class CastPlaybackHandoffTest {
         verify(remote, times(1)).setMediaItem(any())
     }
 
+    @Test fun `receiver ownership remains pending until its own load acknowledgement and cancels on replacement`() {
+        val ready = mutableListOf<() -> Unit>()
+        var cancellations = 0
+        val handoff = CastPlaybackHandoff(local, main = direct, background = direct,
+            loadReceiver = { _, _, _, accepted, _ ->
+                ready += accepted
+                val cancel: () -> Unit = { cancellations++ }
+                cancel
+            })
+        val first = liveSource()
+        val second = liveSource("https://usher.example/next.m3u8")
+        val factory = mock<MediaSource.Factory>()
+        val firstItem = first.mediaItem
+        val secondItem = second.mediaItem
+        whenever(factory.createMediaSource(firstItem)).thenReturn(first)
+        whenever(factory.createMediaSource(secondItem)).thenReturn(second)
+        handoff.setSource(remote, factory, firstItem) { multivariant() }
+        assertTrue(handoff.hasPendingSource)
+        handoff.setSource(remote, factory, secondItem) { multivariant() }
+        assertEquals(1, cancellations)
+        ready[0]()
+        assertTrue(handoff.hasPendingSource)
+        ready[1]()
+        assertFalse(handoff.hasPendingSource)
+    }
+
     @Test fun `failed receiver lookup returns the live stream to the phone at the live edge`() {
         val source = liveSource()
         val factory = mock<MediaSource.Factory>()

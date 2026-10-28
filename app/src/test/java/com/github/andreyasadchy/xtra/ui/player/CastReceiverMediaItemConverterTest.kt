@@ -40,4 +40,12 @@ class CastReceiverMediaItemConverterTest {
         assertEquals("https://clips.example/clip.mp4", media.contentUrl)
         assertEquals("video/mp4", media.contentType)
     }
+
+    @Test fun `load acknowledgement token preserves default converter data and local identity`() {
+        val tagged = live.buildUpon().setTag(CastReceiverUri(Uri.parse("https://cdn.example/live.m3u8"), "request-123")).build()
+        val queue = converter.toMediaQueueItem(tagged)
+        assertEquals("request-123", queue.media!!.customData!!.getString(CAST_LOAD_REQUEST))
+        assertEquals(live.localConfiguration!!.uri, converter.toMediaItem(queue).localConfiguration!!.uri)
+        assertEquals("https://cdn.example/live.m3u8", queue.media!!.contentUrl)
+    }
 }

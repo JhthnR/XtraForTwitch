@@ -401,8 +401,12 @@ behavior remain unverified; emulator results are recorded separately in
   resume position, or at the link's timestamp with saved positions off. Leave
   the app while the offer is open and return: the offer appears again. Retain a
   session after closing the app, reopen, open a VoD and decline: the TV keeps
-  playing and no VoD position changes. A download while casting still shows
-  "Stop casting before opening a download".
+  playing and no VoD position changes. A download while the receiver has media
+  still shows "Stop casting before opening a download"; with a connected idle
+  receiver it gets the stop-casting offer.
+- [ ] Connect to an idle receiver (nothing playing), then start a live stream:
+  the TV starts playing on its own within a few seconds and the phone does not
+  fall back. Repeat while the TV is playing another stream.
 - [ ] Disconnect: one local player resumes the same paused/playing VoD position
   and speed, or the live edge, using normal quality and HTTP configuration.
 - [ ] Background/lock/restore the phone, minimize/restore, rotate, lose/recover

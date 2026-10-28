@@ -30,6 +30,13 @@ internal class CastPlaybackHandoff(
     private val receiverUnavailable: () -> Unit = {},
     private val main: Executor = MAIN,
     private val background: Executor = PLAYLISTS,
+    private val loadReceiver: (Player, MediaItem, Boolean, () -> Unit, () -> Unit) -> (() -> Unit) = { player, item, play, ready, _ ->
+        player.setMediaItem(item)
+        player.playWhenReady = play
+        val cancel: () -> Unit = {}
+        ready()
+        cancel
+    },
     private val transferOnline: (Player, Player, MediaItem) -> Unit = ::transferState,
 ) {
     private var source: MediaSource? = null
@@ -44,9 +51,12 @@ internal class CastPlaybackHandoff(
     private var rejected: LocalSnapshot? = null
     /** Restores local playback if the route returns before a receiver lookup completes. */
     private var pending: LocalSnapshot? = null
+    private var cancelReceiverLoad: (() -> Unit)? = null
 
     fun transfer(from: Player, to: Player, reject: () -> Unit) {
         request++
+        cancelReceiverLoad?.invoke()
+        cancelReceiverLoad = null
         val item = from.currentMediaItem
         val lookup = pending
         pending = null
@@ -80,10 +90,7 @@ internal class CastPlaybackHandoff(
                 val fallback = snapshot(item, from.currentPosition, from.playWhenReady, from.playbackParameters)
                 val variant = localVariant(item)
                 if (variant != null) transferOnline(from, to, item.withReceiverUri(variant))
-                else resolve(item, fallback) {
-                    to.setMediaItem(it)
-                    to.playWhenReady = fallback.play
-                }
+                else resolve(item, fallback) { load(to, it, fallback) }
             }
         }
     }
@@ -117,6 +124,8 @@ internal class CastPlaybackHandoff(
 
     private fun installSource(active: Player, prepared: MediaSource, startPositionMs: Long) {
         request++
+        cancelReceiverLoad?.invoke()
+        cancelReceiverLoad = null
         // Discard any pending fallback for an older, rejected source.
         rejected = null
         pending = null
@@ -127,10 +136,8 @@ internal class CastPlaybackHandoff(
             if (needsVariant(item)) {
                 // Do not resume the receiver's previous item while the new playlist is resolving.
                 active.pause()
-                resolve(item, snapshot(item, 0, true, PlaybackParameters.DEFAULT)) {
-                    active.setMediaItem(it)
-                    active.playWhenReady = true
-                }
+                val fallback = snapshot(item, 0, true, PlaybackParameters.DEFAULT)
+                resolve(item, fallback) { load(active, it, fallback) }
             } else if (startPositionMs == C.TIME_UNSET) {
                 active.setMediaItem(item)
             } else {
@@ -196,10 +203,29 @@ internal class CastPlaybackHandoff(
             }
             main.execute {
                 if (token != request) return@execute
-                pending = null
-                if (variant != null) load(item.withReceiverUri(variant)) else unavailable(fallback)
+                if (variant != null) load(item.withReceiverUri(variant)) else {
+                    pending = null
+                    unavailable(fallback)
+                }
             }
         }
+    }
+
+    private fun load(player: Player, item: MediaItem, fallback: LocalSnapshot) {
+        val token = request
+        var completed = false
+        val cancel = loadReceiver(player, item, fallback.play, {
+            completed = true
+            if (token == request) { pending = null; cancelReceiverLoad = null }
+        }, {
+            completed = true
+            if (token == request) {
+                pending = null
+                cancelReceiverLoad = null
+                unavailable(fallback)
+            }
+        })
+        cancelReceiverLoad = if (completed) null else cancel
     }
 
     /** Session end returns to local playback through [rejected]. */
@@ -211,6 +237,8 @@ internal class CastPlaybackHandoff(
     /** Stop/clear must retire async loads without losing the factory used by local prepare. */
     fun cancelPending(clearOwnership: Boolean = false) {
         request++
+        cancelReceiverLoad?.invoke()
+        cancelReceiverLoad = null
         rejected = null
         pending = null
         if (clearOwnership) ownedItem = null
@@ -218,6 +246,8 @@ internal class CastPlaybackHandoff(
 
     fun clear() {
         request++
+        cancelReceiverLoad?.invoke()
+        cancelReceiverLoad = null
         source = null; factory = null; loader = null; ownedItem = null; rejected = null; pending = null
         sourceFactoryChanged(null)
     }

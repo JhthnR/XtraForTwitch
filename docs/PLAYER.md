@@ -426,8 +426,13 @@ toast and is discarded instead. Until a new source command is sent, a rejected
 screen never saves a position, runs stop-time teardown, or stops/disconnects
 media on close: the controller's media belongs to someone else. Opening the VoD
 from a visible casting player still closes that player first, which stops
-receiver media, so Cancel keeps the session connected but idle. Downloads are
-still blocked in `MainActivity` with a toast before any screen opens.
+receiver media, so Cancel keeps the session connected but idle. The rejected
+command and its state are saved with the fragment, so activity recreation replays
+the same resolved start; a start whose result was lost while stopped asks the
+service for its accepted request on return and replays if it was not accepted.
+While receiver media exists, downloads are still blocked in `MainActivity` with a
+toast before any screen opens. With a connected but idle route, a download
+reaches the service and gets the same offer.
 
 The receiver fetches the media URL directly. Phone HTTP headers/proxies are not
 forwarded. Receivers are browsers, so HLS needs CORS (issue #60): Twitch's usher
@@ -444,6 +449,10 @@ whole session: unlike local playback, it is not re-resolved after a token expiry
 or stall, and RemoteCastPlayer reports no receiver errors to the phone. If no variant can be found, the session ends with a
 message and the stream continues on the phone. VoD HLS is local-only. Clips are
 progressive MP4 and are sent unchanged. Quality is fixed while casting.
+A live stream resolved while casting is loaded paused and played only after the
+receiver's status reports that exact LOAD (`CastReceiverLoad` tags it in the
+media's custom data); an empty receiver ignores an earlier PLAY. Without that
+status within 15 s the session ends and the stream continues on the phone.
 Receiver codec/network compatibility still needs physical Cast QA.
 
 ## Optional chat in system PiP

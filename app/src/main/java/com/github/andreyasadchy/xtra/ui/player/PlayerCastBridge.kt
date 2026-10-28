@@ -43,6 +43,10 @@ internal class PlayerCastBridge(
     private var closed = false
     private var generation = 0
     private var configured = enabled
+    private val receiverLoad = CastReceiverLoad(client = {
+        @Suppress("DEPRECATION")
+        CastContext.getSharedInstance()?.sessionManager?.currentCastSession?.remoteMediaClient
+    })
     private var local = createLocal()
     var handoff = newHandoff()
         private set
@@ -83,6 +87,7 @@ internal class PlayerCastBridge(
         val handoffGeneration = generation
         return CastPlaybackHandoff(local, sourceFactoryChanged,
             receiverUnavailable = { returnToLocal(handoffGeneration, R.string.cast_receiver_unavailable) },
+            loadReceiver = receiverLoad::start,
             main = { handler.post(it) })
     }
 
