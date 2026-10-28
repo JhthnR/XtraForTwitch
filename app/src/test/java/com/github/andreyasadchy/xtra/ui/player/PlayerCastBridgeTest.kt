@@ -87,11 +87,10 @@ class PlayerCastBridgeTest {
             local.playWhenReady = true
             val remote = mock<Player>()
             handoff.transfer(local, remote) { fail("Live transfer should resolve") }
-            // Internal handoff commands use bridge.player and must not count as user intent.
-            bridge.player.pause()
-            bridge.player.play()
             val sessionPlayer = bridge.guardCommands(object : ForwardingSimpleBasePlayer(bridge.player) {}, userIntent = true)
             sessionPlayer.pause()
+            // Internal handoff commands use bridge.player and must not override the user's pause.
+            bridge.player.play()
             queued.single().run()
             verify(remote).setMediaItem(any())
             verify(remote).setPlayWhenReady(false)
