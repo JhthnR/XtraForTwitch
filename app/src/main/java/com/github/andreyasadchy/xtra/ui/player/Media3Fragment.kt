@@ -637,6 +637,8 @@ class Media3Fragment : PlayerFragment() {
             sourceRequest = request
             lastSourceCommand = sourceCommand
             rejectedStart = false
+            // A new source is not owned until the service accepts it.
+            acceptedStart = false
             sourceCommands.send(it, sourceCommand)
         }
     }

@@ -327,6 +327,23 @@ class CastCloseSessionTest {
         }
     }
 
+    @Test fun `a new source command after an accepted start is unowned until its own result`() {
+        val controller = mock<MediaController>()
+        whenever(controller.sendCustomCommand(any(), any())).thenReturn(SettableFuture.create())
+        val (fragment, _) = currentFragment(controller)
+        ReflectionHelpers.setField(fragment, "acceptedStart", true)
+        invoke(fragment, "sendSourceCommand", SessionCommand::class.java, SessionCommand(PlaybackService.START_VIDEO, Bundle().apply {
+            putString(PlaybackService.URI, "https://example.com/next.m3u8")
+        }))
+        assertFalse(ReflectionHelpers.getField<Boolean>(fragment, "acceptedStart"))
+        val saved = Bundle()
+        invoke(fragment, "saveSourceState", Bundle::class.java, saved)
+        val (recreated, _) = currentFragment(mock())
+        invoke(recreated, "restoreSourceState", Bundle::class.java, saved)
+        org.junit.Assert.assertEquals("https://example.com/next.m3u8",
+            ReflectionHelpers.getField<SessionCommand?>(recreated, "lastSourceCommand")!!.customExtras.getString(PlaybackService.URI))
+    }
+
     @Test fun `recreated accepted screen does not replay its original start`() {
         val (original, _) = currentFragment(mock())
         ReflectionHelpers.setField(original, "lastSourceCommand", SessionCommand(PlaybackService.START_VIDEO, Bundle().apply {
