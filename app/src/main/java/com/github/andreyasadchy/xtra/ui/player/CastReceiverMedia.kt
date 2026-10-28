@@ -16,6 +16,7 @@ import androidx.media3.exoplayer.hls.playlist.HlsPlaylist
 import androidx.media3.exoplayer.hls.playlist.HlsPlaylistParserFactory
 import androidx.media3.exoplayer.upstream.ParsingLoadable
 import com.google.android.gms.cast.MediaQueueItem
+import org.json.JSONObject
 import kotlin.math.abs
 
 /**
@@ -24,7 +25,8 @@ import kotlin.math.abs
  * Receivers fetch HLS from a browser. Twitch's usher multivariant playlists (and VoD CDNs)
  * only allow Twitch origins, while live variant playlists and segments allow any origin.
  */
-internal data class CastReceiverUri(val uri: Uri)
+internal data class CastReceiverUri(val uri: Uri, val loadRequest: String? = null)
+internal const val CAST_LOAD_REQUEST = "thysttvLoadRequest"
 
 internal fun MediaItem.withReceiverUri(uri: Uri): MediaItem = buildUpon().setTag(CastReceiverUri(uri)).build()
 
@@ -39,6 +41,10 @@ internal class CastReceiverMediaItemConverter(
         // MediaInfo.Writer is @KeepForSdk, but it ships in the APK with play-services-cast;
         // CastReceiverMediaItemConverterTest catches a removal when that library is upgraded.
         queueItem.media?.writer?.setContentUrl(receiver.uri.toString())
+        receiver.loadRequest?.let { request ->
+            val media = queueItem.media
+            media?.writer?.setCustomData(JSONObject(media.customData?.toString() ?: "{}").put(CAST_LOAD_REQUEST, request))
+        }
         return queueItem
     }
 

@@ -773,14 +773,16 @@ class PlaybackService : MediaSessionService() {
     private fun savePosition() {
         mediaSession?.player?.let { player ->
             if (!player.currentTracks.isEmpty && prefs().getBoolean(C.PLAYER_USE_VIDEOPOSITIONS, true)) {
+                // Player getters are confined to its application thread, including during close.
+                val position = player.currentPosition
                 videoId?.let {
                     statsScope.launch {
-                        playerRepository.saveVideoPosition(VideoPosition(it, player.currentPosition))
+                        playerRepository.saveVideoPosition(VideoPosition(it, position))
                     }
                 } ?:
                 offlineVideoId?.let {
                     statsScope.launch {
-                        offlineRepository.updateVideoPosition(it, player.currentPosition)
+                        offlineRepository.updateVideoPosition(it, position)
                     }
                 }
             }
