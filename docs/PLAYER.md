@@ -431,7 +431,10 @@ command and its state are saved with the fragment, so activity recreation replay
 the same resolved start; a start whose result was lost while stopped asks the
 service for its accepted request on return and replays if it was not accepted.
 An accepted start is not saved: after process death the recreated screen starts
-normally and resumes from the saved position, not the original open position.
+normally and resumes from the saved position, not the original open position. It
+skips the ownership query, which would otherwise race that start into a second
+one. A start still unanswered when the screen stops is saved as unknown; if the
+process then dies, it replays at its original position (a narrow known gap).
 While receiver media exists, downloads are still blocked in `MainActivity` with a
 toast before any screen opens. With a connected but idle route, a download
 reaches the service and gets the same offer.

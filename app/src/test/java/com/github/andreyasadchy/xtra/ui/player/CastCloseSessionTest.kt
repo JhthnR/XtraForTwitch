@@ -245,7 +245,9 @@ class CastCloseSessionTest {
 
     @Test fun `returning screen recovers its own service acceptance after a delayed result`() {
             val controller = mock<MediaController>()
-            val (fragment, _) = currentFragment(controller)
+            val (fragment, model) = currentFragment(controller)
+            // A returning (not recreated) screen keeps its started model.
+            whenever(model.started).thenReturn(true)
             val result = SettableFuture.create<SessionResult>()
             whenever(controller.sendCustomCommand(eq(SessionCommand(PlaybackService.GET_SOURCE_REQUEST, Bundle.EMPTY)), any()))
                 .thenReturn(result)
@@ -335,9 +337,18 @@ class CastCloseSessionTest {
         ReflectionHelpers.setField(original, "acceptedStart", true)
         val saved = Bundle()
         invoke(original, "saveSourceState", Bundle::class.java, saved)
-        val (recreated, _) = currentFragment(mock())
-        invoke(recreated, "restoreSourceState", Bundle::class.java, saved)
-        org.junit.Assert.assertNull(ReflectionHelpers.getField<SessionCommand?>(recreated, "lastSourceCommand"))
-        org.junit.Assert.assertEquals("accepted-source", ReflectionHelpers.getField<String?>(recreated, "sourceRequest"))
+        for (retainedModel in listOf(false, true)) {
+            val controller = mock<MediaController>()
+            whenever(controller.sendCustomCommand(any(), any())).thenReturn(SettableFuture.create())
+            val (recreated, model) = currentFragment(controller)
+            whenever(model.started).thenReturn(retainedModel)
+            invoke(recreated, "restoreSourceState", Bundle::class.java, saved)
+            org.junit.Assert.assertNull(ReflectionHelpers.getField<SessionCommand?>(recreated, "lastSourceCommand"))
+            org.junit.Assert.assertEquals("accepted-source", ReflectionHelpers.getField<String?>(recreated, "sourceRequest"))
+            // A fresh start follows on a new model, so no ownership query may race it into a second start.
+            invoke(recreated, "refreshSourceOwnership", MediaController::class.java, controller)
+            verify(controller, if (retainedModel) times(1) else never())
+                .sendCustomCommand(eq(SessionCommand(PlaybackService.GET_SOURCE_REQUEST, Bundle.EMPTY)), any())
+        }
     }
 }

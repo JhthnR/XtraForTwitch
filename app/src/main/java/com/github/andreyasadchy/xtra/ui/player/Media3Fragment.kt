@@ -718,6 +718,8 @@ class Media3Fragment : PlayerFragment() {
     private fun refreshSourceOwnership(controller: MediaController) {
         val request = sourceRequest ?: return
         if (acceptedStart || rejectedStart) return
+        // A restored accepted screen starts fresh (saved-position resume); a query would race it.
+        if (lastSourceCommand == null && !viewModel.started) return
         val result = controller.sendCustomCommand(SessionCommand(PlaybackService.GET_SOURCE_REQUEST, Bundle.EMPTY), Bundle.EMPTY)
         result.addListener({
             val response = runCatching { result.get() }.getOrNull()
