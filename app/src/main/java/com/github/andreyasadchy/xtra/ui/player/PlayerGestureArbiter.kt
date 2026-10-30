@@ -34,6 +34,7 @@ class PlayerGestureArbiter(
         DEVICE_VOLUME,
         DOUBLE_TAP_CHAT,
         PINCH_DISPLAY_MODE,
+        CHAT_SWIPE,
     }
 
     var owner: Owner = Owner.IDLE
@@ -130,6 +131,12 @@ class PlayerGestureArbiter(
     }
 
     companion object {
-        val SINGLE_FINGER_OWNERS = setOf(Owner.SEEK, Owner.PLAYBACK_SPEED, Owner.BRIGHTNESS, Owner.DEVICE_VOLUME)
+        val SINGLE_FINGER_OWNERS = setOf(
+            Owner.SEEK,
+            Owner.PLAYBACK_SPEED,
+            Owner.BRIGHTNESS,
+            Owner.DEVICE_VOLUME,
+            Owner.CHAT_SWIPE
+        )
     }
 }
