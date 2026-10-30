@@ -27,6 +27,7 @@ interface PlayerGestureCallback {
     fun hideController()
     fun updateProgress()
     fun cycleChatMode()
+    fun swipeChat(open: Boolean) {}
     fun getGestureFeedbackView(): View
     fun getHideGestureRunnable(): Runnable
     fun isControllerHideOnTouch(): Boolean
@@ -65,6 +66,8 @@ class PlayerGestureListener(
     private var isBrightness = false
     private var isSeek = false
     private var isSpeed = false
+    private var isChatSwipe = false
+    private var chatSwipeTriggered = false
     
     // Flag to ensure we only notify the callback once per gesture
     private var hasNotifiedGestureStart = false
@@ -94,6 +97,8 @@ class PlayerGestureListener(
         isSeek = false
         isSpeed = false
         isScrolling = false
+        isChatSwipe = false
+        chatSwipeTriggered = false
         
         // Capture start coordinates
         gestureStartY = e.y
@@ -115,7 +120,7 @@ class PlayerGestureListener(
         val height = callback.playerHeight.toFloat()
         
         // If we haven't locked onto a specific gesture type yet, determine it now
-        if (!isVolume && !isBrightness && !isSeek && !isSpeed) {
+        if (!isVolume && !isBrightness && !isSeek && !isSpeed && !isChatSwipe) {
              if (abs(distanceY) > abs(distanceX)) {
                  // Vertical Swipes (Volume / Brightness)
                  // Split left/right halves
@@ -144,15 +149,18 @@ class PlayerGestureListener(
                              duration = callback.getDuration()
                          }
                      }
+                 } else {
+                     isChatSwipe = true
                  }
              }
              
              // Notify that we've claimed this gesture (prevents minimize gesture from triggering)
-             if (isVolume || isBrightness || isSeek || isSpeed) {
+             if (isVolume || isBrightness || isSeek || isSpeed || isChatSwipe) {
                 val owner = when {
                     isBrightness -> PlayerGestureArbiter.Owner.BRIGHTNESS
                     isVolume -> PlayerGestureArbiter.Owner.DEVICE_VOLUME
                     isSeek -> PlayerGestureArbiter.Owner.SEEK
+                    isChatSwipe -> PlayerGestureArbiter.Owner.CHAT_SWIPE
                     else -> PlayerGestureArbiter.Owner.PLAYBACK_SPEED
                 }
                 if (!callback.claimSingleFingerGesture(owner)) {
@@ -161,6 +169,7 @@ class PlayerGestureListener(
                     isBrightness = false
                     isSeek = false
                     isSpeed = false
+                    isChatSwipe = false
                     return false
                 }
                 isScrolling = true  // Mark that we're in a scroll gesture
@@ -170,6 +179,18 @@ class PlayerGestureListener(
                     hasNotifiedGestureStart = true
                 }
             }
+        }
+
+        if (isChatSwipe) {
+            if (!chatSwipeTriggered) {
+                val dx = e2.x - gestureStartX
+                if (abs(dx) > width * 0.12f) {
+                    chatSwipeTriggered = true
+                    callback.swipeChat(open = dx < 0)
+                    performHapticFeedback()
+                }
+            }
+            return true
         }
 
         val percentY = (gestureStartY - e2.y) / height
