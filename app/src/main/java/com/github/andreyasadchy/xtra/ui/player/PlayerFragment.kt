@@ -4420,6 +4420,15 @@ abstract class PlayerFragment : BaseNetworkFragment(), RadioButtonDialogFragment
         return gestureArbiter.tryClaimSingleFinger(owner)
     }
 
+    override fun swipeChat(open: Boolean) {
+        val visible = isChatOpen || isFloatingChatEnabled
+        if (open && !visible) {
+            cycleChatMode()
+        } else if (!open && visible) {
+            if (isFloatingChatEnabled) cycleChatMode() else hideChat()
+        }
+    }
+
     override fun claimDoubleTapChat(): Boolean {
         if (!gestureArbiter.onDoubleTapClaimed()) return false
         // The listener cycles chat immediately after this claim. Keep its exact
